@@ -1,24 +1,63 @@
 cmake_minimum_required(VERSION 3.10)
-project(HardcoreRobotTest)
+project(canopen_hw LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# 强制告诉 CMake 去哪里找 Pinocchio (极其贴心的防报错设计)
-list(APPEND CMAKE_PREFIX_PATH "/opt/openrobots")
-
-# 寻找三大神器
-find_package(pinocchio REQUIRED)
-find_package(ruckig REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LELY REQUIRED liblely-coapp liblely-io2 liblely-ev liblely-co)
 
+add_library(canopen_core
+  src/cia402_state_machine.cpp
+  src/shared_state.cpp
+  src/axis_driver.cpp
+  src/canopen_master.cpp
+  src/canopen_robot_hw.cpp
+)
 
-add_executable(my_node main.cpp)
+target_include_directories(canopen_core
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${LELY_INCLUDE_DIRS}
+)
 
-# 链接它们
-target_include_directories(my_node PRIVATE ${LELY_INCLUDE_DIRS})
-target_link_libraries(my_node PRIVATE 
-    pinocchio::pinocchio
-    ruckig::ruckig
+target_link_libraries(canopen_core
+  PUBLIC
     ${LELY_LIBRARIES}
 )
+
+target_compile_options(canopen_core
+  PRIVATE
+    ${LELY_CFLAGS_OTHER}
+)
+
+add_executable(canopen_hw_node
+  src/main.cpp
+)
+
+target_link_libraries(canopen_hw_node
+  PRIVATE
+    canopen_core
+)
+
+# Tests
+add_executable(test_state_machine
+  test/test_state_machine.cpp
+)
+target_link_libraries(test_state_machine PRIVATE canopen_core)
+
+add_executable(test_shared_state
+  test/test_shared_state.cpp
+)
+target_link_libraries(test_shared_state PRIVATE canopen_core)
+
+add_executable(test_canopen_robot_hw
+  test/test_canopen_robot_hw.cpp
+)
+target_link_libraries(test_canopen_robot_hw PRIVATE canopen_core)
+
+add_executable(test_unit_conversion
+  test/test_unit_conversion.cpp
+)
+target_link_libraries(test_unit_conversion PRIVATE canopen_core)
