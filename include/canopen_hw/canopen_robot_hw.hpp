@@ -14,6 +14,13 @@ class CanopenRobotHw {
  public:
   static constexpr std::size_t kAxisCount = SharedState::kAxisCount;
 
+  struct AxisConversion {
+    double counts_per_rev = 5308416.0;
+    double rated_torque_nm = 6.0;
+    double velocity_scale = 1.0;
+    double torque_scale = 1.0;
+  };
+
   explicit CanopenRobotHw(SharedState* shared_state);
 
   // 对应 RobotHW::read():
@@ -36,16 +43,19 @@ class CanopenRobotHw {
   // 当前控制可运行标志(来自 SharedState::all_operational)。
   bool all_operational() const { return all_operational_; }
 
+  // 配置某轴单位换算参数，供 joints.yaml 参数加载后调用。
+  void ConfigureAxisConversion(std::size_t axis_index,
+                               const AxisConversion& conversion);
+
  private:
   static bool IsValidAxis(std::size_t axis_index);
 
-  // 单位换算(临时实现):
-  // - 先按每转计数固定值进行换算
-  // - 后续改为每轴参数化(从 joints.yaml 读取)
-  static double TicksToRad(int32_t ticks);
-  static int32_t RadToTicks(double rad);
-  static double TicksPerSecToRadPerSec(int32_t ticks_per_sec);
-  static double TorquePermilleToNm(int16_t permille);
+  // 单位换算(每轴参数化)。
+  double TicksToRad(std::size_t axis_index, int32_t ticks) const;
+  int32_t RadToTicks(std::size_t axis_index, double rad) const;
+  double TicksPerSecToRadPerSec(std::size_t axis_index,
+                                int32_t ticks_per_sec) const;
+  double TorquePermilleToNm(std::size_t axis_index, int16_t permille) const;
 
   SharedState* shared_state_ = nullptr;  // 非拥有指针。
 
@@ -53,6 +63,7 @@ class CanopenRobotHw {
   std::array<double, kAxisCount> joint_vel_{};
   std::array<double, kAxisCount> joint_eff_{};
   std::array<double, kAxisCount> joint_cmd_{};
+  std::array<AxisConversion, kAxisCount> axis_conv_{};
 
   bool all_operational_ = false;
 };
