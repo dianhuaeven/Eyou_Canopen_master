@@ -16,6 +16,7 @@ add_library(canopen_core
   src/canopen_master.cpp
   src/canopen_robot_hw.cpp
   src/joints_config.cpp
+  src/pdo_mapping.cpp
 )
 
 target_include_directories(canopen_core

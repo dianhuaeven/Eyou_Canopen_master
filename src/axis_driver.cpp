@@ -1,17 +1,25 @@
 #include "canopen_hw/axis_driver.hpp"
 
+#include <iostream>
 #include <system_error>
 
 #include <lely/coapp/node.hpp>
 
+#include "canopen_hw/pdo_mapping.hpp"
+
 namespace canopen_hw {
 
 AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
-                       std::size_t axis_index, SharedState* shared_state)
+                       std::size_t axis_index, SharedState* shared_state,
+                       bool verify_pdo_mapping, const std::string& dcf_path)
     : lely::canopen::BasicDriver(master, node_id),
       axis_index_(axis_index),
-      shared_state_(shared_state) {
+      shared_state_(shared_state),
+      verify_pdo_mapping_(verify_pdo_mapping),
+      dcf_path_(dcf_path) {
   state_machine_.set_target_mode(kMode_CSP);
+  pdo_verified_ = !verify_pdo_mapping_;
+  pdo_verification_done_ = !verify_pdo_mapping_;
 }
 
 void AxisDriver::SetRosTargetPosition(int32_t target_position) {
@@ -37,6 +45,10 @@ void AxisDriver::InjectFeedback(int32_t actual_position, int32_t actual_velocity
   feedback_cache_.state = state_machine_.state();
   feedback_cache_.is_operational = state_machine_.is_operational();
   feedback_cache_.is_fault = state_machine_.is_fault();
+  if (verify_pdo_mapping_ &&
+      (!pdo_verification_done_ || !pdo_verified_)) {
+    feedback_cache_.is_operational = false;
+  }
 
   PublishSnapshot();
 }
@@ -110,10 +122,70 @@ void AxisDriver::OnHeartbeat(bool occurred) noexcept {
 
 void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                         const std::string& what) noexcept {
-  (void)st;
-  (void)es;
   (void)what;
-  // TODO: 上线后触发状态机使能流程。
+  if (!verify_pdo_mapping_) {
+    pdo_verified_ = true;
+    pdo_verification_done_ = true;
+    return;
+  }
+  if (pdo_verification_done_) {
+    return;
+  }
+  if (es != 0 || st == lely::canopen::NmtState::BOOTUP) {
+    std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
+              << "): OnConfig failed, skip PDO verify" << std::endl;
+    pdo_verified_ = false;
+    pdo_verification_done_ = true;
+    return;
+  }
+  if (dcf_path_.empty()) {
+    std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
+              << "): DCF path empty, skip PDO verify" << std::endl;
+    pdo_verified_ = false;
+    pdo_verification_done_ = true;
+    return;
+  }
+
+  pdo_reader_ = std::make_shared<PdoMappingReader>();
+  pdo_reader_->Start(*this, [this](bool ok, const std::string& error,
+                                   const PdoMapping& actual) {
+    if (!ok) {
+      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
+                << "): PDO read failed: " << error << std::endl;
+      pdo_verified_ = false;
+      pdo_verification_done_ = true;
+      pdo_reader_.reset();
+      return;
+    }
+
+    PdoMapping expected;
+    std::string err;
+    if (!LoadExpectedPdoMappingFromDcf(dcf_path_, &expected, &err)) {
+      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
+                << "): DCF load failed: " << err << std::endl;
+      pdo_verified_ = false;
+      pdo_verification_done_ = true;
+      pdo_reader_.reset();
+      return;
+    }
+
+    std::vector<std::string> diffs;
+    if (!DiffPdoMapping(expected, actual, &diffs)) {
+      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
+                << "): PDO mapping mismatch" << std::endl;
+      for (const auto& diff : diffs) {
+        std::cerr << "  " << diff << std::endl;
+      }
+      pdo_verified_ = false;
+    } else {
+      std::cout << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
+                << "): PDO mapping verified" << std::endl;
+      pdo_verified_ = true;
+    }
+
+    pdo_verification_done_ = true;
+    pdo_reader_.reset();
+  });
 }
 
 void AxisDriver::PublishSnapshot() {

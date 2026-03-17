@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -12,6 +13,8 @@
 
 namespace canopen_hw {
 
+class PdoMappingReader;
+
 // 单轴驱动骨架:
 // - 继承 Lely BasicDriver，挂接节点事件回调
 // - 维护本轴 CiA402 状态机
@@ -21,7 +24,8 @@ namespace canopen_hw {
 class AxisDriver final : public lely::canopen::BasicDriver {
  public:
   AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
-             std::size_t axis_index, SharedState* shared_state);
+             std::size_t axis_index, SharedState* shared_state,
+             bool verify_pdo_mapping, const std::string& dcf_path);
 
   // ROS 线程每周期调用: 更新上层期望位置(仅写入本地缓存, 不直接触发总线发送)。
   void SetRosTargetPosition(int32_t target_position);
@@ -57,6 +61,11 @@ class AxisDriver final : public lely::canopen::BasicDriver {
 
   std::size_t axis_index_ = 0;
   SharedState* shared_state_ = nullptr;  // 非拥有指针，生命周期由 Master 管理。
+  bool verify_pdo_mapping_ = false;
+  bool pdo_verified_ = true;
+  bool pdo_verification_done_ = false;
+  std::string dcf_path_;
+  std::shared_ptr<PdoMappingReader> pdo_reader_;
 
   // 保护本轴缓存, 避免 ROS 设置目标与 Lely 回调并发冲突。
   mutable std::mutex mtx_;
