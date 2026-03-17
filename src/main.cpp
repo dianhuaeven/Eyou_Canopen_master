@@ -37,6 +37,9 @@ int main() {
   }
 
   // 应用主循环骨架: 100Hz 执行 read/write。
+  // 运行期约束:
+  // - 循环内禁止任何动态内存分配(不 new、不扩容容器、不构造大临时对象)。
+  // - 所有资源在进入循环前初始化完成。
   // 后续接入 ROS controller_manager 后，这里将替换为 ros::Rate + cm.update()。
   const auto period = std::chrono::milliseconds(10);
   while (g_run.load()) {

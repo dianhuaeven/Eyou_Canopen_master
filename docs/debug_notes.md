@@ -85,3 +85,15 @@ g++ -std=c++17 -I/home/dianhua/robot_test/include \
 3. 反复 FAULT：检查 statusword 与 EMCY 码，确认复位节流参数是否过短。
 4. dcfgen 报 EDS 格式错误：切换到 `YiyouServo_V1.4.dcfgen.eds` 并使用 `-S`。
 5. 主站退出后行为异常：做“断 SYNC/强杀进程”实验并确认驱动器策略。
+
+## 7. 运行期内存约束
+
+- 控制循环(`main.cpp` 的 `while` 循环)内禁止动态内存分配。
+- 允许分配的阶段仅限初始化:
+  - 读取配置
+  - 创建主站/驱动对象
+  - 容器 `reserve/resize`
+- 代码审查重点:
+  - 循环内禁止 `new/malloc`
+  - 循环内禁止会触发扩容的容器操作(`push_back/emplace_back` 等)
+  - 循环内避免构造大对象和字符串拼接

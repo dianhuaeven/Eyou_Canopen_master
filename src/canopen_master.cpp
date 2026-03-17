@@ -10,6 +10,8 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
   if (config_.axis_count == 0) {
     config_.axis_count = 1;
   }
+  // 预分配驱动容器容量，保证运行阶段不会因为扩容触发堆分配。
+  axis_drivers_.reserve(config_.axis_count);
 }
 
 bool CanopenMaster::Start() {
@@ -39,8 +41,8 @@ void CanopenMaster::Stop() {
 }
 
 void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& master) {
+  // 初始化阶段函数: clear 后重新 emplace，不会超过预留容量。
   axis_drivers_.clear();
-  axis_drivers_.reserve(config_.axis_count);
 
   for (std::size_t i = 0; i < config_.axis_count; ++i) {
     // 轴索引 i -> node_id i+1。后续可改为从 joints.yaml 读取映射。

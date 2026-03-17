@@ -42,6 +42,7 @@ class CanopenMaster {
 
   // 供后续真实 master 初始化后调用:
   // 基于 node-id 1..N 创建 AxisDriver。
+  // 约束: 该函数只能在初始化阶段调用，禁止在运行循环中调用。
   void CreateAxisDrivers(lely::canopen::BasicMaster& master);
 
  private:
@@ -50,6 +51,7 @@ class CanopenMaster {
   std::atomic<bool> running_{false};
 
   // 每轴一个 driver，索引与轴号一一对应(0 -> node_id 1)。
+  // 约束: 容量在初始化阶段 reserve，运行阶段只读/不扩容。
   std::vector<std::unique_ptr<AxisDriver>> axis_drivers_;
 };
 
