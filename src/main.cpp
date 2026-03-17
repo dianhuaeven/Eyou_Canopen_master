@@ -1,7 +1,9 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <filesystem>
 #include <iostream>
+#include <string>
 #include <thread>
 
 #include "canopen_hw/canopen_master.hpp"
@@ -17,11 +19,46 @@ void HandleSignal(int) {
   g_run.store(false);
 }
 
+struct StartupOptions {
+  std::string dcf_path = "config/master.dcf";
+  std::string joints_path = "config/joints.yaml";
+};
+
+StartupOptions ParseArgs(int argc, char** argv) {
+  StartupOptions opts;
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--dcf" && i + 1 < argc) {
+      opts.dcf_path = argv[++i];
+    } else if (arg == "--joints" && i + 1 < argc) {
+      opts.joints_path = argv[++i];
+    }
+  }
+  return opts;
+}
+
+std::string MakeAbsolutePath(const std::string& path) {
+  if (path.empty()) {
+    return path;
+  }
+  std::filesystem::path p(path);
+  if (p.is_absolute()) {
+    return p.string();
+  }
+  return std::filesystem::absolute(p).string();
+}
+
+bool FileExists(const std::string& path) {
+  return !path.empty() && std::filesystem::exists(path);
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
   std::signal(SIGINT, HandleSignal);
   std::signal(SIGTERM, HandleSignal);
+
+  const StartupOptions opts = ParseArgs(argc, argv);
 
   canopen_hw::SharedState shared_state;
 
@@ -29,14 +66,22 @@ int main() {
   master_cfg.can_interface = "can0";
   master_cfg.master_node_id = 127;
   master_cfg.axis_count = 6;
-  master_cfg.master_dcf_path = "config/master.dcf";
+  master_cfg.master_dcf_path = MakeAbsolutePath(opts.dcf_path);
+  if (!FileExists(master_cfg.master_dcf_path)) {
+    std::cerr << "master_dcf_path not found: " << master_cfg.master_dcf_path
+              << std::endl;
+    return 1;
+  }
 
   canopen_hw::CanopenMaster master(master_cfg, &shared_state);
   canopen_hw::CanopenRobotHw robot_hw(&shared_state);
 
   {
     std::string error;
-    if (!canopen_hw::LoadJointsYaml("config/joints.yaml", &robot_hw, &error)) {
+    const std::string joints_path = MakeAbsolutePath(opts.joints_path);
+    if (!FileExists(joints_path)) {
+      std::cerr << "joints.yaml not found: " << joints_path << std::endl;
+    } else if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error)) {
       std::cerr << "Load joints.yaml failed: " << error << std::endl;
     }
   }
