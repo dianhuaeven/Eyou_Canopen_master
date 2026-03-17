@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LELY REQUIRED liblely-coapp liblely-io2 liblely-ev liblely-co)
+find_package(Threads REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 add_library(canopen_core
@@ -28,6 +29,7 @@ target_include_directories(canopen_core
 target_link_libraries(canopen_core
   PUBLIC
     ${LELY_LIBRARIES}
+    Threads::Threads
     yaml-cpp
 )
 

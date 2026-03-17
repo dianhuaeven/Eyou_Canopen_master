@@ -1,6 +1,7 @@
 #include "canopen_hw/pdo_mapping.hpp"
 
 #include <sstream>
+#include <thread>
 
 #include <lely/co/dcf.h>
 #include <lely/co/dev.h>
@@ -196,14 +197,25 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
 }
 
 void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
-                             DoneCallback cb) {
-  if (finished_) {
+                             DoneCallback cb,
+                             std::chrono::milliseconds timeout) {
+  if (finished_.load()) {
     return;
   }
   driver_ = &driver;
   done_cb_ = std::move(cb);
   BuildHeaderSteps();
   ScheduleNext();
+
+  if (timeout.count() > 0) {
+    std::weak_ptr<PdoMappingReader> weak = shared_from_this();
+    std::thread([weak, timeout]() {
+      std::this_thread::sleep_for(timeout);
+      if (auto self = weak.lock()) {
+        self->Finish(false, "PDO verify timeout");
+      }
+    }).detach();
+  }
 }
 
 void PdoMappingReader::BuildHeaderSteps() {
@@ -283,7 +295,7 @@ void PdoMappingReader::BuildEntrySteps() {
 }
 
 void PdoMappingReader::ScheduleNext() {
-  if (finished_) {
+  if (finished_.load()) {
     return;
   }
   if (step_index_ >= steps_.size()) {
@@ -331,10 +343,9 @@ void PdoMappingReader::ScheduleNext() {
 }
 
 void PdoMappingReader::Finish(bool ok, const std::string& error) {
-  if (finished_) {
+  if (finished_.exchange(true)) {
     return;
   }
-  finished_ = true;
   error_ = error;
   if (done_cb_) {
     done_cb_(ok, error_, mapping_);

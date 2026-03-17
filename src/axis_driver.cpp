@@ -1,5 +1,6 @@
 #include "canopen_hw/axis_driver.hpp"
 
+#include <chrono>
 #include <iostream>
 #include <system_error>
 
@@ -197,7 +198,7 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
 
     pdo_verification_done_ = true;
     pdo_reader_.reset();
-  });
+  }, std::chrono::milliseconds(2000));
 }
 
 void AxisDriver::PublishSnapshot() {

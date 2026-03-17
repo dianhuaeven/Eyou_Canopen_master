@@ -1,8 +1,11 @@
 #pragma once
 
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -30,12 +33,13 @@ bool LoadExpectedPdoMappingFromDcf(const std::string& path, PdoMapping* mapping,
 bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
                     std::vector<std::string>* diffs);
 
-class PdoMappingReader {
+class PdoMappingReader : public std::enable_shared_from_this<PdoMappingReader> {
  public:
   using DoneCallback =
       std::function<void(bool, const std::string&, const PdoMapping&)>;
 
-  void Start(lely::canopen::BasicDriver& driver, DoneCallback cb);
+  void Start(lely::canopen::BasicDriver& driver, DoneCallback cb,
+             std::chrono::milliseconds timeout);
 
  private:
   struct ReadStep {
@@ -57,7 +61,7 @@ class PdoMappingReader {
   std::array<uint8_t, 4> tpdo_counts_{};
   std::size_t step_index_ = 0;
   bool phase_entries_ = false;
-  bool finished_ = false;
+  std::atomic<bool> finished_{false};
   PdoMapping mapping_{};
   std::string error_;
 };
