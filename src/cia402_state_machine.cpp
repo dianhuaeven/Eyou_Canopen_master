@@ -30,16 +30,16 @@ void CiA402StateMachine::set_fault_reset_policy(int hold_cycles, int wait_cycles
 
 CiA402State CiA402StateMachine::DecodeState(uint16_t statusword) {
   // 注意顺序: 先判断 FAULT_REACTION_ACTIVE/FAULT, 避免与其它掩码冲突。
-  if ((statusword & kStateMask_FaultReaction) == kState_FaultReactionActive) {
+  if ((statusword & kStateMask_Basic) == kState_FaultReactionActive) {
     return CiA402State::FaultReactionActive;
   }
-  if ((statusword & kStateMask_FaultReaction) == kState_Fault) {
+  if ((statusword & kStateMask_Basic) == kState_Fault) {
     return CiA402State::Fault;
   }
-  if ((statusword & kStateMask_SwitchOnDisabled) == kState_NotReadyToSwitchOn) {
+  if ((statusword & kStateMask_Basic) == kState_NotReadyToSwitchOn) {
     return CiA402State::NotReadyToSwitchOn;
   }
-  if ((statusword & kStateMask_SwitchOnDisabled) == kState_SwitchOnDisabled) {
+  if ((statusword & kStateMask_Basic) == kState_SwitchOnDisabled) {
     return CiA402State::SwitchOnDisabled;
   }
   if ((statusword & kStateMask_ReadySwitchOn) == kState_ReadyToSwitchOn) {
@@ -69,8 +69,11 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
   is_fault_ = (state_ == CiA402State::Fault ||
                state_ == CiA402State::FaultReactionActive);
 
-  // 只要离开 FAULT, 说明复位流程已经结束或被外部状态打断, 清理上下文。
-  if (state_ != CiA402State::Fault) {
+  // 仅在离开“故障相关状态”后清理上下文:
+  // - FAULT_REACTION_ACTIVE -> FAULT 的内部跃迁不应清理
+  // - 否则会导致刚进入 FAULT 时复位流程重复从 Phase1 开始
+  if (state_ != CiA402State::Fault &&
+      state_ != CiA402State::FaultReactionActive) {
     ResetFaultFlowContext();
   }
 
@@ -238,7 +241,7 @@ void CiA402StateMachine::ResetFaultFlowContext() {
   phase_cycles_ = 0;
   wait_cycles_ = 0;
 
-  // 当离开故障态时允许重新统计尝试次数, 这里保留累计值用于诊断。
+  // 复位尝试次数保持累计值，用于故障诊断与限次保护。
 }
 
 }  // namespace canopen_hw

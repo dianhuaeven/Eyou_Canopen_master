@@ -29,7 +29,7 @@ class CiA402StateMachine {
   // 输出: 是否处于故障态(FAULT 或 FAULT_REACTION_ACTIVE)。
   bool is_fault() const { return is_fault_; }
 
-  // 输出: 已累计故障复位次数。
+  // 输出: 已发起故障复位的尝试次数(每发送一次 0x0080 计数 +1)。
   int fault_reset_count() const { return fault_reset_count_; }
 
   // 配置目标模式, CSP 默认 8。

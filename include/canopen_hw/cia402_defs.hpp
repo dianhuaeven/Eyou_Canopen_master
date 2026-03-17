@@ -6,8 +6,8 @@ namespace canopen_hw {
 
 // CiA 402 state decoding masks and values.
 constexpr uint16_t kStateMask_ReadySwitchOn = 0x006F;
-constexpr uint16_t kStateMask_SwitchOnDisabled = 0x004F;
-constexpr uint16_t kStateMask_FaultReaction = 0x004F;
+// 0x004F 同时用于 NotReady/SwitchOnDisabled/Fault/FaultReactionActive 判定。
+constexpr uint16_t kStateMask_Basic = 0x004F;
 
 constexpr uint16_t kState_NotReadyToSwitchOn = 0x0000;
 constexpr uint16_t kState_SwitchOnDisabled = 0x0040;

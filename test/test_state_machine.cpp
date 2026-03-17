@@ -38,10 +38,15 @@ int main() {
 
   // 5) Fault 状态下进入复位流程, 最终应出现 fault reset 边沿
   sm.set_fault_reset_policy(2, 5, 2);
+  sm.Update(0x000F, kMode_CSP, 12348);  // FaultReactionActive: 不应触发复位边沿
+  assert(sm.state() == CiA402State::FaultReactionActive);
+  assert(sm.controlword() != kCtrl_FaultReset);
+
   sm.Update(0x0008, kMode_CSP, 12348);  // Hold 1
   sm.Update(0x0008, kMode_CSP, 12348);  // Hold 2
   sm.Update(0x0008, kMode_CSP, 12348);  // SendEdge
   assert(sm.controlword() == kCtrl_FaultReset);
+  assert(sm.fault_reset_count() == 1);
 
   return 0;
 }
