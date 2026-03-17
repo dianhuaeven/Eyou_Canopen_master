@@ -78,6 +78,33 @@ g++ -std=c++17 -I/home/dianhua/robot_test/include \
     -o /tmp/test_unit_conversion && /tmp/test_unit_conversion
 ```
 
+## 6. 启动与联调流程（建议顺序）
+
+```bash
+# 1) 生成 DCF（如需）
+dcfgen -S -r -d /home/dianhua/robot_test/config \
+       /home/dianhua/robot_test/config/master.yaml
+
+# 2) 编译
+cmake -S /home/dianhua/robot_test -B /home/dianhua/robot_test/build
+cmake --build /home/dianhua/robot_test/build -j
+
+# 3) 启动主站（路径建议使用绝对路径）
+/home/dianhua/robot_test/build/canopen_hw_node \
+  --dcf /home/dianhua/robot_test/config/master.dcf \
+  --joints /home/dianhua/robot_test/config/joints.yaml
+```
+
+验证点：
+- 启动日志无 `master_dcf_path not found`
+- 10ms 左右 SYNC 周期
+- 0x701~0x706 心跳可见
+- 运行后有 `0x18x/0x28x` 与 `0x20x` PDO
+
+停止流程验证：
+- Ctrl+C 后可观察到 Disable Operation -> Shutdown -> NMT Stop
+- 轴进入 SwitchedOn / ReadyToSwitchOn 后再进入 Stopped
+
 ## 6. 故障排查清单
 
 1. 看不到任何帧：优先检查终端电阻、电源、CAN_H/CAN_L 线序。
@@ -86,7 +113,77 @@ g++ -std=c++17 -I/home/dianhua/robot_test/include \
 4. dcfgen 报 EDS 格式错误：切换到 `YiyouServo_V1.4.dcfgen.eds` 并使用 `-S`。
 5. 主站退出后行为异常：做“断 SYNC/强杀进程”实验并确认驱动器策略。
 
-## 7. 运行期内存约束
+## 7. D1~D9 实验记录模板
+
+```text
+D1 SocketCAN 通讯验证
+- 日期/负责人：
+- 设备/环境：
+- 步骤：
+  1) candump can0 观察心跳帧 0x701~0x706
+- 结果：
+- 结论/下一步：
+
+D2 Lely 主站启动 + DCF 配置
+- 日期/负责人：
+- 设备/环境：
+- 步骤：
+  1) 启动 canopen_hw_node（记录 --dcf/--joints 路径）
+  2) 抓包确认 NMT 进入 Operational
+- 结果：
+- 结论/下一步：
+
+D3 状态机使能
+- 日期/负责人：
+- 步骤：
+  1) 观察 statusword 进入 OPERATION_ENABLED
+- 结果：
+- 结论/下一步：
+
+D4 位置控制
+- 日期/负责人：
+- 步骤：
+  1) 写入不同 target_position，观察位置跟随
+- 结果：
+- 结论/下一步：
+
+D5 故障复位
+- 日期/负责人：
+- 步骤：
+  1) 人为触发故障，观察自动复位
+- 结果：
+- 结论/下一步：
+
+D6 无扰切换
+- 日期/负责人：
+- 步骤：
+  1) 故障恢复后无明显跳变
+- 结果：
+- 结论/下一步：
+
+D7 多轴联调
+- 日期/负责人：
+- 步骤：
+  1) 6轴同时使能与运动
+- 结果：
+- 结论/下一步：
+
+D8 ROS 集成
+- 日期/负责人：
+- 步骤：
+  1) controller_manager + JointTrajectoryController 正常工作
+- 结果：
+- 结论/下一步：
+
+D9 耐久测试
+- 日期/负责人：
+- 步骤：
+  1) 连续运行 3 小时，反复运动
+- 结果：
+- 结论/下一步：
+```
+
+## 8. 运行期内存约束
 
 - 控制循环(`main.cpp` 的 `while` 循环)内禁止动态内存分配。
 - 允许分配的阶段仅限初始化:
