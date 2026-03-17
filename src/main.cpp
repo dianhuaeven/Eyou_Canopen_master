@@ -1,10 +1,12 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <iostream>
 #include <thread>
 
 #include "canopen_hw/canopen_master.hpp"
 #include "canopen_hw/canopen_robot_hw.hpp"
+#include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 namespace {
@@ -31,6 +33,13 @@ int main() {
 
   canopen_hw::CanopenMaster master(master_cfg, &shared_state);
   canopen_hw::CanopenRobotHw robot_hw(&shared_state);
+
+  {
+    std::string error;
+    if (!canopen_hw::LoadJointsYaml("config/joints.yaml", &robot_hw, &error)) {
+      std::cerr << "Load joints.yaml failed: " << error << std::endl;
+    }
+  }
 
   if (!master.Start()) {
     return 1;

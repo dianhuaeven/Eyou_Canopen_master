@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LELY REQUIRED liblely-coapp liblely-io2 liblely-ev liblely-co)
+find_package(yaml-cpp REQUIRED)
 
 add_library(canopen_core
   src/cia402_state_machine.cpp
@@ -14,6 +15,7 @@ add_library(canopen_core
   src/axis_driver.cpp
   src/canopen_master.cpp
   src/canopen_robot_hw.cpp
+  src/joints_config.cpp
 )
 
 target_include_directories(canopen_core
@@ -25,6 +27,7 @@ target_include_directories(canopen_core
 target_link_libraries(canopen_core
   PUBLIC
     ${LELY_LIBRARIES}
+    yaml-cpp
 )
 
 target_compile_options(canopen_core
@@ -61,3 +64,8 @@ add_executable(test_unit_conversion
   test/test_unit_conversion.cpp
 )
 target_link_libraries(test_unit_conversion PRIVATE canopen_core)
+
+add_executable(test_joints_config
+  test/test_joints_config.cpp
+)
+target_link_libraries(test_joints_config PRIVATE canopen_core)
