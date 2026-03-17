@@ -1,5 +1,7 @@
 #include "canopen_hw/axis_driver.hpp"
 
+#include <system_error>
+
 namespace canopen_hw {
 
 AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
@@ -40,7 +42,31 @@ void AxisDriver::InjectFeedback(int32_t actual_position, int32_t actual_velocity
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;
-  // TODO: 在此通过对象字典读取 RPDO 对应反馈字段, 再调用 InjectFeedback()。
+  // RPDO 触发后读取关键反馈字段并推进状态机。
+  std::error_code ec;
+  const auto statusword = rpdo_mapped[0x6041][0].Read<uint16_t>(ec);
+  if (ec) {
+    return;
+  }
+  const auto actual_position = rpdo_mapped[0x6064][0].Read<int32_t>(ec);
+  if (ec) {
+    return;
+  }
+  const auto mode_display = rpdo_mapped[0x6061][0].Read<int8_t>(ec);
+  if (ec) {
+    return;
+  }
+  const auto actual_velocity = rpdo_mapped[0x606C][0].Read<int32_t>(ec);
+  if (ec) {
+    return;
+  }
+  const auto actual_torque = rpdo_mapped[0x6077][0].Read<int16_t>(ec);
+  if (ec) {
+    return;
+  }
+
+  InjectFeedback(actual_position, actual_velocity, actual_torque, statusword,
+                 mode_display);
 }
 
 void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
