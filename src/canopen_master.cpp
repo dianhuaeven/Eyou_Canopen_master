@@ -51,6 +51,8 @@ bool CanopenMaster::GracefulShutdown() {
     return true;
   }
 
+  // 注意: Stop() 必须在 Lely 事件循环仍在运行时调用，否则 RPDO 不再更新，
+  // 下面的等待将只会超时返回。
   for (const auto& axis : axis_drivers_) {
     if (axis) {
       axis->SendControlword(kCtrl_DisableOperation);

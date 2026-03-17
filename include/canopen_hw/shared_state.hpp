@@ -49,6 +49,9 @@ class SharedState {
   // 由 Lely 线程更新全局“可控”标志。
   void SetAllOperational(bool value);
 
+  // 由 Lely 线程在每个 SYNC/RPDO 更新后调用，汇总全轴状态。
+  void RecomputeAllOperational();
+
   // 任意线程: 获取完整快照。
   SharedSnapshot Snapshot() const;
 

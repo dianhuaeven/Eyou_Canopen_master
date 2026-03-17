@@ -42,6 +42,7 @@ void AxisDriver::InjectFeedback(int32_t actual_position, int32_t actual_velocity
 }
 
 bool AxisDriver::SendControlword(uint16_t controlword) {
+  // 从主站视角发送 TPDO（从站视角接收 RPDO），用于下发 0x6040。
   std::error_code ec;
   tpdo_mapped[0x6040][0].Write(controlword, ec);
   if (ec) {
@@ -89,6 +90,10 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
 
   InjectFeedback(actual_position, actual_velocity, actual_torque, statusword,
                  mode_display);
+
+  if (shared_state_) {
+    shared_state_->RecomputeAllOperational();
+  }
 }
 
 void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
