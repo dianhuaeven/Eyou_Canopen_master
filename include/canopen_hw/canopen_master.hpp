@@ -6,9 +6,16 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <lely/coapp/master.hpp>
+#include <lely/ev/loop.hpp>
+#include <lely/io2/ctx.hpp>
+#include <lely/io2/linux/can.hpp>
+#include <lely/io2/posix/poll.hpp>
+#include <lely/io2/sys/io.hpp>
+#include <lely/io2/sys/timer.hpp>
 
 #include "canopen_hw/axis_driver.hpp"
 #include "canopen_hw/shared_state.hpp"
@@ -56,6 +63,16 @@ class CanopenMaster {
   CanopenMasterConfig config_;
   SharedState* shared_state_ = nullptr;  // 非拥有指针。
   std::atomic<bool> running_{false};
+
+  std::unique_ptr<lely::io::IoGuard> io_guard_;
+  std::unique_ptr<lely::io::Context> io_ctx_;
+  std::unique_ptr<lely::io::Poll> io_poll_;
+  std::unique_ptr<lely::ev::Loop> ev_loop_;
+  std::unique_ptr<lely::io::Timer> io_timer_;
+  std::unique_ptr<lely::io::CanController> can_ctrl_;
+  std::unique_ptr<lely::io::CanChannel> can_chan_;
+  std::unique_ptr<lely::canopen::AsyncMaster> master_;
+  std::thread ev_thread_;
 
   // 每轴一个 driver，索引与轴号一一对应(0 -> node_id 1)。
   // 约束: 容量在初始化阶段 reserve，运行阶段只读/不扩容。

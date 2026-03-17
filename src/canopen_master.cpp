@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 #include <thread>
+#include <ctime>
 
 #include "canopen_hw/cia402_defs.hpp"
 
@@ -34,26 +36,77 @@ bool CanopenMaster::Start() {
     return true;
   }
 
-  // TODO(commit 8+): 在这里初始化 Lely IO 组件并创建 AsyncMaster:
-  // 1) io::IoGuard / io::Context / io::Poll / ev::Loop
-  // 2) io::Timer + io::CanChannel(can_interface)
-  // 3) AsyncMaster(dcf_txt, concise_dcf, node_id)
-  // 4) 调用 CreateAxisDrivers(master) 注册 6 轴驱动
-  //
-  // 当前阶段先交付可编译的生命周期骨架，避免一次引入过多变量。
-  running_.store(true);
-  return true;
+  try {
+    io_guard_ = std::make_unique<lely::io::IoGuard>();
+    io_ctx_ = std::make_unique<lely::io::Context>();
+    io_poll_ = std::make_unique<lely::io::Poll>(*io_ctx_);
+    ev_loop_ = std::make_unique<lely::ev::Loop>(io_poll_->get_poll());
+    io_timer_ = std::make_unique<lely::io::Timer>(
+        *io_poll_, ev_loop_->get_executor(), CLOCK_MONOTONIC);
+    can_ctrl_ =
+        std::make_unique<lely::io::CanController>(config_.can_interface.c_str());
+    can_chan_ =
+        std::make_unique<lely::io::CanChannel>(*io_poll_,
+                                               ev_loop_->get_executor());
+    can_chan_->open(*can_ctrl_);
+
+    master_ = std::make_unique<lely::canopen::AsyncMaster>(
+        ev_loop_->get_executor(), *io_timer_, *can_chan_,
+        config_.master_dcf_path, std::string(), config_.master_node_id);
+    CreateAxisDrivers(*master_);
+
+    ev_loop_->restart();
+    ev_thread_ = std::thread([this]() { ev_loop_->run(); });
+    master_->Reset();
+
+    running_.store(true);
+    return true;
+  } catch (const std::exception& e) {
+    std::cerr << "CanopenMaster start failed: " << e.what() << std::endl;
+    if (ev_loop_) {
+      ev_loop_->stop();
+    }
+    if (ev_thread_.joinable()) {
+      ev_thread_.join();
+    }
+    axis_drivers_.clear();
+    master_.reset();
+    can_chan_.reset();
+    can_ctrl_.reset();
+    io_timer_.reset();
+    ev_loop_.reset();
+    io_poll_.reset();
+    io_ctx_.reset();
+    io_guard_.reset();
+    running_.store(false);
+    return false;
+  }
 }
 
 void CanopenMaster::Stop() {
-  if (!running_.load()) {
+  if (!running_.load() && !master_ && !ev_loop_ && axis_drivers_.empty()) {
     return;
   }
 
   GracefulShutdown();
 
-  // 先释放驱动对象，确保不会再触发回调访问 shared_state。
+  if (ev_loop_) {
+    ev_loop_->stop();
+  }
+  if (ev_thread_.joinable()) {
+    ev_thread_.join();
+  }
+
   axis_drivers_.clear();
+  master_.reset();
+  can_chan_.reset();
+  can_ctrl_.reset();
+  io_timer_.reset();
+  ev_loop_.reset();
+  io_poll_.reset();
+  io_ctx_.reset();
+  io_guard_.reset();
+
   running_.store(false);
 }
 
