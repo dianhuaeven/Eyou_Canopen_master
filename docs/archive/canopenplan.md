@@ -1055,7 +1055,7 @@ canopen:
 
 joints:
   - name: "joint_1"
-    node_id: 1
+    node_id: 
     counts_per_rev: 5308416        # 65536 * 81 (PH11, 减速比81)
     rated_torque_nm: 6.0           # 需查手册确认
     position_lock_threshold: 15000 # counts, 约1°
