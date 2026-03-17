@@ -1,0 +1,20 @@
+# Per-joint parameters used by the runtime.
+
+canopen:
+  interface: "can0"
+  bitrate: 1000000
+  sync_period_us: 10000
+  master_node_id: 127
+
+joints:
+  - name: joint_1
+    node_id: 1
+    counts_per_rev: 5308416
+    rated_torque_nm: 0.0
+    position_lock_threshold: 15000
+    max_fault_resets: 3
+    fault_reset_hold_cycles: 5
+    velocity_scale: 1.0
+    torque_scale: 1.0
+
+# TODO: Add joints 2-6 and per-axis parameters.

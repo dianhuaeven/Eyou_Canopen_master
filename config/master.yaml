@@ -1,0 +1,25 @@
+# Skeleton for Lely dcfgen input. Fill in PDO mappings and COB-IDs later.
+
+master:
+  node_id: 127
+  heartbeat_producer: 500
+  sync:
+    period: 10000
+    overflow: 0
+
+defaults:
+  dcf_path: YiyouServo_V1.4.eds
+  heartbeat_producer: 500
+  boot_timeout: 5000
+
+nodes:
+  - id: 1
+    name: joint_1
+    heartbeat_consumer:
+      - node_id: 1
+        timeout: 2000
+    rpdo: []
+    tpdo: []
+    sdo: []
+
+# TODO: Add nodes 2-6 with full RPDO/TPDO mappings.
