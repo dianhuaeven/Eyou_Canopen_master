@@ -5,6 +5,7 @@ canopen:
   bitrate: 1000000
   sync_period_us: 10000
   master_node_id: 127
+  auto_fix_pdo: false
 
 joints:
   - name: joint_1

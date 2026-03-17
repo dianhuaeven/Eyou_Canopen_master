@@ -28,7 +28,8 @@ int main() {
   }
 
   std::string error;
-  const bool ok = canopen_hw::LoadJointsYaml(path, &hw, &error);
+  canopen_hw::CanopenRuntimeConfig runtime_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(path, &hw, &error, &runtime_cfg);
   assert(ok);
 
   canopen_hw::AxisFeedback fb0;

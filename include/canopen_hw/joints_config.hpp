@@ -6,9 +6,14 @@
 
 namespace canopen_hw {
 
+struct CanopenRuntimeConfig {
+  bool auto_fix_pdo = false;
+};
+
 // 读取 joints.yaml 并将每轴换算参数注入 CanopenRobotHw。
 // 返回 true 表示加载成功; 若失败可从 error 获取原因。
 bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
-                    std::string* error);
+                    std::string* error,
+                    CanopenRuntimeConfig* runtime_cfg = nullptr);
 
 }  // namespace canopen_hw

@@ -17,7 +17,8 @@ void SetError(std::string* error, const std::string& msg) {
 }  // namespace
 
 bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
-                    std::string* error) {
+                    std::string* error,
+                    CanopenRuntimeConfig* runtime_cfg) {
   if (!robot_hw) {
     SetError(error, "robot_hw is null");
     return false;
@@ -31,6 +32,13 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
     oss << "failed to load joints yaml: " << e.what();
     SetError(error, oss.str());
     return false;
+  }
+
+  if (runtime_cfg) {
+    const YAML::Node canopen = root["canopen"];
+    if (canopen && canopen.IsMap() && canopen["auto_fix_pdo"]) {
+      runtime_cfg->auto_fix_pdo = canopen["auto_fix_pdo"].as<bool>();
+    }
   }
 
   const YAML::Node joints = root["joints"];

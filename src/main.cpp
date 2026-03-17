@@ -78,11 +78,15 @@ int main(int argc, char** argv) {
 
   {
     std::string error;
+    canopen_hw::CanopenRuntimeConfig runtime_cfg;
     const std::string joints_path = MakeAbsolutePath(opts.joints_path);
     if (!FileExists(joints_path)) {
       std::cerr << "joints.yaml not found: " << joints_path << std::endl;
-    } else if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error)) {
+    } else if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error,
+                                           &runtime_cfg)) {
       std::cerr << "Load joints.yaml failed: " << error << std::endl;
+    } else {
+      master_cfg.auto_fix_pdo = runtime_cfg.auto_fix_pdo;
     }
   }
 

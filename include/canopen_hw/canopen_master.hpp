@@ -21,6 +21,7 @@ struct CanopenMasterConfig {
   std::string master_dcf_path;
   uint8_t master_node_id = 127;
   std::size_t axis_count = 6;
+  bool auto_fix_pdo = false;
 };
 
 class CanopenMaster {
