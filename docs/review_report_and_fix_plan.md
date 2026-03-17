@@ -1,160 +1,114 @@
-# CANopen 主站代码评审报告与修复提交路线
+# PDO 映射验证实现评估与修复计划
 
-版本: v0.1  
-日期: 2026-03-17
+日期：2026-03-17  
+范围：基于 `change_report_pdo_verify.md` 的现有实现
 
-## 1. 结论摘要
+---
 
-本次外部评审结论整体可信，方向与项目现状一致。当前代码属于“骨架完整、闭环未打通”阶段：
+## 1. 评估结论
 
-- 架构分层正确（状态机纯逻辑、共享状态清晰、测试可独立运行）
-- 关键功能尚未落地（Lely 启动、PDO 接入、全轴运行态判定、配置加载、优雅关机）
+当前实现已完成核心链路（配置解析、映射读回、差异比对与 OnBoot 触发），并能在验证失败时阻断 Operational。结构清晰，可用性方向正确，但仍存在稳定性与实时性风险，需在上线前补齐超时、I/O 位置和回调生命周期等问题。
 
-综合结论：**可以继续按现有设计推进，但必须尽快完成控制闭环主路径。**
+---
 
-## 2. 评审意见采纳情况
+## 2. 主要问题清单（按严重性）
 
-### 2.1 完全采纳
+### 2.1 高严重
 
-1. `CMakeLists.txt` 与当前源码结构不匹配（严重）
-2. `OnRpdoWrite()` 未接入反馈字段（功能缺失）
-3. `all_operational` 未实现周期计算（逻辑缺口）
-4. `CanopenMaster::Start()` 未完成真实 Lely 初始化（功能缺失）
-5. `joints.yaml` 未加载（配置未接入）
-6. `master_dcf_path` 相对路径风险（可部署性问题）
-7. 关机流程未按规格书 8.3 落地（安全缺口）
+1. **缺少超时兜底**
+   - 现状：SDO 读未返回时会永久卡住 `pdo_verification_done_ = false`，轴始终非 Operational。
+   - 影响：系统无法恢复，需要人工干预或重启。
 
-### 2.2 部分采纳（需澄清）
+2. **回调线程内同步读取 DCF**
+   - 现状：`OnBoot` 回调中读取 DCF 文件（阻塞 I/O）。
+   - 影响：阻塞 Lely 事件循环，影响实时性与启动稳定性。
 
-1. `ResetFaultFlowContext()` 条件是否为硬 bug：
-   - 当前实现将 `fault_reset_count` 定义为“复位尝试次数”，在 `SendEdge` 计数
-   - 该实现并非必然错误，但可读性与语义存在争议
-   - 处理策略：修复时同步重构复位计数语义并补测试，避免歧义
+### 2.2 中严重
 
-2. `DecodeState()` 掩码问题：
-   - 逻辑判定可工作
-   - 主要问题是常量命名重复导致理解成本高
-   - 处理策略：整理掩码命名并补注释，不作为单独阻塞项
+3. **OnBoot 状态判断不稳妥**
+   - 现状：`st == BOOTUP` 直接跳过验证。
+   - 风险：若 `OnBoot` 常态为 `BOOTUP`，将导致永不验证或误判失败。
+   - 建议：仅以 `es != 0` 作为失败条件，`st` 需按 Lely 语义再决定。
 
-## 3. 当前风险分级
+4. **回调生命周期安全不明确**
+   - 现状：SDO 回调捕获 `this`，Stop/析构时若仍有挂起读请求，可能访问已析构对象。
+   - 风险：潜在崩溃或未定义行为。
 
-- P0（必须优先修）
-  - PDO 未接入（无法闭环）
-  - Master 未真实启动（无总线控制能力）
-- P1（高优先）
-  - `all_operational` 未计算（上层控制无法进入正常写入）
-  - CMake 目标错误（工程构建不稳定）
-  - 关机流程未落实（安全收敛不足）
-- P2（中优先）
-  - joints.yaml 未加载（参数未工程化）
-  - dcf/路径依赖工作目录（部署一致性不足）
-  - 状态机常量命名可读性问题
+### 2.3 低严重
 
-## 4. 修复总原则
+5. **日志可观测性不足**
+   - 现状：SDO 读失败日志不包含 idx/sub；PDO 编号从 0 开始不直观。
+   - 影响：现场排查成本高。
 
-1. 保持“初始化可分配、运行循环零动态分配”约束
-2. 每个 commit 只做一件可验证的小事
-3. 每个 commit 提交前必须完成完整编译回归
-4. 高风险改动必须配套最小单元测试或集成验证点
+---
 
-## 5. 小 Commit 修复路线
+## 3. 修复计划（按 commit 划分）
 
-### Commit A: build: fix cmake target layout
+### Commit 1：预加载 DCF，回调内只做比对
 
-目标:
-- 修正 `CMakeLists.txt`，显式编译 `src/*.cpp`
-- 增加测试目标（至少 state_machine/shared_state/unit_conversion）
+目标：消除回调线程内 I/O，提高实时性稳定性。
 
-验收:
-- `cmake && make` 可生成主程序与测试
+内容：
+- 在 `AxisDriver` 构造或 `CreateAxisDrivers` 阶段加载 expected 映射并缓存。
+- `OnBoot` 只做 `DiffPdoMapping`。
+- 失败判断仅保留 `es != 0`，不依赖 `st == BOOTUP`。
 
-### Commit B: core: clarify cia402 reset semantics and masks
+编译：
+```
+cmake -S . -B build
+cmake --build build -j
+```
 
-目标:
-- 明确 `fault_reset_count` 语义（尝试次数/成功次数二选一并统一）
-- 调整 `ResetFaultFlowContext()` 触发条件与注释
-- 整理重复掩码命名，提升可读性
+提交信息：
+```
+canopen: preload expected PDO mapping before OnBoot
+```
 
-验收:
-- `test_state_machine` 覆盖 FaultReaction->Fault->Reset 场景
+---
 
-### Commit C: canopen: implement lely master runtime bootstrap
+### Commit 2：加入 PDO 验证超时兜底
 
-目标:
-- 在 `CanopenMaster::Start()` 中创建并启动真实 Lely 组件
-- 创建 master 与 6 轴 driver，进入事件循环线程
+目标：避免 SDO 读挂死导致永久阻塞。
 
-验收:
-- 程序启动后可观测到总线心跳/基础事件（至少无崩溃）
+内容：
+- `PdoMappingReader` 增加超时机制（建议 2s）。
+- 超时触发 `Finish(false, "timeout")`，轴进入验证失败态。
+- 若已接入 Lely 事件循环，优先用 timer；否则先用时间戳轮询兜底。
 
-### Commit D: canopen: wire rpdo decode into axis state machine
+编译：
+```
+cmake -S . -B build
+cmake --build build -j
+```
 
-目标:
-- 在 `AxisDriver::OnRpdoWrite()` 读取关键对象字段
-  - 0x6041, 0x6064, 0x6061, 0x606C, 0x6077
-- 调用状态机推进并更新 SharedState
+提交信息：
+```
+canopen: add PDO verify timeout fallback
+```
 
-验收:
-- 反馈路径可驱动状态机状态变化
+---
 
-### Commit E: canopen: compute all_operational each cycle
+### Commit 3：日志增强与编号修正
 
-目标:
-- 在 Lely 周期中汇总各轴 `is_operational && !position_locked`
-- 写入 `SharedState::SetAllOperational()`
+目标：提升现场定位效率。
 
-验收:
-- `CanopenRobotHw::WriteToSharedState()` 仅在全轴就绪时写入命令
+内容：
+- SDO 读失败日志包含 idx/sub。
+- RPDO/TPDO 日志编号从 1 开始。
 
-### Commit F: config: load joints.yaml into runtime conversions
+编译：
+```
+cmake -S . -B build
+cmake --build build -j
+```
 
-目标:
-- 增加配置加载模块，解析 `joints.yaml`
-- 将 `counts_per_rev/rated_torque_nm/scale` 注入 `CanopenRobotHw`
+提交信息：
+```
+canopen: improve PDO verify logging
+```
 
-验收:
-- 单测覆盖每轴不同参数换算
+---
 
-### Commit G: app: harden dcf path and startup args
+## 4. 备注
 
-目标:
-- `master_dcf_path` 改为参数化绝对路径或启动参数注入
-- 启动时增加配置有效性检查与失败日志
-
-验收:
-- 从任意工作目录启动均可正确定位 DCF
-
-### Commit H: safety: implement graceful shutdown sequence
-
-目标:
-- 实现 Disable Operation -> Shutdown -> NMT Stop 顺序
-- 带超时等待与失败处理
-
-验收:
-- `SIGINT` 下可观察到有序停机流程
-
-### Commit I: docs: update debug and bringup playbook
-
-目标:
-- 更新调试文档中的新命令、验证点、故障树
-- 固化 D1~D9 实验记录模板
-
-验收:
-- 文档可直接用于上机联调
-
-## 6. 执行顺序
-
-建议顺序：`A -> B -> C -> D -> E -> F -> G -> H -> I`
-
-其中 `C/D/E` 为主链路阻塞项，优先级最高。
-
-## 7. 完成标准
-
-满足以下条件视为“闭环完成”:
-
-1. 主程序可稳定启动 Lely 主站并接收 6 轴反馈
-2. 状态机可将轴推进到 `OPERATION_ENABLED`
-3. `all_operational=true` 后上层命令可写入并被从站执行
-4. `SIGINT` 可触发优雅关机序列
-5. 单测全绿，且关键路径具备基础联调记录
-
+当前工作区存在未处理改动（`.gitignore` 修改、`main.cpp` 删除），已按要求不处理。后续执行每个 commit 前会先确认工作区状态，避免混入无关变更。
