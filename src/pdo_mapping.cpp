@@ -140,13 +140,13 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
   for (std::size_t i = 0; i < 4; ++i) {
     if (expected.rpdo[i].cob_id != actual.rpdo[i].cob_id) {
       std::ostringstream oss;
-      oss << "RPDO" << i << " COB-ID mismatch: expected 0x" << std::hex
+      oss << "RPDO" << (i + 1) << " COB-ID mismatch: expected 0x" << std::hex
           << expected.rpdo[i].cob_id << " actual 0x" << actual.rpdo[i].cob_id;
       record(oss.str());
     }
     if (expected.rpdo[i].entries.size() != actual.rpdo[i].entries.size()) {
       std::ostringstream oss;
-      oss << "RPDO" << i << " entry count mismatch: expected "
+      oss << "RPDO" << (i + 1) << " entry count mismatch: expected "
           << expected.rpdo[i].entries.size() << " actual "
           << actual.rpdo[i].entries.size();
       record(oss.str());
@@ -157,7 +157,7 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
     for (std::size_t j = 0; j < count; ++j) {
       if (expected.rpdo[i].entries[j] != actual.rpdo[i].entries[j]) {
         std::ostringstream oss;
-        oss << "RPDO" << i << " entry[" << j << "] mismatch: expected "
+        oss << "RPDO" << (i + 1) << " entry[" << j << "] mismatch: expected "
             << FormatEntry(expected.rpdo[i].entries[j]) << " actual "
             << FormatEntry(actual.rpdo[i].entries[j]);
         record(oss.str());
@@ -168,13 +168,13 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
   for (std::size_t i = 0; i < 4; ++i) {
     if (expected.tpdo[i].cob_id != actual.tpdo[i].cob_id) {
       std::ostringstream oss;
-      oss << "TPDO" << i << " COB-ID mismatch: expected 0x" << std::hex
+      oss << "TPDO" << (i + 1) << " COB-ID mismatch: expected 0x" << std::hex
           << expected.tpdo[i].cob_id << " actual 0x" << actual.tpdo[i].cob_id;
       record(oss.str());
     }
     if (expected.tpdo[i].entries.size() != actual.tpdo[i].entries.size()) {
       std::ostringstream oss;
-      oss << "TPDO" << i << " entry count mismatch: expected "
+      oss << "TPDO" << (i + 1) << " entry count mismatch: expected "
           << expected.tpdo[i].entries.size() << " actual "
           << actual.tpdo[i].entries.size();
       record(oss.str());
@@ -185,7 +185,7 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
     for (std::size_t j = 0; j < count; ++j) {
       if (expected.tpdo[i].entries[j] != actual.tpdo[i].entries[j]) {
         std::ostringstream oss;
-        oss << "TPDO" << i << " entry[" << j << "] mismatch: expected "
+        oss << "TPDO" << (i + 1) << " entry[" << j << "] mismatch: expected "
             << FormatEntry(expected.tpdo[i].entries[j]) << " actual "
             << FormatEntry(actual.tpdo[i].entries[j]);
         record(oss.str());
@@ -315,7 +315,10 @@ void PdoMappingReader::ScheduleNext() {
         [this, step](uint8_t, uint16_t, uint8_t, std::error_code ec,
                      uint8_t value) {
           if (ec) {
-            Finish(false, "SDO read failed");
+            std::ostringstream oss;
+            oss << "SDO read failed at 0x" << std::hex << step.idx << ":"
+                << std::dec << static_cast<int>(step.sub);
+            Finish(false, oss.str());
             return;
           }
           if (step.on_value) {
@@ -330,7 +333,10 @@ void PdoMappingReader::ScheduleNext() {
         [this, step](uint8_t, uint16_t, uint8_t, std::error_code ec,
                      uint32_t value) {
           if (ec) {
-            Finish(false, "SDO read failed");
+            std::ostringstream oss;
+            oss << "SDO read failed at 0x" << std::hex << step.idx << ":"
+                << std::dec << static_cast<int>(step.sub);
+            Finish(false, oss.str());
             return;
           }
           if (step.on_value) {
