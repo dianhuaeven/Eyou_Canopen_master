@@ -32,6 +32,11 @@ class AxisDriver final : public lely::canopen::BasicDriver {
                       int16_t actual_torque, uint16_t statusword,
                       int8_t mode_display);
 
+  // 关机流程辅助接口。
+  bool SendControlword(uint16_t controlword);
+  bool SendNmtStopAll();
+  CiA402State feedback_state() const;
+
  private:
   // Lely 回调: RPDO/SDO 写入了 RPDO-mapped 对象后触发。
   // 当前骨架阶段仅保留钩子，具体对象读取将在下一阶段接入。

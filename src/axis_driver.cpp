@@ -2,6 +2,8 @@
 
 #include <system_error>
 
+#include <lely/coapp/node.hpp>
+
 namespace canopen_hw {
 
 AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
@@ -37,6 +39,26 @@ void AxisDriver::InjectFeedback(int32_t actual_position, int32_t actual_velocity
   feedback_cache_.is_fault = state_machine_.is_fault();
 
   PublishSnapshot();
+}
+
+bool AxisDriver::SendControlword(uint16_t controlword) {
+  std::error_code ec;
+  tpdo_mapped[0x6040][0].Write(controlword, ec);
+  if (ec) {
+    return false;
+  }
+  tpdo_mapped[0x6040][0].WriteEvent(ec);
+  return !ec;
+}
+
+bool AxisDriver::SendNmtStopAll() {
+  master.Command(lely::canopen::NmtCommand::STOP);
+  return true;
+}
+
+CiA402State AxisDriver::feedback_state() const {
+  std::lock_guard<std::mutex> lk(mtx_);
+  return feedback_cache_.state;
 }
 
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {

@@ -1,6 +1,10 @@
 #include "canopen_hw/canopen_master.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <thread>
+
+#include "canopen_hw/cia402_defs.hpp"
 
 namespace canopen_hw {
 
@@ -35,9 +39,62 @@ void CanopenMaster::Stop() {
     return;
   }
 
+  GracefulShutdown();
+
   // 先释放驱动对象，确保不会再触发回调访问 shared_state。
   axis_drivers_.clear();
   running_.store(false);
+}
+
+bool CanopenMaster::GracefulShutdown() {
+  if (axis_drivers_.empty()) {
+    return true;
+  }
+
+  for (const auto& axis : axis_drivers_) {
+    if (axis) {
+      axis->SendControlword(kCtrl_DisableOperation);
+    }
+  }
+  WaitForAllState(CiA402State::SwitchedOn,
+                  std::chrono::steady_clock::now() +
+                      std::chrono::milliseconds(2000));
+
+  for (const auto& axis : axis_drivers_) {
+    if (axis) {
+      axis->SendControlword(kCtrl_Shutdown);
+    }
+  }
+  WaitForAllState(CiA402State::ReadyToSwitchOn,
+                  std::chrono::steady_clock::now() +
+                      std::chrono::milliseconds(1000));
+
+  if (axis_drivers_.front()) {
+    axis_drivers_.front()->SendNmtStopAll();
+  }
+  return true;
+}
+
+bool CanopenMaster::WaitForAllState(
+    CiA402State target_state,
+    std::chrono::steady_clock::time_point deadline) {
+  while (std::chrono::steady_clock::now() < deadline) {
+    bool all_match = true;
+    for (const auto& axis : axis_drivers_) {
+      if (!axis) {
+        continue;
+      }
+      if (axis->feedback_state() != target_state) {
+        all_match = false;
+        break;
+      }
+    }
+    if (all_match) {
+      return true;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  return false;
 }
 
 void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& master) {

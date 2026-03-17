@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -46,6 +47,10 @@ class CanopenMaster {
   void CreateAxisDrivers(lely::canopen::BasicMaster& master);
 
  private:
+  bool GracefulShutdown();
+  bool WaitForAllState(CiA402State target_state,
+                       std::chrono::steady_clock::time_point deadline);
+
   CanopenMasterConfig config_;
   SharedState* shared_state_ = nullptr;  // 非拥有指针。
   std::atomic<bool> running_{false};
