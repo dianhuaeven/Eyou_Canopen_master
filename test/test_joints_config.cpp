@@ -14,13 +14,17 @@ int main() {
     std::ofstream ofs(path);
     ofs << "joints:\n"
            "  - name: joint_1\n"
-           "    node_id: 1\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "      verify_pdo_mapping: true\n"
            "    counts_per_rev: 1000\n"
            "    rated_torque_nm: 10\n"
            "    velocity_scale: 2\n"
            "    torque_scale: 0.5\n"
            "  - name: joint_2\n"
-           "    node_id: 2\n"
+           "    canopen:\n"
+           "      node_id: 2\n"
+           "      verify_pdo_mapping: false\n"
            "    counts_per_rev: 2000\n"
            "    rated_torque_nm: 20\n"
            "    velocity_scale: 1.5\n"
@@ -31,6 +35,11 @@ int main() {
   canopen_hw::CanopenRuntimeConfig runtime_cfg;
   const bool ok = canopen_hw::LoadJointsYaml(path, &hw, &error, &runtime_cfg);
   assert(ok);
+  assert(runtime_cfg.joints.size() == 2);
+  assert(runtime_cfg.joints[0].node_id == 1);
+  assert(runtime_cfg.joints[0].verify_pdo_mapping);
+  assert(runtime_cfg.joints[1].node_id == 2);
+  assert(!runtime_cfg.joints[1].verify_pdo_mapping);
 
   canopen_hw::AxisFeedback fb0;
   fb0.actual_position = 500;  // 0.5 rev -> pi

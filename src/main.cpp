@@ -73,7 +73,6 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  canopen_hw::CanopenMaster master(master_cfg, &shared_state);
   canopen_hw::CanopenRobotHw robot_hw(&shared_state);
 
   {
@@ -86,9 +85,21 @@ int main(int argc, char** argv) {
                                            &runtime_cfg)) {
       std::cerr << "Load joints.yaml failed: " << error << std::endl;
     } else {
-      master_cfg.auto_fix_pdo = runtime_cfg.auto_fix_pdo;
+      master_cfg.node_ids.clear();
+      master_cfg.verify_pdo_mapping.clear();
+      master_cfg.node_ids.reserve(runtime_cfg.joints.size());
+      master_cfg.verify_pdo_mapping.reserve(runtime_cfg.joints.size());
+      for (const auto& joint : runtime_cfg.joints) {
+        master_cfg.node_ids.push_back(joint.node_id);
+        master_cfg.verify_pdo_mapping.push_back(joint.verify_pdo_mapping);
+      }
+      if (!master_cfg.node_ids.empty()) {
+        master_cfg.axis_count = master_cfg.node_ids.size();
+      }
     }
   }
+
+  canopen_hw::CanopenMaster master(master_cfg, &shared_state);
 
   if (!master.Start()) {
     return 1;

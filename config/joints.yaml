@@ -5,11 +5,12 @@ canopen:
   bitrate: 1000000
   sync_period_us: 10000
   master_node_id: 127
-  auto_fix_pdo: false
 
 joints:
   - name: joint_1
-    node_id: 1
+    canopen:
+      node_id: 1
+      verify_pdo_mapping: true
     counts_per_rev: 5308416
     rated_torque_nm: 0.0
     position_lock_threshold: 15000

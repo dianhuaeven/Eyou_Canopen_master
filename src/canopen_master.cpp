@@ -14,6 +14,17 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
   if (config_.axis_count == 0) {
     config_.axis_count = 1;
   }
+  if (config_.node_ids.size() < config_.axis_count) {
+    config_.node_ids.resize(config_.axis_count);
+    for (std::size_t i = 0; i < config_.axis_count; ++i) {
+      if (config_.node_ids[i] == 0) {
+        config_.node_ids[i] = static_cast<uint8_t>(i + 1);
+      }
+    }
+  }
+  if (config_.verify_pdo_mapping.size() < config_.axis_count) {
+    config_.verify_pdo_mapping.resize(config_.axis_count, false);
+  }
   // 预分配驱动容器容量，保证运行阶段不会因为扩容触发堆分配。
   axis_drivers_.reserve(config_.axis_count);
 }
@@ -104,10 +115,11 @@ void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& master) {
   axis_drivers_.clear();
 
   for (std::size_t i = 0; i < config_.axis_count; ++i) {
-    // 轴索引 i -> node_id i+1。后续可改为从 joints.yaml 读取映射。
-    const uint8_t node_id = static_cast<uint8_t>(i + 1);
+    const uint8_t node_id = config_.node_ids[i];
     axis_drivers_.emplace_back(
-        std::make_unique<AxisDriver>(master, node_id, i, shared_state_));
+        std::make_unique<AxisDriver>(master, node_id, i, shared_state_,
+                                     config_.verify_pdo_mapping[i],
+                                     config_.master_dcf_path));
   }
 }
 

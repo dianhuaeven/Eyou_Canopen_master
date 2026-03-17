@@ -47,9 +47,7 @@ candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 - `rated_torque_nm`
 - `velocity_scale`
 - `torque_scale`
-
-可选字段（总线）：
-- `canopen.auto_fix_pdo`：是否允许启动时自动改写 PDO 映射（默认 false）。
+ - `canopen.verify_pdo_mapping`（启动时是否验证 PDO 映射）
 
 建议每轴都填完整参数，避免默认值掩盖问题。
 

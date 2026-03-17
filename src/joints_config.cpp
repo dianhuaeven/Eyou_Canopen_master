@@ -34,31 +34,29 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
     return false;
   }
 
-  if (runtime_cfg) {
-    const YAML::Node canopen = root["canopen"];
-    if (canopen && canopen.IsMap() && canopen["auto_fix_pdo"]) {
-      runtime_cfg->auto_fix_pdo = canopen["auto_fix_pdo"].as<bool>();
-    }
-  }
-
   const YAML::Node joints = root["joints"];
   if (!joints || !joints.IsSequence()) {
     SetError(error, "joints is missing or not a sequence");
     return false;
   }
 
+  if (runtime_cfg) {
+    runtime_cfg->joints.clear();
+    runtime_cfg->joints.reserve(joints.size());
+  }
+
   std::size_t loaded = 0;
+  std::size_t axis_index = 0;
   for (const auto& joint : joints) {
     if (!joint || !joint.IsMap()) {
       continue;
     }
-    if (!joint["node_id"]) {
-      continue;
-    }
-
-    const int node_id = joint["node_id"].as<int>();
-    if (node_id <= 0 || node_id > static_cast<int>(CanopenRobotHw::kAxisCount)) {
-      continue;
+    const YAML::Node canopen = joint["canopen"];
+    int node_id = 0;
+    if (canopen && canopen.IsMap() && canopen["node_id"]) {
+      node_id = canopen["node_id"].as<int>();
+    } else if (joint["node_id"]) {
+      node_id = joint["node_id"].as<int>();
     }
 
     CanopenRobotHw::AxisConversion conv;
@@ -75,9 +73,26 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
       conv.torque_scale = joint["torque_scale"].as<double>();
     }
 
-    robot_hw->ConfigureAxisConversion(static_cast<std::size_t>(node_id - 1),
-                                      conv);
+    if (node_id > 0 &&
+        node_id <= static_cast<int>(CanopenRobotHw::kAxisCount)) {
+      robot_hw->ConfigureAxisConversion(static_cast<std::size_t>(node_id - 1),
+                                        conv);
+    } else if (axis_index < CanopenRobotHw::kAxisCount) {
+      robot_hw->ConfigureAxisConversion(axis_index, conv);
+    }
+
+    if (runtime_cfg) {
+      JointCanopenConfig cfg;
+      cfg.node_id = node_id > 0 ? static_cast<uint8_t>(node_id)
+                                : static_cast<uint8_t>(axis_index + 1);
+      if (canopen && canopen.IsMap() && canopen["verify_pdo_mapping"]) {
+        cfg.verify_pdo_mapping = canopen["verify_pdo_mapping"].as<bool>();
+      }
+      runtime_cfg->joints.push_back(cfg);
+    }
+
     ++loaded;
+    ++axis_index;
   }
 
   if (loaded == 0) {
