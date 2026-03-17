@@ -20,6 +20,29 @@ AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
   state_machine_.set_target_mode(kMode_CSP);
   pdo_verified_ = !verify_pdo_mapping_;
   pdo_verification_done_ = !verify_pdo_mapping_;
+  if (verify_pdo_mapping_) {
+    expected_pdo_ = std::make_shared<PdoMapping>();
+    if (dcf_path_.empty()) {
+      std::cerr << "Axis " << axis_index_ << " (node "
+                << static_cast<int>(id())
+                << "): DCF path empty, skip PDO verify" << std::endl;
+      pdo_verified_ = false;
+      pdo_verification_done_ = true;
+    } else {
+      std::string err;
+      if (LoadExpectedPdoMappingFromDcf(dcf_path_, expected_pdo_.get(), &err)) {
+        expected_pdo_loaded_ = true;
+        pdo_verified_ = false;
+        pdo_verification_done_ = false;
+      } else {
+        std::cerr << "Axis " << axis_index_ << " (node "
+                  << static_cast<int>(id())
+                  << "): DCF load failed: " << err << std::endl;
+        pdo_verified_ = false;
+        pdo_verification_done_ = true;
+      }
+    }
+  }
 }
 
 void AxisDriver::SetRosTargetPosition(int32_t target_position) {
@@ -131,16 +154,16 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
   if (pdo_verification_done_) {
     return;
   }
-  if (es != 0 || st == lely::canopen::NmtState::BOOTUP) {
+  if (es != 0) {
     std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
               << "): OnConfig failed, skip PDO verify" << std::endl;
     pdo_verified_ = false;
     pdo_verification_done_ = true;
     return;
   }
-  if (dcf_path_.empty()) {
+  if (!expected_pdo_loaded_ || !expected_pdo_) {
     std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-              << "): DCF path empty, skip PDO verify" << std::endl;
+              << "): DCF not loaded, skip PDO verify" << std::endl;
     pdo_verified_ = false;
     pdo_verification_done_ = true;
     return;
@@ -158,19 +181,8 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
       return;
     }
 
-    PdoMapping expected;
-    std::string err;
-    if (!LoadExpectedPdoMappingFromDcf(dcf_path_, &expected, &err)) {
-      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-                << "): DCF load failed: " << err << std::endl;
-      pdo_verified_ = false;
-      pdo_verification_done_ = true;
-      pdo_reader_.reset();
-      return;
-    }
-
     std::vector<std::string> diffs;
-    if (!DiffPdoMapping(expected, actual, &diffs)) {
+    if (!DiffPdoMapping(*expected_pdo_, actual, &diffs)) {
       std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
                 << "): PDO mapping mismatch" << std::endl;
       for (const auto& diff : diffs) {

@@ -13,6 +13,7 @@
 
 namespace canopen_hw {
 
+struct PdoMapping;
 class PdoMappingReader;
 
 // 单轴驱动骨架:
@@ -65,6 +66,8 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   bool pdo_verified_ = true;
   bool pdo_verification_done_ = false;
   std::string dcf_path_;
+  std::shared_ptr<PdoMapping> expected_pdo_;
+  bool expected_pdo_loaded_ = false;
   std::shared_ptr<PdoMappingReader> pdo_reader_;
 
   // 保护本轴缓存, 避免 ROS 设置目标与 Lely 回调并发冲突。
