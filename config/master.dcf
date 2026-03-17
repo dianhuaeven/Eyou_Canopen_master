@@ -1,0 +1,8 @@
+# Placeholder concise DCF.
+#
+# Generation command (run after placing YiyouServo_V1.4.eds in config/):
+#   dcfgen -r -d /home/dianhua/robot_test/config \
+#          /home/dianhua/robot_test/config/master.yaml
+#
+# This file is intentionally tracked as a placeholder in commit 11.
+# It should be replaced by real dcfgen output during hardware integration.

@@ -1,25 +1,243 @@
-# Skeleton for Lely dcfgen input. Fill in PDO mappings and COB-IDs later.
+options:
+  dcf_path: /home/dianhua/robot_test/config
+  heartbeat_multiplier: 3.0
 
 master:
   node_id: 127
   heartbeat_producer: 500
-  sync:
-    period: 10000
-    overflow: 0
+  sync_period: 10000
+  sync_overflow: 0
 
-defaults:
-  dcf_path: YiyouServo_V1.4.eds
+joint_1:
+  node_id: 1
+  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.eds
   heartbeat_producer: 500
-  boot_timeout: 5000
+  rpdo:
+    1:
+      cob_id: 0x201
+      transmission: 1
+      mapping:
+        - {index: 0x6040, sub_index: 0, bits: 16}
+        - {index: 0x607A, sub_index: 0, bits: 32}
+        - {index: 0x6060, sub_index: 0, bits: 8}
+    2:
+      enabled: false
+    3:
+      enabled: false
+    4:
+      enabled: false
+  tpdo:
+    1:
+      cob_id: 0x181
+      transmission: 1
+      mapping:
+        - {index: 0x6041, sub_index: 0, bits: 16}
+        - {index: 0x6064, sub_index: 0, bits: 32}
+        - {index: 0x6061, sub_index: 0, bits: 8}
+    2:
+      cob_id: 0x281
+      transmission: 1
+      mapping:
+        - {index: 0x606C, sub_index: 0, bits: 32}
+        - {index: 0x6077, sub_index: 0, bits: 16}
+    3:
+      enabled: false
+    4:
+      enabled: false
+  sdo:
+    - {index: 0x6060, sub_index: 0, value: 8}
 
-nodes:
-  - id: 1
-    name: joint_1
-    heartbeat_consumer:
-      - node_id: 1
-        timeout: 2000
-    rpdo: []
-    tpdo: []
-    sdo: []
+joint_2:
+  node_id: 2
+  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.eds
+  heartbeat_producer: 500
+  rpdo:
+    1:
+      cob_id: 0x202
+      transmission: 1
+      mapping:
+        - {index: 0x6040, sub_index: 0, bits: 16}
+        - {index: 0x607A, sub_index: 0, bits: 32}
+        - {index: 0x6060, sub_index: 0, bits: 8}
+    2:
+      enabled: false
+    3:
+      enabled: false
+    4:
+      enabled: false
+  tpdo:
+    1:
+      cob_id: 0x182
+      transmission: 1
+      mapping:
+        - {index: 0x6041, sub_index: 0, bits: 16}
+        - {index: 0x6064, sub_index: 0, bits: 32}
+        - {index: 0x6061, sub_index: 0, bits: 8}
+    2:
+      cob_id: 0x282
+      transmission: 1
+      mapping:
+        - {index: 0x606C, sub_index: 0, bits: 32}
+        - {index: 0x6077, sub_index: 0, bits: 16}
+    3:
+      enabled: false
+    4:
+      enabled: false
+  sdo:
+    - {index: 0x6060, sub_index: 0, value: 8}
 
-# TODO: Add nodes 2-6 with full RPDO/TPDO mappings.
+joint_3:
+  node_id: 3
+  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.eds
+  heartbeat_producer: 500
+  rpdo:
+    1:
+      cob_id: 0x203
+      transmission: 1
+      mapping:
+        - {index: 0x6040, sub_index: 0, bits: 16}
+        - {index: 0x607A, sub_index: 0, bits: 32}
+        - {index: 0x6060, sub_index: 0, bits: 8}
+    2:
+      enabled: false
+    3:
+      enabled: false
+    4:
+      enabled: false
+  tpdo:
+    1:
+      cob_id: 0x183
+      transmission: 1
+      mapping:
+        - {index: 0x6041, sub_index: 0, bits: 16}
+        - {index: 0x6064, sub_index: 0, bits: 32}
+        - {index: 0x6061, sub_index: 0, bits: 8}
+    2:
+      cob_id: 0x283
+      transmission: 1
+      mapping:
+        - {index: 0x606C, sub_index: 0, bits: 32}
+        - {index: 0x6077, sub_index: 0, bits: 16}
+    3:
+      enabled: false
+    4:
+      enabled: false
+  sdo:
+    - {index: 0x6060, sub_index: 0, value: 8}
+
+joint_4:
+  node_id: 4
+  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.eds
+  heartbeat_producer: 500
+  rpdo:
+    1:
+      cob_id: 0x204
+      transmission: 1
+      mapping:
+        - {index: 0x6040, sub_index: 0, bits: 16}
+        - {index: 0x607A, sub_index: 0, bits: 32}
+        - {index: 0x6060, sub_index: 0, bits: 8}
+    2:
+      enabled: false
+    3:
+      enabled: false
+    4:
+      enabled: false
+  tpdo:
+    1:
+      cob_id: 0x184
+      transmission: 1
+      mapping:
+        - {index: 0x6041, sub_index: 0, bits: 16}
+        - {index: 0x6064, sub_index: 0, bits: 32}
+        - {index: 0x6061, sub_index: 0, bits: 8}
+    2:
+      cob_id: 0x284
+      transmission: 1
+      mapping:
+        - {index: 0x606C, sub_index: 0, bits: 32}
+        - {index: 0x6077, sub_index: 0, bits: 16}
+    3:
+      enabled: false
+    4:
+      enabled: false
+  sdo:
+    - {index: 0x6060, sub_index: 0, value: 8}
+
+joint_5:
+  node_id: 5
+  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.eds
+  heartbeat_producer: 500
+  rpdo:
+    1:
+      cob_id: 0x205
+      transmission: 1
+      mapping:
+        - {index: 0x6040, sub_index: 0, bits: 16}
+        - {index: 0x607A, sub_index: 0, bits: 32}
+        - {index: 0x6060, sub_index: 0, bits: 8}
+    2:
+      enabled: false
+    3:
+      enabled: false
+    4:
+      enabled: false
+  tpdo:
+    1:
+      cob_id: 0x185
+      transmission: 1
+      mapping:
+        - {index: 0x6041, sub_index: 0, bits: 16}
+        - {index: 0x6064, sub_index: 0, bits: 32}
+        - {index: 0x6061, sub_index: 0, bits: 8}
+    2:
+      cob_id: 0x285
+      transmission: 1
+      mapping:
+        - {index: 0x606C, sub_index: 0, bits: 32}
+        - {index: 0x6077, sub_index: 0, bits: 16}
+    3:
+      enabled: false
+    4:
+      enabled: false
+  sdo:
+    - {index: 0x6060, sub_index: 0, value: 8}
+
+joint_6:
+  node_id: 6
+  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.eds
+  heartbeat_producer: 500
+  rpdo:
+    1:
+      cob_id: 0x206
+      transmission: 1
+      mapping:
+        - {index: 0x6040, sub_index: 0, bits: 16}
+        - {index: 0x607A, sub_index: 0, bits: 32}
+        - {index: 0x6060, sub_index: 0, bits: 8}
+    2:
+      enabled: false
+    3:
+      enabled: false
+    4:
+      enabled: false
+  tpdo:
+    1:
+      cob_id: 0x186
+      transmission: 1
+      mapping:
+        - {index: 0x6041, sub_index: 0, bits: 16}
+        - {index: 0x6064, sub_index: 0, bits: 32}
+        - {index: 0x6061, sub_index: 0, bits: 8}
+    2:
+      cob_id: 0x286
+      transmission: 1
+      mapping:
+        - {index: 0x606C, sub_index: 0, bits: 32}
+        - {index: 0x6077, sub_index: 0, bits: 16}
+    3:
+      enabled: false
+    4:
+      enabled: false
+  sdo:
+    - {index: 0x6060, sub_index: 0, value: 8}
