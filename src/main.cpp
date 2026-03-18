@@ -87,11 +87,22 @@ int main(int argc, char** argv) {
     } else {
       master_cfg.node_ids.clear();
       master_cfg.verify_pdo_mapping.clear();
+      master_cfg.position_lock_thresholds.clear();
+      master_cfg.max_fault_resets.clear();
+      master_cfg.fault_reset_hold_cycles.clear();
       master_cfg.node_ids.reserve(runtime_cfg.joints.size());
       master_cfg.verify_pdo_mapping.reserve(runtime_cfg.joints.size());
+      master_cfg.position_lock_thresholds.reserve(runtime_cfg.joints.size());
+      master_cfg.max_fault_resets.reserve(runtime_cfg.joints.size());
+      master_cfg.fault_reset_hold_cycles.reserve(runtime_cfg.joints.size());
       for (const auto& joint : runtime_cfg.joints) {
         master_cfg.node_ids.push_back(joint.node_id);
         master_cfg.verify_pdo_mapping.push_back(joint.verify_pdo_mapping);
+        master_cfg.position_lock_thresholds.push_back(
+            joint.position_lock_threshold);
+        master_cfg.max_fault_resets.push_back(joint.max_fault_resets);
+        master_cfg.fault_reset_hold_cycles.push_back(
+            joint.fault_reset_hold_cycles);
       }
       if (!master_cfg.node_ids.empty()) {
         master_cfg.axis_count = master_cfg.node_ids.size();

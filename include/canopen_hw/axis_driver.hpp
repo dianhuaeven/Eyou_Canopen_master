@@ -43,6 +43,9 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   bool SendTargetPosition(int32_t target_position);
   bool SendNmtStopAll();
   CiA402State feedback_state() const;
+  void ConfigureStateMachine(int32_t position_lock_threshold,
+                             int max_fault_resets,
+                             int fault_reset_hold_cycles);
 
  private:
   // Lely 回调: RPDO/SDO 写入了 RPDO-mapped 对象后触发。

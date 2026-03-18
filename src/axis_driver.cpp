@@ -109,6 +109,16 @@ CiA402State AxisDriver::feedback_state() const {
   return feedback_cache_.state;
 }
 
+void AxisDriver::ConfigureStateMachine(int32_t position_lock_threshold,
+                                       int max_fault_resets,
+                                       int fault_reset_hold_cycles) {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.set_position_lock_threshold(position_lock_threshold);
+  // wait_cycles 保持状态机默认值 100，仅接通当前 YAML 中已定义的参数。
+  state_machine_.set_fault_reset_policy(fault_reset_hold_cycles, 100,
+                                        max_fault_resets);
+}
+
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;

@@ -30,6 +30,9 @@ struct CanopenMasterConfig {
   std::size_t axis_count = 6;
   std::vector<uint8_t> node_ids;
   std::vector<bool> verify_pdo_mapping;
+  std::vector<int32_t> position_lock_thresholds;
+  std::vector<int> max_fault_resets;
+  std::vector<int> fault_reset_hold_cycles;
 };
 
 class CanopenMaster {

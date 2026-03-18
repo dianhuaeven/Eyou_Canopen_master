@@ -11,6 +11,9 @@ namespace canopen_hw {
 struct JointCanopenConfig {
   uint8_t node_id = 0;
   bool verify_pdo_mapping = false;
+  int32_t position_lock_threshold = 15000;
+  int max_fault_resets = 3;
+  int fault_reset_hold_cycles = 5;
 };
 
 struct CanopenRuntimeConfig {

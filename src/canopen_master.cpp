@@ -27,6 +27,15 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
   if (config_.verify_pdo_mapping.size() < config_.axis_count) {
     config_.verify_pdo_mapping.resize(config_.axis_count, false);
   }
+  if (config_.position_lock_thresholds.size() < config_.axis_count) {
+    config_.position_lock_thresholds.resize(config_.axis_count, 15000);
+  }
+  if (config_.max_fault_resets.size() < config_.axis_count) {
+    config_.max_fault_resets.resize(config_.axis_count, 3);
+  }
+  if (config_.fault_reset_hold_cycles.size() < config_.axis_count) {
+    config_.fault_reset_hold_cycles.resize(config_.axis_count, 5);
+  }
   // 预分配驱动容器容量，保证运行阶段不会因为扩容触发堆分配。
   axis_drivers_.reserve(config_.axis_count);
 }
@@ -169,10 +178,13 @@ void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& master) {
 
   for (std::size_t i = 0; i < config_.axis_count; ++i) {
     const uint8_t node_id = config_.node_ids[i];
-    axis_drivers_.emplace_back(
-        std::make_unique<AxisDriver>(master, node_id, i, shared_state_,
-                                     config_.verify_pdo_mapping[i],
-                                     config_.master_dcf_path));
+    auto axis = std::make_unique<AxisDriver>(master, node_id, i, shared_state_,
+                                             config_.verify_pdo_mapping[i],
+                                             config_.master_dcf_path);
+    axis->ConfigureStateMachine(config_.position_lock_thresholds[i],
+                                config_.max_fault_resets[i],
+                                config_.fault_reset_hold_cycles[i]);
+    axis_drivers_.emplace_back(std::move(axis));
   }
 }
 

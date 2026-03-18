@@ -88,6 +88,16 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
       if (canopen && canopen.IsMap() && canopen["verify_pdo_mapping"]) {
         cfg.verify_pdo_mapping = canopen["verify_pdo_mapping"].as<bool>();
       }
+      if (joint["position_lock_threshold"]) {
+        cfg.position_lock_threshold = joint["position_lock_threshold"].as<int>();
+      }
+      if (joint["max_fault_resets"]) {
+        cfg.max_fault_resets = joint["max_fault_resets"].as<int>();
+      }
+      if (joint["fault_reset_hold_cycles"]) {
+        cfg.fault_reset_hold_cycles =
+            joint["fault_reset_hold_cycles"].as<int>();
+      }
       runtime_cfg->joints.push_back(cfg);
     }
 
