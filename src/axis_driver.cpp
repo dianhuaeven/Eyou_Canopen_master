@@ -190,22 +190,35 @@ void AxisDriver::OnHeartbeat(bool occurred) noexcept {
 
 void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                         const std::string& what) noexcept {
+  (void)st;
   (void)what;
   if (!verify_pdo_mapping_) {
     pdo_verified_.store(true);
     pdo_verification_done_.store(true);
+    boot_retry_count_ = 0;
     return;
   }
   if (pdo_verification_done_.load()) {
     return;
   }
   if (es != 0) {
+    if (boot_retry_count_ < max_boot_retries_) {
+      ++boot_retry_count_;
+      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
+                << "): OnConfig failed (es=" << static_cast<int>(es)
+                << "), retry " << boot_retry_count_ << "/" << max_boot_retries_
+                << " with RESET_NODE" << std::endl;
+      master.Command(lely::canopen::NmtCommand::RESET_NODE, id());
+      return;
+    }
     std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-              << "): OnConfig failed, skip PDO verify" << std::endl;
+              << "): OnConfig failed (es=" << static_cast<int>(es)
+              << "), retries exhausted; mark PDO verify failed" << std::endl;
     pdo_verified_.store(false);
     pdo_verification_done_.store(true);
     return;
   }
+  boot_retry_count_ = 0;
   if (!expected_pdo_loaded_ || !expected_pdo_) {
     std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
               << "): DCF not loaded, skip PDO verify" << std::endl;
