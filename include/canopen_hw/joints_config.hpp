@@ -16,7 +16,15 @@ struct JointCanopenConfig {
   int fault_reset_hold_cycles = 5;
 };
 
+struct MasterConfig {
+  std::string can_interface = "can0";
+  int bitrate = 1000000;
+  uint8_t master_node_id = 127;
+  int sync_period_us = 10000;
+};
+
 struct CanopenRuntimeConfig {
+  MasterConfig master;
   std::vector<JointCanopenConfig> joints;
 };
 

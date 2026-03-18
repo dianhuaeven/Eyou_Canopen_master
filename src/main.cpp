@@ -85,6 +85,8 @@ int main(int argc, char** argv) {
                                            &runtime_cfg)) {
       std::cerr << "Load joints.yaml failed: " << error << std::endl;
     } else {
+      master_cfg.can_interface = runtime_cfg.master.can_interface;
+      master_cfg.master_node_id = runtime_cfg.master.master_node_id;
       master_cfg.node_ids.clear();
       master_cfg.verify_pdo_mapping.clear();
       master_cfg.position_lock_thresholds.clear();
@@ -107,6 +109,14 @@ int main(int argc, char** argv) {
       if (!master_cfg.node_ids.empty()) {
         master_cfg.axis_count = master_cfg.node_ids.size();
       }
+
+      std::cout << "Loaded top-level canopen config: interface="
+                << runtime_cfg.master.can_interface
+                << " master_node_id="
+                << static_cast<int>(runtime_cfg.master.master_node_id)
+                << " bitrate=" << runtime_cfg.master.bitrate
+                << " sync_period_us=" << runtime_cfg.master.sync_period_us
+                << std::endl;
     }
   }
 
