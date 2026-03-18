@@ -120,8 +120,9 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       break;
 
     case CiA402State::QuickStopActive:
-      // 快停执行期间不注入额外状态机指令, 等驱动自行回落。
-      controlword_ = kCtrl_DisableVoltage;
+      // 某些驱动器在 QuickStopActive 下需要明确 EnableVoltage(0x0002)
+      // 才会回到 SwitchOnDisabled 路径。
+      controlword_ = kCtrl_EnableVoltage;
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
