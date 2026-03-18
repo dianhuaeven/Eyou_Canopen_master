@@ -18,6 +18,7 @@ struct AxisFeedback {
   CiA402State state = CiA402State::NotReadyToSwitchOn;
   bool is_operational = false;
   bool is_fault = false;
+  bool heartbeat_lost = false;
 };
 
 // 线程间共享的单轴命令(由 ROS 线程写入)。

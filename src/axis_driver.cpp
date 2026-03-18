@@ -164,8 +164,22 @@ void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
 }
 
 void AxisDriver::OnHeartbeat(bool occurred) noexcept {
-  (void)occurred;
-  // TODO: 心跳超时/恢复状态上报到 SharedState。
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    feedback_cache_.heartbeat_lost = occurred;
+    if (occurred) {
+      feedback_cache_.is_fault = true;
+      feedback_cache_.is_operational = false;
+    } else {
+      feedback_cache_.is_fault = state_machine_.is_fault();
+      feedback_cache_.is_operational =
+          state_machine_.is_operational() && !feedback_cache_.is_fault;
+    }
+  }
+  PublishSnapshot();
+  if (shared_state_) {
+    shared_state_->RecomputeAllOperational();
+  }
 }
 
 void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
