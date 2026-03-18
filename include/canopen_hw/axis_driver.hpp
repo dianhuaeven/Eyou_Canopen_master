@@ -40,6 +40,7 @@ class AxisDriver final : public lely::canopen::BasicDriver {
 
   // 关机流程辅助接口。
   bool SendControlword(uint16_t controlword);
+  bool SendTargetPosition(int32_t target_position);
   bool SendNmtStopAll();
   CiA402State feedback_state() const;
 

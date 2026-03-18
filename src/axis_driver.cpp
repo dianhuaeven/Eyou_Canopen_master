@@ -88,6 +88,17 @@ bool AxisDriver::SendControlword(uint16_t controlword) {
   return !ec;
 }
 
+bool AxisDriver::SendTargetPosition(int32_t target_position) {
+  // 从主站视角发送 TPDO（从站视角接收 RPDO），用于下发 0x607A。
+  std::error_code ec;
+  tpdo_mapped[0x607A][0].Write(target_position, ec);
+  if (ec) {
+    return false;
+  }
+  tpdo_mapped[0x607A][0].WriteEvent(ec);
+  return !ec;
+}
+
 bool AxisDriver::SendNmtStopAll() {
   master.Command(lely::canopen::NmtCommand::STOP);
   return true;
@@ -101,6 +112,17 @@ CiA402State AxisDriver::feedback_state() const {
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;
+  int32_t ros_target_ticks = 0;
+  bool have_ros_target = false;
+  if (shared_state_) {
+    const SharedSnapshot snap = shared_state_->Snapshot();
+    ros_target_ticks = snap.commands[axis_index_].target_position;
+    have_ros_target = true;
+  }
+  if (have_ros_target) {
+    SetRosTargetPosition(ros_target_ticks);
+  }
+
   // RPDO 触发后读取关键反馈字段并推进状态机。
   std::error_code ec;
   const auto statusword = rpdo_mapped[0x6041][0].Read<uint16_t>(ec);
@@ -129,6 +151,8 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
 
   if (shared_state_) {
     shared_state_->RecomputeAllOperational();
+    const SharedSnapshot snap = shared_state_->Snapshot();
+    (void)SendTargetPosition(snap.commands[axis_index_].target_position);
   }
 }
 
