@@ -19,6 +19,7 @@ struct AxisFeedback {
   bool is_operational = false;
   bool is_fault = false;
   bool heartbeat_lost = false;
+  uint16_t last_emcy_eec = 0;
 };
 
 // 线程间共享的单轴命令(由 ROS 线程写入)。

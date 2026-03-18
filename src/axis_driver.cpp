@@ -157,10 +157,16 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
 }
 
 void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
-  (void)eec;
-  (void)er;
   (void)msef;
-  // TODO: 增加错误码映射与日志记录。
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    feedback_cache_.last_emcy_eec = eec;
+  }
+  std::cerr << "Axis " << axis_index_ << " EMCY eec=0x"
+            << std::hex << static_cast<unsigned int>(eec)
+            << " er=0x" << static_cast<unsigned int>(er) << std::dec
+            << std::endl;
+  PublishSnapshot();
 }
 
 void AxisDriver::OnHeartbeat(bool occurred) noexcept {
