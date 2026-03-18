@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -63,8 +64,8 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   std::size_t axis_index_ = 0;
   SharedState* shared_state_ = nullptr;  // 非拥有指针，生命周期由 Master 管理。
   bool verify_pdo_mapping_ = false;
-  bool pdo_verified_ = true;
-  bool pdo_verification_done_ = false;
+  std::atomic<bool> pdo_verified_{true};
+  std::atomic<bool> pdo_verification_done_{false};
   std::string dcf_path_;
   std::shared_ptr<PdoMapping> expected_pdo_;
   bool expected_pdo_loaded_ = false;

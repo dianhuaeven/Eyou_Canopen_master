@@ -12,17 +12,15 @@ void SharedState::UpdateFeedback(std::size_t axis_index,
 }
 
 void SharedState::RecomputeAllOperational() {
+  std::lock_guard<std::mutex> lk(mtx_);
   bool all_ok = true;
-  {
-    std::lock_guard<std::mutex> lk(mtx_);
-    for (const auto& axis_feedback : feedback_) {
-      if (!axis_feedback.is_operational || axis_feedback.is_fault) {
-        all_ok = false;
-        break;
-      }
+  for (const auto& axis_feedback : feedback_) {
+    if (!axis_feedback.is_operational || axis_feedback.is_fault) {
+      all_ok = false;
+      break;
     }
   }
-  SetAllOperational(all_ok);
+  all_operational_ = all_ok;
 }
 
 void SharedState::UpdateCommand(std::size_t axis_index,

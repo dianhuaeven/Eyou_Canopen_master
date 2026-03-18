@@ -19,28 +19,28 @@ AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
       verify_pdo_mapping_(verify_pdo_mapping),
       dcf_path_(dcf_path) {
   state_machine_.set_target_mode(kMode_CSP);
-  pdo_verified_ = !verify_pdo_mapping_;
-  pdo_verification_done_ = !verify_pdo_mapping_;
+  pdo_verified_.store(!verify_pdo_mapping_);
+  pdo_verification_done_.store(!verify_pdo_mapping_);
   if (verify_pdo_mapping_) {
     expected_pdo_ = std::make_shared<PdoMapping>();
     if (dcf_path_.empty()) {
       std::cerr << "Axis " << axis_index_ << " (node "
                 << static_cast<int>(id())
                 << "): DCF path empty, skip PDO verify" << std::endl;
-      pdo_verified_ = false;
-      pdo_verification_done_ = true;
+      pdo_verified_.store(false);
+      pdo_verification_done_.store(true);
     } else {
       std::string err;
       if (LoadExpectedPdoMappingFromDcf(dcf_path_, expected_pdo_.get(), &err)) {
         expected_pdo_loaded_ = true;
-        pdo_verified_ = false;
-        pdo_verification_done_ = false;
+        pdo_verified_.store(false);
+        pdo_verification_done_.store(false);
       } else {
         std::cerr << "Axis " << axis_index_ << " (node "
                   << static_cast<int>(id())
                   << "): DCF load failed: " << err << std::endl;
-        pdo_verified_ = false;
-        pdo_verification_done_ = true;
+        pdo_verified_.store(false);
+        pdo_verification_done_.store(true);
       }
     }
   }
@@ -70,7 +70,7 @@ void AxisDriver::InjectFeedback(int32_t actual_position, int32_t actual_velocity
   feedback_cache_.is_operational = state_machine_.is_operational();
   feedback_cache_.is_fault = state_machine_.is_fault();
   if (verify_pdo_mapping_ &&
-      (!pdo_verification_done_ || !pdo_verified_)) {
+      (!pdo_verification_done_.load() || !pdo_verified_.load())) {
     feedback_cache_.is_operational = false;
   }
 
@@ -148,25 +148,25 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                         const std::string& what) noexcept {
   (void)what;
   if (!verify_pdo_mapping_) {
-    pdo_verified_ = true;
-    pdo_verification_done_ = true;
+    pdo_verified_.store(true);
+    pdo_verification_done_.store(true);
     return;
   }
-  if (pdo_verification_done_) {
+  if (pdo_verification_done_.load()) {
     return;
   }
   if (es != 0) {
     std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
               << "): OnConfig failed, skip PDO verify" << std::endl;
-    pdo_verified_ = false;
-    pdo_verification_done_ = true;
+    pdo_verified_.store(false);
+    pdo_verification_done_.store(true);
     return;
   }
   if (!expected_pdo_loaded_ || !expected_pdo_) {
     std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
               << "): DCF not loaded, skip PDO verify" << std::endl;
-    pdo_verified_ = false;
-    pdo_verification_done_ = true;
+    pdo_verified_.store(false);
+    pdo_verification_done_.store(true);
     return;
   }
 
@@ -176,8 +176,8 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
     if (!ok) {
       std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
                 << "): PDO read failed: " << error << std::endl;
-      pdo_verified_ = false;
-      pdo_verification_done_ = true;
+      pdo_verified_.store(false);
+      pdo_verification_done_.store(true);
       pdo_reader_.reset();
       return;
     }
@@ -189,14 +189,14 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
       for (const auto& diff : diffs) {
         std::cerr << "  " << diff << std::endl;
       }
-      pdo_verified_ = false;
+      pdo_verified_.store(false);
     } else {
       std::cout << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
                 << "): PDO mapping verified" << std::endl;
-      pdo_verified_ = true;
+      pdo_verified_.store(true);
     }
 
-    pdo_verification_done_ = true;
+    pdo_verification_done_.store(true);
     pdo_reader_.reset();
   }, std::chrono::milliseconds(2000));
 }
