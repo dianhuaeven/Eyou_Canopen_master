@@ -37,3 +37,40 @@ TEST(SharedStateGTest, OutOfRangeIgnored) {
   const auto snap = shared.Snapshot();
   EXPECT_EQ(snap.commands[0].target_position, 777);
 }
+
+TEST(SharedStateGTest, RecomputeAllOperationalTrueWhenAllOperationalAndNoFault) {
+  canopen_hw::SharedState shared;
+
+  for (std::size_t i = 0; i < canopen_hw::SharedState::kAxisCount; ++i) {
+    canopen_hw::AxisFeedback fb;
+    fb.is_operational = true;
+    fb.is_fault = false;
+    shared.UpdateFeedback(i, fb);
+  }
+
+  shared.RecomputeAllOperational();
+  const auto snap = shared.Snapshot();
+  EXPECT_TRUE(snap.all_operational);
+}
+
+TEST(SharedStateGTest, RecomputeAllOperationalFalseWhenAnyAxisFault) {
+  canopen_hw::SharedState shared;
+
+  for (std::size_t i = 0; i < canopen_hw::SharedState::kAxisCount; ++i) {
+    canopen_hw::AxisFeedback fb;
+    fb.is_operational = true;
+    fb.is_fault = false;
+    shared.UpdateFeedback(i, fb);
+  }
+
+  canopen_hw::AxisFeedback fault_fb;
+  fault_fb.is_operational = true;
+  fault_fb.is_fault = true;
+  fault_fb.heartbeat_lost = true;
+  shared.UpdateFeedback(3, fault_fb);
+
+  shared.RecomputeAllOperational();
+  const auto snap = shared.Snapshot();
+  EXPECT_FALSE(snap.all_operational);
+  EXPECT_TRUE(snap.feedback[3].heartbeat_lost);
+}
