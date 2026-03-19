@@ -14,8 +14,9 @@ uint8_t SdoResult::as_u8() const {
 
 uint16_t SdoResult::as_u16() const {
   if (data.size() < 2) return as_u8();
-  return static_cast<uint16_t>(static_cast<uint16_t>(data[0]) |
-         static_cast<uint16_t>(static_cast<uint16_t>(data[1]) << 8));
+  const uint32_t val = static_cast<uint32_t>(data[0]) |
+                       (static_cast<uint32_t>(data[1]) << 8);
+  return static_cast<uint16_t>(val);
 }
 
 uint32_t SdoResult::as_u32() const {
