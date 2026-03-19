@@ -37,7 +37,7 @@
 | P2-2 | kCtrl 同值常量无注释 | C11 | ✅ 已修复 |
 | P2-3 | kAxisCount 硬编码 vs 运行时不一致 | — | ⚠️ 接受风险（见下） |
 | P2-4 | joints.yaml 只配了 1 轴 | C13 | ✅ 已修复 |
-| P2-5 | AbsDiff int32 截断 | C06 文档化 | ⚠️ 接受风险（见下） |
+| P2-5 | AbsDiff int32 截断 | C06 + C14 | ✅ 已修复 |
 | P2-6 | 缺少 Soak 和故障注入文档 | C13 | ✅ 已修复 |
 
 ---
@@ -49,7 +49,6 @@
 | # | 问题 | 接受理由 |
 |---|------|----------|
 | P2-3 | `kAxisCount` 编译期硬编码 6 | 当前硬件固定为 6 轴，运行时通过 `active_axis_count_` 配置实际使用轴数，`kAxisCount` 仅为数组上界。后续支持动态轴数时再重构 |
-| P2-5 | `AbsDiff` 返回 `int32_t` 理论截断 | 触发条件为两个关节位置差超过 2^31 ticks（电机转动上百万圈），工程上不可能发生。已在 `Boundary.Int32ExtremeAbsDiffTruncation` 测试中文档化 |
 
 ---
 
