@@ -159,11 +159,16 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   InjectFeedback(actual_position, actual_velocity, actual_torque, statusword,
                  mode_display);
 
+  int32_t safe_target_ticks = 0;
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    safe_target_ticks = state_machine_.safe_target();
+  }
+
   if (shared_state_) {
     shared_state_->RecomputeAllOperational();
-    const SharedSnapshot snap = shared_state_->Snapshot();
-    (void)SendTargetPosition(snap.commands[axis_index_].target_position);
   }
+  (void)SendTargetPosition(safe_target_ticks);
 }
 
 void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
