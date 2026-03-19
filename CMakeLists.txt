@@ -197,3 +197,9 @@ add_executable(test_realtime_loop
 )
 target_link_libraries(test_realtime_loop PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_realtime_loop)
+
+add_executable(test_axis_logic
+  test/test_axis_logic.cpp
+)
+target_link_libraries(test_axis_logic PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_axis_logic)
