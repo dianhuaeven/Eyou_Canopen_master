@@ -226,4 +226,25 @@ void CanopenMaster::EmergencyStop() {
   }
 }
 
+bool CanopenMaster::GetAxisFeedback(std::size_t axis_index,
+                                    AxisFeedback* out) const {
+  if (!out || !shared_state_ || axis_index >= axis_drivers_.size()) {
+    return false;
+  }
+  const SharedSnapshot snap = shared_state_->Snapshot();
+  if (axis_index >= snap.feedback.size()) {
+    return false;
+  }
+  *out = snap.feedback[axis_index];
+  return true;
+}
+
+const HealthCounters* CanopenMaster::GetHealthCounters(
+    std::size_t axis_index) const {
+  if (axis_index >= axis_drivers_.size() || !axis_drivers_[axis_index]) {
+    return nullptr;
+  }
+  return &axis_drivers_[axis_index]->health();
+}
+
 }  // namespace canopen_hw

@@ -77,6 +77,12 @@ class CanopenMaster {
   // 全轴紧急停止: 对所有轴发送 DisableVoltage。
   void EmergencyStop();
 
+  // 每轴状态查询。越界返回 false。
+  bool GetAxisFeedback(std::size_t axis_index, AxisFeedback* out) const;
+
+  // 每轴健康计数快照（非拷贝，返回指针供读取）。越界返回 nullptr。
+  const HealthCounters* GetHealthCounters(std::size_t axis_index) const;
+
  private:
   // 供后续真实 master 初始化后调用:
   // 基于 node-id 1..N 创建 AxisDriver。
