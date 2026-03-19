@@ -176,15 +176,15 @@ void AxisDriver::AsyncSdoWrite(uint16_t index, uint8_t subindex,
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;
-  int32_t ros_target_ticks = 0;
-  bool have_ros_target = false;
   if (shared_state_) {
     AxisCommand cmd;
-    have_ros_target = shared_state_->GetCommand(axis_index_, &cmd);
-    ros_target_ticks = cmd.target_position;
-  }
-  if (have_ros_target) {
-    SetRosTargetPosition(ros_target_ticks);
+    if (shared_state_->GetCommand(axis_index_, &cmd)) {
+      std::lock_guard<std::mutex> lk(mtx_);
+      state_machine_.set_ros_target(cmd.target_position);
+      state_machine_.set_ros_target_velocity(cmd.target_velocity);
+      state_machine_.set_ros_target_torque(cmd.target_torque);
+      state_machine_.set_target_mode(cmd.mode_of_operation);
+    }
   }
 
   // RPDO 触发后读取关键反馈字段并推进状态机。
@@ -214,15 +214,21 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
                  mode_display);
 
   int32_t safe_target_ticks = 0;
+  int32_t safe_target_velocity = 0;
+  int16_t safe_target_torque = 0;
   {
     std::lock_guard<std::mutex> lk(mtx_);
     safe_target_ticks = state_machine_.safe_target();
+    safe_target_velocity = state_machine_.safe_target_velocity();
+    safe_target_torque = state_machine_.safe_target_torque();
   }
 
   if (shared_state_) {
     shared_state_->RecomputeAllOperational();
   }
   (void)SendTargetPosition(safe_target_ticks);
+  (void)safe_target_velocity;  // TODO: PDO 写入 0x60FF (target velocity)
+  (void)safe_target_torque;    // TODO: PDO 写入 0x6071 (target torque)
 }
 
 void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
@@ -362,6 +368,9 @@ void AxisDriver::PublishSnapshot() {
   // 不再写入 commands（ROS 线程专用），避免覆盖 ROS 侧用户期望位置。
   AxisSafeCommand safe_cmd;
   safe_cmd.safe_target_position = state_machine_.safe_target();
+  safe_cmd.safe_target_velocity = state_machine_.safe_target_velocity();
+  safe_cmd.safe_target_torque = state_machine_.safe_target_torque();
+  safe_cmd.safe_mode_of_operation = state_machine_.safe_mode_of_operation();
 
   shared_state_->UpdateFeedback(axis_index_, feedback_cache_);
   shared_state_->UpdateSafeCommand(axis_index_, safe_cmd);
