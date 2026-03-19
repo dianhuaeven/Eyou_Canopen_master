@@ -7,13 +7,13 @@
 
 ## 1. 项目简介
 
-本项目实现面向 6 轴谐波关节的 CANopen 主站控制栈，基于 Lely-core 与 CSP 模式。系统由三层核心模块组成：
+本项目实现面向 6 轴谐波关节的 CANopen 主站控制栈，基于 Lely-core，支持 CSP/CSV/CST 三种运动模式。系统由三层核心模块组成：
 
 - CANopen 主站层：负责 Lely I/O 初始化、AsyncMaster 事件循环与从站驱动管理。
-- 轴驱动层：每轴一个驱动，接入 CiA402 状态机与 PDO/SDO 交互。
+- 轴驱动层：每轴一个驱动，通过 AxisLogic + BusIO 接口接入 CiA402 状态机与 PDO/SDO 交互。
 - 上层接口层：以 `SharedState` 作为线程间共享数据面，连接控制算法或 ROS 侧。
 
-当前版本为独立可运行程序（`canopen_hw_node`），未接入 ROS。主循环以 100Hz 读写 `SharedState`，与 Lely 事件线程并行运行。
+当前版本为独立可运行程序（`canopen_hw_node`），未接入 ROS。主循环以 100Hz 通过 RealtimeLoop（clock_nanosleep 绝对时间等待）读写 `SharedState`，与 Lely 事件线程并行运行。
 
 ---
 
@@ -37,20 +37,25 @@
 ```
 include/
   canopen_hw/
-    axis_driver.hpp           # 单轴驱动，回调接入、状态机入口
+    axis_driver.hpp           # Lely 适配器，实现 BusIO，委托 AxisLogic
+    axis_logic.hpp            # 单轴核心逻辑（状态机、反馈、健康计数）
+    bus_io.hpp                # 总线写入抽象接口
     canopen_master.hpp        # 主站与 Lely 生命周期管理
     canopen_robot_hw.hpp      # 机器人硬件抽象层（读写 SharedState）
-    cia402_state_machine.hpp  # CiA402 状态机
+    cia402_state_machine.hpp  # CiA402 状态机（CSP/CSV/CST）
     joints_config.hpp         # joints.yaml 解析
     pdo_mapping.hpp           # PDO 读取/比对
+    realtime_loop.hpp         # 周期性实时循环（clock_nanosleep）
     shared_state.hpp          # 共享状态
 src/
   axis_driver.cpp
+  axis_logic.cpp
   canopen_master.cpp
   canopen_robot_hw.cpp
   cia402_state_machine.cpp
   joints_config.cpp
   pdo_mapping.cpp
+  realtime_loop.cpp
   shared_state.cpp
   main.cpp
 config/
@@ -58,7 +63,7 @@ config/
   master.yaml
   master.dcf
   *.eds
-_docs/
+docs/
   usage.md
   canopenplan.md
   pdo_sdo_design.md
@@ -81,15 +86,19 @@ _docs/
 - `CreateAxisDrivers()`：创建 6 轴驱动。
 - 启动 `ev::Loop` 线程，并 `Reset()` 触发配置流程。
 
-### 4.2 AxisDriver
+### 4.2 AxisDriver / AxisLogic / BusIO
 
-职责：单轴驱动，继承 `lely::canopen::BasicDriver`，处理回调并驱动 CiA402 状态机。
+AxisDriver 是 Lely 适配器，继承 `BasicDriver` 并实现 `BusIO` 接口。核心逻辑委托给 `AxisLogic`。
+
+- `AxisDriver`：Lely 回调转发 + PDO 读写 + PDO 验证 + SDO 转发
+- `AxisLogic`：状态机驱动、反馈缓存、健康计数、安全目标计算
+- `BusIO`：纯虚接口（WriteControlword/Position/Velocity/Torque/Mode），可 mock 测试
 
 关键功能：
-- `OnRpdoWrite()`：读取 PDO 映射对象，推进状态机。
-- `OnBoot()`：触发 PDO 映射验证；失败则阻断该轴 Operational。
-- `InjectFeedback()`：统一反馈入口。
-- `SendControlword()`：下发控制字。
+- `OnRpdoWrite()`：读取 RPDO 反馈，委托 AxisLogic::ProcessRpdo 推进状态机并写安全目标
+- `OnBoot()`：触发 PDO 映射验证；失败则阻断该轴 Operational
+- `OnEmcy()`/`OnHeartbeat()`：委托 AxisLogic 处理，更新健康计数和 SharedState
+- PDO 下行：支持 0x607A（位置）、0x60FF（速度）、0x6071（力矩）、0x6060（模式）
 
 ### 4.3 SharedState
 
@@ -222,8 +231,8 @@ cmake --build /home/dianhua/robot_test/build -j
 | DCF 文件不存在 | 启动前直接退出 | `main.cpp` 预检查 |
 | 从站 PDO 映射不一致 | 该轴不进入 Operational | 日志输出差异明细 |
 | SDO 读回超时 | 该轴验证失败 | 超时 2s |
-| 心跳超时 | 未处理 | TODO（需上报 SharedState） |
-| EMCY | 仅占位 | TODO（需日志/映射） |
+| 心跳超时 | 标记该轴 fault，上报 SharedState | AxisLogic::ProcessHeartbeat |
+| EMCY | 记录 EEC，递增健康计数 | AxisLogic::ProcessEmcy |
 
 ---
 
@@ -238,18 +247,19 @@ cmake --build /home/dianhua/robot_test/build -j
 
 限制：
 - 尚未接入 ROS controller_manager。
-- 不做 EMCY 映射与自动复位。
-- 仅支持固定 6 轴配置（由 `axis_count` 决定）。
+- 不做 EMCY 自动复位（仅记录和计数）。
+- 轴数由 `joints.yaml` 配置决定，上限 16 轴。
 
 建议后续：
 - 增加上电/OnBoot 超时与失败恢复策略。
-- 增加对心跳超时的上报。
 - 将 `SharedState` 对接 ROS 控制器。
+- SCHED_FIFO 需 root 或 CAP_SYS_NICE，生产部署需配置权限。
 
 ---
 
 ## 12. 版本与变更
 
+- 2026-03-19：补齐 CSV/CST PDO 下行链路；RealtimeLoop 替代 sleep_for；抽取 BusIO/AxisLogic 提升可测试性。
 - 2026-03-17：完成 PDO 映射验证 + 超时兜底 + Lely 主站真实启动流程。
 
 ---
