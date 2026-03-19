@@ -1,6 +1,7 @@
 #include "canopen_hw/sdo_accessor.hpp"
 
 #include <future>
+#include <memory>
 
 #include "canopen_hw/canopen_master.hpp"
 
@@ -89,12 +90,12 @@ void SdoAccessor::AsyncWrite(uint8_t node_id, uint16_t index, uint8_t subindex,
 
 SdoResult SdoAccessor::Read(uint8_t node_id, uint16_t index, uint8_t subindex,
                             std::chrono::milliseconds timeout) {
-  std::promise<SdoResult> promise;
-  auto future = promise.get_future();
+  auto promise = std::make_shared<std::promise<SdoResult>>();
+  auto future = promise->get_future();
 
   AsyncRead(node_id, index, subindex,
-            [&promise](const SdoResult& result) {
-              promise.set_value(result);
+            [promise](const SdoResult& result) {
+              promise->set_value(result);
             });
 
   if (future.wait_for(timeout) == std::future_status::timeout) {
@@ -106,12 +107,12 @@ SdoResult SdoAccessor::Read(uint8_t node_id, uint16_t index, uint8_t subindex,
 SdoResult SdoAccessor::Write(uint8_t node_id, uint16_t index, uint8_t subindex,
                              const std::vector<uint8_t>& data,
                              std::chrono::milliseconds timeout) {
-  std::promise<SdoResult> promise;
-  auto future = promise.get_future();
+  auto promise = std::make_shared<std::promise<SdoResult>>();
+  auto future = promise->get_future();
 
   AsyncWrite(node_id, index, subindex, data,
-             [&promise](const SdoResult& result) {
-               promise.set_value(result);
+             [promise](const SdoResult& result) {
+               promise->set_value(result);
              });
 
   if (future.wait_for(timeout) == std::future_status::timeout) {
