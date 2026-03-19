@@ -42,7 +42,9 @@ include/
     bus_io.hpp                # 总线写入抽象接口
     canopen_master.hpp        # 主站与 Lely 生命周期管理
     canopen_robot_hw.hpp      # 机器人硬件抽象层（读写 SharedState）
+    canopen_robot_hw_ros.hpp  # ROS1 ros_control 适配层
     cia402_state_machine.hpp  # CiA402 状态机（CSP/CSV/CST）
+    lifecycle_manager.hpp     # 生命周期管理（Init/Halt/Recover/Shutdown）
     joints_config.hpp         # joints.yaml 解析
     pdo_mapping.hpp           # PDO 读取/比对
     realtime_loop.hpp         # 周期性实时循环（clock_nanosleep）
@@ -52,23 +54,24 @@ src/
   axis_logic.cpp
   canopen_master.cpp
   canopen_robot_hw.cpp
+  canopen_robot_hw_ros.cpp    # ROS 适配层实现
+  canopen_hw_ros_node.cpp     # ROS 节点入口
   cia402_state_machine.cpp
   joints_config.cpp
+  lifecycle_manager.cpp
   pdo_mapping.cpp
   realtime_loop.cpp
   shared_state.cpp
-  main.cpp
+  main.cpp                    # 独立模式入口
+srv/
+  SetMode.srv                 # 运动模式切换 service 定义
 config/
   joints.yaml
   master.yaml
   master.dcf
-  *.eds
-docs/
-  usage.md
-  canopenplan.md
-  pdo_sdo_design.md
-  change_report_pdo_verify.md
-  review_report_and_fix_plan.md
+  ros/controllers.yaml        # ros_control controller 配置
+launch/
+  canopen_hw.launch           # ROS 一键启动
 ```
 
 ---

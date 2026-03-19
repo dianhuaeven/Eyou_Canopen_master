@@ -75,19 +75,31 @@ dcfgen -S -r -d /home/dianhua/robot_test/config \
 
 ## 4. 编译
 
+### 4.1 独立编译（不依赖 ROS）
+
 ```bash
-cmake -S /home/dianhua/robot_test -B /home/dianhua/robot_test/build
-cmake --build /home/dianhua/robot_test/build -j
+cmake -S . -B build
+cmake --build build -j
+```
+
+### 4.2 catkin 编译（ROS 模式）
+
+```bash
+cd ~/Robot24_catkin_ws
+catkin_make --pkg canopen_hw
+source devel/setup.bash
 ```
 
 ---
 
 ## 5. 启动
 
+### 5.1 独立模式
+
 ```bash
-/home/dianhua/robot_test/build/canopen_hw_node \
-  --dcf /home/dianhua/robot_test/config/master.dcf \
-  --joints /home/dianhua/robot_test/config/joints.yaml
+./build/canopen_hw_node \
+  --dcf config/master.dcf \
+  --joints config/joints.yaml
 ```
 
 说明：
@@ -95,9 +107,68 @@ cmake --build /home/dianhua/robot_test/build -j
 - `--joints` 不存在时只报警，但仍可运行。
 - 路径建议使用绝对路径，避免工作目录变化导致失败。
 
+### 5.2 ROS 模式
+
+```bash
+roslaunch canopen_hw canopen_hw.launch
+```
+
+可选参数：
+- `dcf_path:=<path>` — DCF 文件路径
+- `joints_path:=<path>` — joints.yaml 路径
+- `loop_hz:=100.0` — 控制循环频率
+
 ---
 
-## 6. 运行期验证点
+## 6. ROS 接口
+
+### 6.1 Services
+
+| Service | 类型 | 说明 |
+|---------|------|------|
+| `~halt` | `std_srvs/Trigger` | 停止运动，保持总线连接 |
+| `~recover` | `std_srvs/Trigger` | 从 halt/故障状态恢复 |
+| `~shutdown` | `std_srvs/Trigger` | 关闭主站并退出节点 |
+| `~set_mode` | `canopen_hw/SetMode` | 切换运动模式（CSP=8, CSV=9） |
+
+### 6.2 模式切换流程
+
+```bash
+# 1. 停止运动
+rosservice call /canopen_hw_node/halt
+
+# 2. 切换到 CSV 模式（所有轴）
+for i in 0 1 2 3 4 5; do
+  rosservice call /canopen_hw_node/set_mode "{axis_index: $i, mode: 9}"
+done
+
+# 3. 切换 controller
+rosrun controller_manager controller_manager stop arm_position_controller
+rosrun controller_manager controller_manager start arm_velocity_controller
+
+# 4. 恢复运动
+rosservice call /canopen_hw_node/recover
+```
+
+### 6.3 Controllers
+
+| Controller | 类型 | 模式 | 默认状态 |
+|-----------|------|------|---------|
+| `joint_state_controller` | JointStateController | — | 启动 |
+| `arm_position_controller` | position_controllers/JointTrajectoryController | CSP | 启动 |
+| `arm_velocity_controller` | velocity_controllers/JointTrajectoryController | CSV | 已加载未启动 |
+
+### 6.4 Diagnostics
+
+`/diagnostics` topic 每轴上报：
+- `heartbeat_lost` — 心跳丢失计数
+- `emcy_count` — EMCY 计数
+- `fault_reset_attempts` — 故障复位尝试次数
+- `is_operational` / `is_fault` / `heartbeat_lost_flag`
+
+---
+
+## 7. 运行期验证点
 
 基础验证：
 - 主站启动无报错
@@ -124,16 +195,14 @@ cmake --build /home/dianhua/robot_test/build -j
 
 ---
 
-## 8. 单测
+## 9. 单测
 
 ```bash
-cmake --build /home/dianhua/robot_test/build -j
+# 独立编译模式
+cmake --build build -j && cd build && ctest --output-on-failure
 
-# 或直接运行目标
-/home/dianhua/robot_test/build/test_state_machine
-/home/dianhua/robot_test/build/test_shared_state
-/home/dianhua/robot_test/build/test_unit_conversion
-/home/dianhua/robot_test/build/test_joints_config
+# catkin 模式
+catkin_make run_tests_canopen_hw
 ```
 
 ---
