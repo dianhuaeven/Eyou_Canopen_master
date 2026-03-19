@@ -84,3 +84,22 @@ TEST(JointsConfig, InvalidNodeIdRejected) {
   EXPECT_FALSE(invalid_ok);
   EXPECT_NE(invalid_error.find("invalid node_id"), std::string::npos);
 }
+
+TEST(JointsConfig, InvalidFieldTypeRejected) {
+  const std::string invalid_path = "/tmp/joints_test_invalid_type.yaml";
+  {
+    std::ofstream ofs(invalid_path);
+    ofs << "joints:\n"
+           "  - name: joint_bad\n"
+           "    canopen:\n"
+           "      node_id: bad\n"
+           "    counts_per_rev: 1000\n"
+           "    rated_torque_nm: 6\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(invalid_path, &error, &master_cfg);
+  EXPECT_FALSE(ok);
+  EXPECT_NE(error.find("invalid field type at joints[0]"), std::string::npos);
+}
