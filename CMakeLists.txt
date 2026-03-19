@@ -11,12 +11,21 @@ find_package(catkin REQUIRED COMPONENTS
   hardware_interface
   controller_manager
   std_srvs
+  message_generation
+)
+
+add_service_files(FILES
+  SetMode.srv
+)
+
+generate_messages(DEPENDENCIES
+  std_msgs
 )
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES canopen_core canopen_ros_adapter
-  CATKIN_DEPENDS roscpp hardware_interface controller_manager std_srvs
+  CATKIN_DEPENDS roscpp hardware_interface controller_manager std_srvs message_runtime
 )
 
 # ── 第三方依赖 ─────────────────────────────────────────
@@ -117,6 +126,7 @@ target_link_libraries(canopen_hw_ros_node
   PRIVATE
     canopen_ros_adapter
 )
+add_dependencies(canopen_hw_ros_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # ── Install ───────────────────────────────────────────
 install(TARGETS canopen_core canopen_ros_adapter canopen_hw_node canopen_hw_ros_node

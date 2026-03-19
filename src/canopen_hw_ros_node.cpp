@@ -8,6 +8,7 @@
 #include <controller_manager/controller_manager.h>
 #include <std_srvs/Trigger.h>
 
+#include "canopen_hw/SetMode.h"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
@@ -103,6 +104,21 @@ int main(int argc, char** argv) {
         res.success = lifecycle.Shutdown();
         res.message = res.success ? "shutdown" : "shutdown failed";
         g_run.store(false);
+        return true;
+      });
+
+  auto set_mode_srv = pnh.advertiseService<canopen_hw::SetMode::Request,
+                                           canopen_hw::SetMode::Response>(
+      "set_mode", [&](canopen_hw::SetMode::Request& req,
+                      canopen_hw::SetMode::Response& res) {
+        if (req.axis_index >= robot_hw_ros.axis_count()) {
+          res.success = false;
+          res.message = "axis_index out of range";
+          return true;
+        }
+        robot_hw_ros.SetMode(req.axis_index, req.mode);
+        res.success = true;
+        res.message = "mode set";
         return true;
       });
 

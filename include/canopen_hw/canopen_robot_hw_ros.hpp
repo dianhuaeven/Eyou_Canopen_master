@@ -30,6 +30,7 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
   void SetMode(std::size_t axis_index, int8_t mode);
 
   bool all_operational() const { return hw_->all_operational(); }
+  std::size_t axis_count() const { return pos_.size(); }
 
  private:
   CanopenRobotHw* hw_;  // 非拥有指针。
