@@ -7,12 +7,10 @@
 #include <ros/ros.h>
 #include <controller_manager/controller_manager.h>
 
-#include "canopen_hw/canopen_master.hpp"
-#include "canopen_hw/canopen_robot_hw.hpp"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 #include "canopen_hw/joints_config.hpp"
+#include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
-#include "canopen_hw/shared_state.hpp"
 
 namespace {
 
@@ -40,7 +38,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, HandleSignal);
   std::signal(SIGTERM, HandleSignal);
 
-  // 从 ROS 参数或默认路径读取配置文件。
+  // 从 ROS 参数读取配置文件路径。
   std::string dcf_path, joints_path;
   pnh.param<std::string>("dcf_path", dcf_path, "config/master.dcf");
   pnh.param<std::string>("joints_path", joints_path, "config/joints.yaml");
@@ -56,6 +54,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  // 解析配置（需要 joint names 来构造 ROS adapter）。
   canopen_hw::CanopenMasterConfig master_cfg;
   master_cfg.master_dcf_path = dcf_path;
 
@@ -65,31 +64,20 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  if (master_cfg.axis_count > canopen_hw::SharedState::kMaxAxisCount) {
-    CANOPEN_LOG_ERROR("axis_count exceeds maximum: {} > {}",
-                      master_cfg.axis_count,
-                      canopen_hw::SharedState::kMaxAxisCount);
-    return 1;
-  }
-
-  // 从配置中提取 joint name 列表。
   std::vector<std::string> joint_names;
   joint_names.reserve(master_cfg.joints.size());
   for (const auto& jcfg : master_cfg.joints) {
     joint_names.push_back(jcfg.name);
   }
 
-  canopen_hw::SharedState shared_state(master_cfg.axis_count);
-  canopen_hw::CanopenRobotHw robot_hw(&shared_state);
-  robot_hw.ApplyConfig(master_cfg);
-
-  // ROS 适配层: 注册 JointStateInterface + PositionJointInterface。
-  canopen_hw::CanopenRobotHwRos robot_hw_ros(&robot_hw, joint_names);
-
-  canopen_hw::CanopenMaster master(master_cfg, &shared_state);
-  if (!master.Start()) {
+  // 通过 LifecycleManager 启动主站。
+  canopen_hw::LifecycleManager lifecycle;
+  if (!lifecycle.Init(master_cfg)) {
     return 1;
   }
+
+  // ROS 适配层。
+  canopen_hw::CanopenRobotHwRos robot_hw_ros(lifecycle.robot_hw(), joint_names);
 
   controller_manager::ControllerManager cm(&robot_hw_ros, nh);
 
@@ -107,9 +95,10 @@ int main(int argc, char** argv) {
     cm.update(now, period);
     robot_hw_ros.write(now, period);
 
+    ros::spinOnce();
     rate.sleep();
   }
 
-  master.Stop();
+  lifecycle.Shutdown();
   return 0;
 }
