@@ -63,6 +63,9 @@ class SharedState {
   // ROS 线程: 更新某轴目标位置命令。
   void UpdateCommand(std::size_t axis_index, const AxisCommand& command);
 
+  // 任意线程: 读取某轴目标位置命令。
+  AxisCommand GetCommand(std::size_t axis_index) const;
+
   // Lely 线程: 更新某轴状态机过滤后的安全目标位置。
   void UpdateSafeCommand(std::size_t axis_index,
                          const AxisSafeCommand& safe_command);

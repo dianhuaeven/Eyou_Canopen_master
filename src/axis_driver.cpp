@@ -123,8 +123,7 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   int32_t ros_target_ticks = 0;
   bool have_ros_target = false;
   if (shared_state_) {
-    const SharedSnapshot snap = shared_state_->Snapshot();
-    ros_target_ticks = snap.commands[axis_index_].target_position;
+    ros_target_ticks = shared_state_->GetCommand(axis_index_).target_position;
     have_ros_target = true;
   }
   if (have_ros_target) {
