@@ -3,17 +3,19 @@
   <name>canopen_hw</name>
   <version>0.1.0</version>
   <description>CANopen robot hardware interface with ros_control adapter</description>
-  <maintainer email="todo@todo.com">dianhua</maintainer>
+  <maintainer email="2733239989@qq.com">dianhua</maintainer>
   <license>MIT</license>
 
-  <buildtool_depend>cmake</buildtool_depend>
-  <buildtool_depend condition="$WITH_ROS">catkin</buildtool_depend>
+  <buildtool_depend>catkin</buildtool_depend>
 
-  <depend condition="$WITH_ROS">roscpp</depend>
-  <depend condition="$WITH_ROS">hardware_interface</depend>
-  <depend condition="$WITH_ROS">controller_manager</depend>
+  <depend>roscpp</depend>
+  <depend>hardware_interface</depend>
+  <depend>controller_manager</depend>
+  <depend>std_srvs</depend>
 
-  <exec_depend condition="$WITH_ROS">joint_state_controller</exec_depend>
-  <exec_depend condition="$WITH_ROS">position_controllers</exec_depend>
-  <exec_depend condition="$WITH_ROS">robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_controller</exec_depend>
+  <exec_depend>position_controllers</exec_depend>
+  <exec_depend>velocity_controllers</exec_depend>
+  <exec_depend>effort_controllers</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
 </package>
