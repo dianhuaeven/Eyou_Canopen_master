@@ -3,8 +3,7 @@
 #include "canopen_hw/canopen_robot_hw.hpp"
 
 TEST(RobotHw, ReadTicksToRad) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(1);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   canopen_hw::AxisFeedback fb;
@@ -23,8 +22,7 @@ TEST(RobotHw, ReadTicksToRad) {
 }
 
 TEST(RobotHw, WriteRadToTicks) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(1);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   canopen_hw::AxisFeedback fb;

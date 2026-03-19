@@ -8,7 +8,8 @@
 #include "canopen_hw/shared_state.hpp"
 
 TEST(SharedStateConcurrent, MultiThreadReadWriteStress) {
-  canopen_hw::SharedState shared;
+  constexpr std::size_t kTestAxisCount = 6;
+  canopen_hw::SharedState shared(kTestAxisCount);
 
   constexpr int kWriterThreads = 4;
   constexpr int kReaderThreads = 2;
@@ -24,7 +25,7 @@ TEST(SharedStateConcurrent, MultiThreadReadWriteStress) {
       }
       for (int i = 0; i < kIterations; ++i) {
         const std::size_t axis =
-            static_cast<std::size_t>((i + t) % canopen_hw::SharedState::kAxisCount);
+            static_cast<std::size_t>((i + t) % kTestAxisCount);
 
         canopen_hw::AxisFeedback fb;
         fb.actual_position = static_cast<int32_t>(i + t * 1000);
@@ -51,9 +52,8 @@ TEST(SharedStateConcurrent, MultiThreadReadWriteStress) {
       }
       for (int i = 0; i < kIterations; ++i) {
         const auto snap = shared.Snapshot();
-        for (std::size_t axis = 0; axis < canopen_hw::SharedState::kAxisCount;
-             ++axis) {
-          // 基础不变量：读取结果应保持可解释范围，避免“撕裂式”异常值。
+        for (std::size_t axis = 0; axis < kTestAxisCount; ++axis) {
+          // 基础不变量：读取结果应保持可解释范围，避免"撕裂式"异常值。
           EXPECT_LE(snap.feedback[axis].actual_torque, 1000);
           EXPECT_GE(snap.feedback[axis].actual_torque, 0);
         }
@@ -67,6 +67,6 @@ TEST(SharedStateConcurrent, MultiThreadReadWriteStress) {
   }
 
   const auto final_snap = shared.Snapshot();
-  EXPECT_TRUE(final_snap.feedback.size() == canopen_hw::SharedState::kAxisCount);
-  EXPECT_TRUE(final_snap.commands.size() == canopen_hw::SharedState::kAxisCount);
+  EXPECT_EQ(final_snap.feedback.size(), kTestAxisCount);
+  EXPECT_EQ(final_snap.commands.size(), kTestAxisCount);
 }

@@ -1,10 +1,10 @@
 #pragma once
 
-#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <vector>
 
 #include "canopen_hw/cia402_defs.hpp"
 
@@ -36,20 +36,26 @@ struct AxisSafeCommand {
 };
 
 // 给调用者返回的快照结构:
-// - read() 一次锁内拷贝即可拿到 6 轴一致视图
+// - read() 一次锁内拷贝即可拿到全轴一致视图
 // - 调用方后续使用不需要持锁
 struct SharedSnapshot {
-  std::array<AxisFeedback, 6> feedback{};
-  std::array<AxisCommand, 6> commands{};
-  std::array<AxisSafeCommand, 6> safe_commands{};
+  std::vector<AxisFeedback> feedback;
+  std::vector<AxisCommand> commands;
+  std::vector<AxisSafeCommand> safe_commands;
   bool all_operational = false;
 };
 
 class SharedState {
  public:
-  static constexpr std::size_t kAxisCount = 6;
+  // 安全上限：构造时 axis_count 不得超过此值。
+  static constexpr std::size_t kMaxAxisCount = 16;
 
-  SharedState() = default;
+  // 构造时确定轴数，内部 vector 一次性分配，运行期大小不变。
+  // axis_count 会被限制在 [1, kMaxAxisCount]。
+  explicit SharedState(std::size_t axis_count = 6);
+
+  // 轴数（构造后不变）。
+  std::size_t axis_count() const { return axis_count_; }
 
   // Lely 线程: 更新某轴反馈信息。
   void UpdateFeedback(std::size_t axis_index, const AxisFeedback& feedback);
@@ -64,28 +70,24 @@ class SharedState {
   // 由 Lely 线程在每个 SYNC/RPDO 更新后调用，汇总全轴状态。
   void RecomputeAllOperational();
 
-  // 配置有效轴数（用于 all_operational 汇总边界）。
-  // count 会被限制在 [1, kAxisCount]。
-  void SetActiveAxisCount(std::size_t count);
-
   // 任意线程: 获取完整快照。
   SharedSnapshot Snapshot() const;
 
   // 阻塞等待反馈状态发生变化（由 UpdateFeedback 通知唤醒）。
   // 返回 true 表示在 deadline 前被唤醒，false 表示超时。
-  // 用于替代 WaitForAllState 中的 sleep_for busy-wait。
   bool WaitForStateChange(std::chrono::steady_clock::time_point deadline);
 
  private:
   bool IsValidAxis(std::size_t axis_index) const;
 
+  const std::size_t axis_count_;
+
   mutable std::mutex mtx_;
   std::condition_variable state_cv_;  // 由 UpdateFeedback() 通知。
-  std::array<AxisFeedback, kAxisCount> feedback_{};
-  std::array<AxisCommand, kAxisCount> commands_{};
-  std::array<AxisSafeCommand, kAxisCount> safe_commands_{};
+  std::vector<AxisFeedback> feedback_;
+  std::vector<AxisCommand> commands_;
+  std::vector<AxisSafeCommand> safe_commands_;
   bool all_operational_ = false;
-  std::size_t active_axis_count_ = kAxisCount;
 };
 
 }  // namespace canopen_hw

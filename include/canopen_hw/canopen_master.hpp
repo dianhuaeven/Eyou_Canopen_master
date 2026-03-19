@@ -28,7 +28,7 @@ struct CanopenMasterConfig {
   std::string can_interface = "can0";
   std::string master_dcf_path;
   uint8_t master_node_id = 127;
-  std::size_t axis_count = 6;
+  std::size_t axis_count = 6;  // 由 joints.yaml 覆盖，上限 SharedState::kMaxAxisCount。
 
   // 每轴配置。C08 之前分散在 JointCanopenConfig / CanopenRuntimeConfig，
   // 现在合并为单一 JointConfig，消除 main.cpp 中的手动对拷。

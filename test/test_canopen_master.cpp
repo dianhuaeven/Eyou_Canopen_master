@@ -3,7 +3,7 @@
 #include "canopen_hw/canopen_master.hpp"
 
 TEST(MasterConfig, ZeroAxisNormalized) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 0;  // 构造时会被归一化为至少 1 轴。
   cfg.master_node_id = 127;
@@ -23,7 +23,7 @@ TEST(MasterConfig, ZeroAxisNormalized) {
 }
 
 TEST(MasterConfig, NotRunningAfterConstruction) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 0;
   cfg.master_node_id = 127;

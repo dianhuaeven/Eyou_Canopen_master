@@ -118,7 +118,7 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
 
     // 统一映射规则: YAML 中第 N 个 joint 映射到 axis_index = N (从 0 开始),
     // node_id 仅用于总线通信, 不参与数组索引。
-    if (axis_index < CanopenRobotHw::kAxisCount) {
+    if (axis_index < robot_hw->axis_count()) {
       robot_hw->ConfigureAxisConversion(axis_index, conv);
     }
 

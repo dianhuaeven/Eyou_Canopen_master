@@ -60,8 +60,6 @@ int main(int argc, char** argv) {
 
   const StartupOptions opts = ParseArgs(argc, argv);
 
-  canopen_hw::SharedState shared_state;
-
   canopen_hw::CanopenMasterConfig master_cfg;
   master_cfg.can_interface = "can0";
   master_cfg.master_node_id = 127;
@@ -73,30 +71,39 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  canopen_hw::CanopenRobotHw robot_hw(&shared_state);
+  // 先用临时 SharedState 解析 joints.yaml 以确定轴数和参数。
+  // LoadJointsYaml 需要 CanopenRobotHw 指针来配置单位换算，
+  // 但此时还不知道最终轴数，所以先用默认值构造。
+  canopen_hw::SharedState temp_state;
+  canopen_hw::CanopenRobotHw temp_hw(&temp_state);
 
   {
-    std::string error;
     const std::string joints_path = MakeAbsolutePath(opts.joints_path);
     if (!FileExists(joints_path)) {
       CANOPEN_LOG_WARN("joints.yaml not found: {}", joints_path);
-    } else if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error,
-                                           &master_cfg)) {
-      CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
     } else {
-      if (master_cfg.axis_count > canopen_hw::SharedState::kAxisCount) {
-        CANOPEN_LOG_ERROR("configured axis_count exceeds supported maximum: {} > {}",
-                          master_cfg.axis_count,
-                          canopen_hw::SharedState::kAxisCount);
-        return 1;
+      std::string error;
+      if (!canopen_hw::LoadJointsYaml(joints_path, &temp_hw, &error,
+                                      &master_cfg)) {
+        CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
+      } else {
+        CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
+                         master_cfg.can_interface,
+                         static_cast<int>(master_cfg.master_node_id));
       }
-      shared_state.SetActiveAxisCount(master_cfg.axis_count);
-
-      CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
-                       master_cfg.can_interface,
-                       static_cast<int>(master_cfg.master_node_id));
     }
   }
+
+  if (master_cfg.axis_count > canopen_hw::SharedState::kMaxAxisCount) {
+    CANOPEN_LOG_ERROR("configured axis_count exceeds supported maximum: {} > {}",
+                      master_cfg.axis_count,
+                      canopen_hw::SharedState::kMaxAxisCount);
+    return 1;
+  }
+
+  // 用确定的轴数构造正式的 SharedState 和 RobotHw。
+  canopen_hw::SharedState shared_state(master_cfg.axis_count);
+  canopen_hw::CanopenRobotHw robot_hw(&shared_state);
 
   canopen_hw::CanopenMaster master(master_cfg, &shared_state);
 

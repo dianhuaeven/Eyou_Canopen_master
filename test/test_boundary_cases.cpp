@@ -18,7 +18,7 @@ using canopen_hw::kMode_CSP;
 // --- axis_count 边界 ---
 
 TEST(Boundary, AxisCountZeroNormalizesToOne) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 0;
   cfg.master_node_id = 127;
@@ -29,20 +29,26 @@ TEST(Boundary, AxisCountZeroNormalizesToOne) {
 }
 
 TEST(Boundary, AxisCountExceedsMaxClamped) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(100);  // 内部应限制在 kAxisCount=6
+  // 构造时传入超大值，内部应限制在 kMaxAxisCount
+  canopen_hw::SharedState shared(100);
+  EXPECT_EQ(shared.axis_count(), canopen_hw::SharedState::kMaxAxisCount);
 
-  // 验证 SetActiveAxisCount(100) 后 RecomputeAllOperational 不越界
+  // 验证 RecomputeAllOperational 不越界
   shared.RecomputeAllOperational();
   const auto snap = shared.Snapshot();
   // all_operational 应为 false (默认 feedback 未设置 is_operational)
   EXPECT_FALSE(snap.all_operational);
 }
 
+TEST(Boundary, AxisCountZeroClampedToOne) {
+  canopen_hw::SharedState shared(0);
+  EXPECT_EQ(shared.axis_count(), 1u);
+}
+
 // --- node_id 边界 ---
 
 TEST(Boundary, NodeIdZeroDefaultFill) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 3;
   cfg.master_node_id = 127;
@@ -57,7 +63,7 @@ TEST(Boundary, NodeIdZeroDefaultFill) {
 }
 
 TEST(Boundary, NodeIdOutOfRange) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   // node_id: 0 应被拒绝

@@ -3,8 +3,7 @@
 #include "canopen_hw/canopen_robot_hw.hpp"
 
 TEST(UnitConversion, TicksToRadDefaultAxis) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(1);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   canopen_hw::AxisFeedback fb0;
@@ -18,8 +17,7 @@ TEST(UnitConversion, TicksToRadDefaultAxis) {
 }
 
 TEST(UnitConversion, CustomAxisConversion) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(2);
+  canopen_hw::SharedState shared(2);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   canopen_hw::CanopenRobotHw::AxisConversion conv1;
@@ -45,8 +43,7 @@ TEST(UnitConversion, CustomAxisConversion) {
 }
 
 TEST(UnitConversion, NotOperationalSkipsWrite) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(3);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   // all_operational=false 时 write() 不应覆盖命令

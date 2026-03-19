@@ -3,8 +3,7 @@
 #include "canopen_hw/shared_state.hpp"
 
 TEST(SharedState, BasicUpdateAndSnapshot) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(1);
 
   canopen_hw::AxisFeedback fb;
   fb.actual_position = 123456;
@@ -27,8 +26,7 @@ TEST(SharedState, BasicUpdateAndSnapshot) {
 }
 
 TEST(SharedState, OutOfRangeIgnored) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(1);
 
   canopen_hw::AxisCommand cmd;
   cmd.target_position = 223344;

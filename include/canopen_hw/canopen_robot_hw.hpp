@@ -1,7 +1,7 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
+#include <vector>
 
 #include "canopen_hw/shared_state.hpp"
 
@@ -12,8 +12,6 @@ namespace canopen_hw {
 // - 后续 commit 再替换为 hardware_interface::RobotHW 继承实现
 class CanopenRobotHw {
  public:
-  static constexpr std::size_t kAxisCount = SharedState::kAxisCount;
-
   struct AxisConversion {
     double counts_per_rev = 5308416.0;
     double rated_torque_nm = 6.0;
@@ -21,7 +19,10 @@ class CanopenRobotHw {
     double torque_scale = 1.0;
   };
 
+  // axis_count 从 SharedState 获取，保证两者一致。
   explicit CanopenRobotHw(SharedState* shared_state);
+
+  std::size_t axis_count() const { return axis_count_; }
 
   // 对应 RobotHW::read():
   // 从 SharedState 拉取反馈并更新本地关节状态缓存。
@@ -48,7 +49,7 @@ class CanopenRobotHw {
                                const AxisConversion& conversion);
 
  private:
-  static bool IsValidAxis(std::size_t axis_index);
+  bool IsValidAxis(std::size_t axis_index) const;
 
   // 单位换算(每轴参数化)。
   double TicksToRad(std::size_t axis_index, int32_t ticks) const;
@@ -58,12 +59,13 @@ class CanopenRobotHw {
   double TorquePermilleToNm(std::size_t axis_index, int16_t permille) const;
 
   SharedState* shared_state_ = nullptr;  // 非拥有指针。
+  const std::size_t axis_count_;
 
-  std::array<double, kAxisCount> joint_pos_{};
-  std::array<double, kAxisCount> joint_vel_{};
-  std::array<double, kAxisCount> joint_eff_{};
-  std::array<double, kAxisCount> joint_cmd_{};
-  std::array<AxisConversion, kAxisCount> axis_conv_{};
+  std::vector<double> joint_pos_;
+  std::vector<double> joint_vel_;
+  std::vector<double> joint_eff_;
+  std::vector<double> joint_cmd_;
+  std::vector<AxisConversion> axis_conv_;
 
   bool all_operational_ = false;
 };

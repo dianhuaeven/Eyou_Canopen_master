@@ -1,6 +1,16 @@
 #include "canopen_hw/shared_state.hpp"
 
+#include <algorithm>
+
 namespace canopen_hw {
+
+SharedState::SharedState(std::size_t axis_count)
+    : axis_count_(std::clamp(axis_count,
+                             static_cast<std::size_t>(1),
+                             kMaxAxisCount)),
+      feedback_(axis_count_),
+      commands_(axis_count_),
+      safe_commands_(axis_count_) {}
 
 void SharedState::UpdateFeedback(std::size_t axis_index,
                                  const AxisFeedback& feedback) {
@@ -18,7 +28,7 @@ void SharedState::UpdateFeedback(std::size_t axis_index,
 void SharedState::RecomputeAllOperational() {
   std::lock_guard<std::mutex> lk(mtx_);
   bool all_ok = true;
-  for (std::size_t i = 0; i < active_axis_count_; ++i) {
+  for (std::size_t i = 0; i < axis_count_; ++i) {
     const auto& axis_feedback = feedback_[i];
     if (!axis_feedback.is_operational || axis_feedback.is_fault) {
       all_ok = false;
@@ -26,17 +36,6 @@ void SharedState::RecomputeAllOperational() {
     }
   }
   all_operational_ = all_ok;
-}
-
-void SharedState::SetActiveAxisCount(std::size_t count) {
-  std::lock_guard<std::mutex> lk(mtx_);
-  if (count == 0) {
-    active_axis_count_ = 1;
-  } else if (count > kAxisCount) {
-    active_axis_count_ = kAxisCount;
-  } else {
-    active_axis_count_ = count;
-  }
 }
 
 void SharedState::UpdateCommand(std::size_t axis_index,
@@ -68,7 +67,7 @@ SharedSnapshot SharedState::Snapshot() const {
 }
 
 bool SharedState::IsValidAxis(std::size_t axis_index) const {
-  return axis_index < kAxisCount;
+  return axis_index < axis_count_;
 }
 
 bool SharedState::WaitForStateChange(

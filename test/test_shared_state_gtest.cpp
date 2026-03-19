@@ -3,8 +3,7 @@
 #include "canopen_hw/shared_state.hpp"
 
 TEST(SharedStateGTest, UpdateAndSnapshot) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(1);
 
   canopen_hw::AxisFeedback fb;
   fb.actual_position = 123;
@@ -27,7 +26,7 @@ TEST(SharedStateGTest, UpdateAndSnapshot) {
 }
 
 TEST(SharedStateGTest, OutOfRangeIgnored) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::AxisCommand cmd;
   cmd.target_position = 777;
   shared.UpdateCommand(0, cmd);
@@ -40,9 +39,9 @@ TEST(SharedStateGTest, OutOfRangeIgnored) {
 }
 
 TEST(SharedStateGTest, RecomputeAllOperationalTrueWhenAllOperationalAndNoFault) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
 
-  for (std::size_t i = 0; i < canopen_hw::SharedState::kAxisCount; ++i) {
+  for (std::size_t i = 0; i < shared.axis_count(); ++i) {
     canopen_hw::AxisFeedback fb;
     fb.is_operational = true;
     fb.is_fault = false;
@@ -55,9 +54,9 @@ TEST(SharedStateGTest, RecomputeAllOperationalTrueWhenAllOperationalAndNoFault) 
 }
 
 TEST(SharedStateGTest, RecomputeAllOperationalFalseWhenAnyAxisFault) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
 
-  for (std::size_t i = 0; i < canopen_hw::SharedState::kAxisCount; ++i) {
+  for (std::size_t i = 0; i < shared.axis_count(); ++i) {
     canopen_hw::AxisFeedback fb;
     fb.is_operational = true;
     fb.is_fault = false;
@@ -77,15 +76,14 @@ TEST(SharedStateGTest, RecomputeAllOperationalFalseWhenAnyAxisFault) {
 }
 
 TEST(SharedStateGTest, RecomputeUsesConfiguredAxisCount) {
-  canopen_hw::SharedState shared;
-  shared.SetActiveAxisCount(1);
+  canopen_hw::SharedState shared(1);
 
   canopen_hw::AxisFeedback axis0;
   axis0.is_operational = true;
   axis0.is_fault = false;
   shared.UpdateFeedback(0, axis0);
 
-  // 其余轴保持默认 false，不应影响只配置 1 轴时的汇总结果。
+  // 其余轴不存在，不应影响只配置 1 轴时的汇总结果。
   shared.RecomputeAllOperational();
   const auto snap = shared.Snapshot();
   EXPECT_TRUE(snap.all_operational);

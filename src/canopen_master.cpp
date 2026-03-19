@@ -16,10 +16,10 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
   if (config_.axis_count == 0) {
     config_.axis_count = 1;
   }
-  if (config_.axis_count > SharedState::kAxisCount) {
+  if (config_.axis_count > SharedState::kMaxAxisCount) {
     CANOPEN_LOG_WARN("axis_count {} exceeds max {}, clamping",
-                     config_.axis_count, SharedState::kAxisCount);
-    config_.axis_count = SharedState::kAxisCount;
+                     config_.axis_count, SharedState::kMaxAxisCount);
+    config_.axis_count = SharedState::kMaxAxisCount;
   }
   if (config_.node_ids.size() < config_.axis_count) {
     config_.node_ids.resize(config_.axis_count);

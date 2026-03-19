@@ -7,7 +7,7 @@
 #include "canopen_hw/shared_state.hpp"
 
 TEST(JointsConfig, LoadValidYaml) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   const std::string path = "/tmp/joints_test.yaml";
@@ -65,7 +65,7 @@ TEST(JointsConfig, LoadValidYaml) {
 }
 
 TEST(JointsConfig, InvalidNodeIdRejected) {
-  canopen_hw::SharedState shared;
+  canopen_hw::SharedState shared(6);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   const std::string invalid_path = "/tmp/joints_test_invalid_node_id.yaml";

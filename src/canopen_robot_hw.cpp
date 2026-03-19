@@ -13,7 +13,13 @@ constexpr double kPi = 3.14159265358979323846;
 }  // namespace
 
 CanopenRobotHw::CanopenRobotHw(SharedState* shared_state)
-    : shared_state_(shared_state) {}
+    : shared_state_(shared_state),
+      axis_count_(shared_state ? shared_state->axis_count() : 6),
+      joint_pos_(axis_count_, 0.0),
+      joint_vel_(axis_count_, 0.0),
+      joint_eff_(axis_count_, 0.0),
+      joint_cmd_(axis_count_, 0.0),
+      axis_conv_(axis_count_) {}
 
 void CanopenRobotHw::ReadFromSharedState() {
   if (!shared_state_) {
@@ -23,7 +29,7 @@ void CanopenRobotHw::ReadFromSharedState() {
   const SharedSnapshot snap = shared_state_->Snapshot();
   all_operational_ = snap.all_operational;
 
-  for (std::size_t i = 0; i < kAxisCount; ++i) {
+  for (std::size_t i = 0; i < axis_count_; ++i) {
     joint_pos_[i] = TicksToRad(i, snap.feedback[i].actual_position);
     joint_vel_[i] = TicksPerSecToRadPerSec(i, snap.feedback[i].actual_velocity);
     joint_eff_[i] = TorquePermilleToNm(i, snap.feedback[i].actual_torque);
@@ -40,7 +46,7 @@ void CanopenRobotHw::WriteToSharedState() {
     return;
   }
 
-  for (std::size_t i = 0; i < kAxisCount; ++i) {
+  for (std::size_t i = 0; i < axis_count_; ++i) {
     AxisCommand cmd;
     cmd.target_position = RadToTicks(i, joint_cmd_[i]);
     shared_state_->UpdateCommand(i, cmd);
@@ -66,8 +72,8 @@ double CanopenRobotHw::joint_effort(std::size_t axis_index) const {
   return IsValidAxis(axis_index) ? joint_eff_[axis_index] : 0.0;
 }
 
-bool CanopenRobotHw::IsValidAxis(std::size_t axis_index) {
-  return axis_index < kAxisCount;
+bool CanopenRobotHw::IsValidAxis(std::size_t axis_index) const {
+  return axis_index < axis_count_;
 }
 
 void CanopenRobotHw::ConfigureAxisConversion(
