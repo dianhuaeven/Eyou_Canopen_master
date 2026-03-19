@@ -37,3 +37,13 @@ TEST(RobotHw, WriteRadToTicks) {
   EXPECT_GT(snap.commands[0].target_position, 2600000);
   EXPECT_LT(snap.commands[0].target_position, 2700000);
 }
+
+TEST(RobotHw, NullSharedStateUsesZeroAxis) {
+  canopen_hw::CanopenRobotHw hw(nullptr);
+  EXPECT_EQ(hw.axis_count(), 0u);
+
+  // 空 shared_state 下 read/write 应为空操作，不发生崩溃。
+  hw.ReadFromSharedState();
+  hw.WriteToSharedState();
+  EXPECT_FALSE(hw.all_operational());
+}

@@ -16,7 +16,7 @@ constexpr double kPi = 3.14159265358979323846;
 
 CanopenRobotHw::CanopenRobotHw(SharedState* shared_state)
     : shared_state_(shared_state),
-      axis_count_(shared_state ? shared_state->axis_count() : 6),
+      axis_count_(shared_state ? shared_state->axis_count() : 0),
       joint_pos_(axis_count_, 0.0),
       joint_vel_(axis_count_, 0.0),
       joint_eff_(axis_count_, 0.0),
