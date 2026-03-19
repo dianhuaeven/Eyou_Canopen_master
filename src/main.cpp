@@ -85,6 +85,7 @@ int main(int argc, char** argv) {
     if (!canopen_hw::LoadJointsYaml(joints_path, &temp_hw, &error,
                                     &master_cfg)) {
       CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
+      return 1;
     } else {
       CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
                        master_cfg.can_interface,
@@ -103,7 +104,11 @@ int main(int argc, char** argv) {
   canopen_hw::SharedState shared_state(master_cfg.axis_count);
   canopen_hw::CanopenRobotHw robot_hw(&shared_state);
   if (FileExists(joints_path)) {
-    canopen_hw::LoadJointsYaml(joints_path, &robot_hw, nullptr, nullptr);
+    std::string error;
+    if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error, nullptr)) {
+      CANOPEN_LOG_ERROR("Reload joints.yaml failed: {}", error);
+      return 1;
+    }
   }
 
   canopen_hw::CanopenMaster master(master_cfg, &shared_state);
