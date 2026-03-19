@@ -150,16 +150,18 @@ CiA402State AxisLogic::feedback_state() const {
 void AxisLogic::PublishSnapshot() {
   if (!shared_state_) return;
 
+  AxisFeedback feedback_snapshot;
   AxisSafeCommand safe_cmd;
   {
     std::lock_guard<std::mutex> lk(mtx_);
+    feedback_snapshot = feedback_cache_;
     safe_cmd.safe_target_position = state_machine_.safe_target();
     safe_cmd.safe_target_velocity = state_machine_.safe_target_velocity();
     safe_cmd.safe_target_torque = state_machine_.safe_target_torque();
     safe_cmd.safe_mode_of_operation = state_machine_.safe_mode_of_operation();
   }
 
-  shared_state_->UpdateFeedback(axis_index_, feedback_cache_);
+  shared_state_->UpdateFeedback(axis_index_, feedback_snapshot);
   shared_state_->UpdateSafeCommand(axis_index_, safe_cmd);
 }
 
