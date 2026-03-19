@@ -6,8 +6,11 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
+#include <condition_variable>
 
 namespace lely {
 namespace canopen {
@@ -38,6 +41,8 @@ class PdoMappingReader : public std::enable_shared_from_this<PdoMappingReader> {
   using DoneCallback =
       std::function<void(bool, const std::string&, const PdoMapping&)>;
 
+  ~PdoMappingReader();
+
   void Start(lely::canopen::BasicDriver& driver, DoneCallback cb,
              std::chrono::milliseconds timeout);
 
@@ -62,6 +67,10 @@ class PdoMappingReader : public std::enable_shared_from_this<PdoMappingReader> {
   std::size_t step_index_ = 0;
   bool phase_entries_ = false;
   std::atomic<bool> finished_{false};
+  std::atomic<bool> timeout_stop_{false};
+  std::thread timeout_thread_;
+  std::mutex timeout_mtx_;
+  std::condition_variable timeout_cv_;
   PdoMapping mapping_{};
   std::string error_;
 };

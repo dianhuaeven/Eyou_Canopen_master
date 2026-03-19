@@ -1,5 +1,7 @@
 #include "canopen_hw/pdo_mapping.hpp"
 
+#include <condition_variable>
+#include <mutex>
 #include <sstream>
 #include <thread>
 
@@ -196,6 +198,18 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
   return !diffs || diffs->empty();
 }
 
+PdoMappingReader::~PdoMappingReader() {
+  timeout_stop_.store(true);
+  timeout_cv_.notify_all();
+  if (timeout_thread_.joinable()) {
+    if (timeout_thread_.get_id() == std::this_thread::get_id()) {
+      timeout_thread_.detach();
+    } else {
+      timeout_thread_.join();
+    }
+  }
+}
+
 void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
                              DoneCallback cb,
                              std::chrono::milliseconds timeout) {
@@ -208,13 +222,22 @@ void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
   ScheduleNext();
 
   if (timeout.count() > 0) {
+    timeout_stop_.store(false);
     std::weak_ptr<PdoMappingReader> weak = shared_from_this();
-    std::thread([weak, timeout]() {
-      std::this_thread::sleep_for(timeout);
-      if (auto self = weak.lock()) {
+    timeout_thread_ = std::thread([weak, timeout]() {
+      auto self = weak.lock();
+      if (!self) {
+        return;
+      }
+
+      std::unique_lock<std::mutex> lk(self->timeout_mtx_);
+      const bool stopped = self->timeout_cv_.wait_for(
+          lk, timeout, [self]() { return self->timeout_stop_.load(); });
+      lk.unlock();
+      if (!stopped) {
         self->Finish(false, "PDO verify timeout");
       }
-    }).detach();
+    });
   }
 }
 
@@ -352,6 +375,17 @@ void PdoMappingReader::Finish(bool ok, const std::string& error) {
   if (finished_.exchange(true)) {
     return;
   }
+
+  timeout_stop_.store(true);
+  timeout_cv_.notify_all();
+  if (timeout_thread_.joinable()) {
+    if (timeout_thread_.get_id() == std::this_thread::get_id()) {
+      timeout_thread_.detach();
+    } else {
+      timeout_thread_.join();
+    }
+  }
+
   error_ = error;
   if (done_cb_) {
     done_cb_(ok, error_, mapping_);
