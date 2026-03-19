@@ -41,6 +41,9 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   // 关机流程辅助接口。
   bool SendControlword(uint16_t controlword);
   bool SendTargetPosition(int32_t target_position);
+  bool SendTargetVelocity(int32_t target_velocity);
+  bool SendTargetTorque(int16_t target_torque);
+  bool SendModeOfOperation(int8_t mode);
   bool SendNmtStopAll();
   CiA402State feedback_state() const;
   void ConfigureStateMachine(int32_t position_lock_threshold,

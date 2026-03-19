@@ -97,6 +97,36 @@ bool AxisDriver::SendTargetPosition(int32_t target_position) {
   return !ec;
 }
 
+bool AxisDriver::SendTargetVelocity(int32_t target_velocity) {
+  std::error_code ec;
+  tpdo_mapped[0x60FF][0].Write(target_velocity, ec);
+  if (ec) {
+    return false;
+  }
+  tpdo_mapped[0x60FF][0].WriteEvent(ec);
+  return !ec;
+}
+
+bool AxisDriver::SendTargetTorque(int16_t target_torque) {
+  std::error_code ec;
+  tpdo_mapped[0x6071][0].Write(target_torque, ec);
+  if (ec) {
+    return false;
+  }
+  tpdo_mapped[0x6071][0].WriteEvent(ec);
+  return !ec;
+}
+
+bool AxisDriver::SendModeOfOperation(int8_t mode) {
+  std::error_code ec;
+  tpdo_mapped[0x6060][0].Write(mode, ec);
+  if (ec) {
+    return false;
+  }
+  tpdo_mapped[0x6060][0].WriteEvent(ec);
+  return !ec;
+}
+
 bool AxisDriver::SendNmtStopAll() {
   master.Command(lely::canopen::NmtCommand::STOP);
   return true;
@@ -227,8 +257,8 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
     shared_state_->RecomputeAllOperational();
   }
   (void)SendTargetPosition(safe_target_ticks);
-  (void)safe_target_velocity;  // TODO: PDO 写入 0x60FF (target velocity)
-  (void)safe_target_torque;    // TODO: PDO 写入 0x6071 (target torque)
+  (void)SendTargetVelocity(safe_target_velocity);
+  (void)SendTargetTorque(safe_target_torque);
 }
 
 void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
