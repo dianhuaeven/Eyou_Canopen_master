@@ -47,12 +47,13 @@ void SharedState::UpdateCommand(std::size_t axis_index,
   commands_[axis_index] = command;
 }
 
-AxisCommand SharedState::GetCommand(std::size_t axis_index) const {
-  if (!IsValidAxis(axis_index)) {
-    return AxisCommand{};
+bool SharedState::GetCommand(std::size_t axis_index, AxisCommand* out) const {
+  if (!out || !IsValidAxis(axis_index)) {
+    return false;
   }
   std::lock_guard<std::mutex> lk(mtx_);
-  return commands_[axis_index];
+  *out = commands_[axis_index];
+  return true;
 }
 
 void SharedState::UpdateSafeCommand(std::size_t axis_index,

@@ -123,8 +123,9 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   int32_t ros_target_ticks = 0;
   bool have_ros_target = false;
   if (shared_state_) {
-    ros_target_ticks = shared_state_->GetCommand(axis_index_).target_position;
-    have_ros_target = true;
+    AxisCommand cmd;
+    have_ros_target = shared_state_->GetCommand(axis_index_, &cmd);
+    ros_target_ticks = cmd.target_position;
   }
   if (have_ros_target) {
     SetRosTargetPosition(ros_target_ticks);
