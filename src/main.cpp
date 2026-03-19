@@ -5,11 +5,8 @@
 #include <string>
 #include <thread>
 
-#include "canopen_hw/canopen_master.hpp"
-#include "canopen_hw/canopen_robot_hw.hpp"
-#include "canopen_hw/joints_config.hpp"
+#include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
-#include "canopen_hw/shared_state.hpp"
 
 namespace {
 
@@ -59,49 +56,21 @@ int main(int argc, char** argv) {
   std::signal(SIGTERM, HandleSignal);
 
   const StartupOptions opts = ParseArgs(argc, argv);
+  const std::string dcf_path = MakeAbsolutePath(opts.dcf_path);
   const std::string joints_path = MakeAbsolutePath(opts.joints_path);
 
-  canopen_hw::CanopenMasterConfig master_cfg;
-  master_cfg.can_interface = "can0";
-  master_cfg.master_node_id = 127;
-  master_cfg.axis_count = 6;
-  master_cfg.master_dcf_path = MakeAbsolutePath(opts.dcf_path);
-  if (!FileExists(master_cfg.master_dcf_path)) {
-    CANOPEN_LOG_ERROR("master_dcf_path not found: {}",
-                      master_cfg.master_dcf_path);
+  if (!FileExists(dcf_path)) {
+    CANOPEN_LOG_ERROR("master_dcf_path not found: {}", dcf_path);
     return 1;
   }
-
   if (!FileExists(joints_path)) {
     CANOPEN_LOG_ERROR("joints.yaml not found: {}", joints_path);
     return 1;
   }
 
-  std::string error;
-  if (!canopen_hw::LoadJointsYaml(joints_path, &error, &master_cfg)) {
-    CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
-    return 1;
-  } else {
-    CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
-                     master_cfg.can_interface,
-                     static_cast<int>(master_cfg.master_node_id));
-  }
+  canopen_hw::LifecycleManager lifecycle;
 
-  if (master_cfg.axis_count > canopen_hw::SharedState::kMaxAxisCount) {
-    CANOPEN_LOG_ERROR("configured axis_count exceeds supported maximum: {} > {}",
-                      master_cfg.axis_count,
-                      canopen_hw::SharedState::kMaxAxisCount);
-    return 1;
-  }
-
-  // 用确定的轴数构造正式的 SharedState 和 RobotHw。
-  canopen_hw::SharedState shared_state(master_cfg.axis_count);
-  canopen_hw::CanopenRobotHw robot_hw(&shared_state);
-  robot_hw.ApplyConfig(master_cfg);
-
-  canopen_hw::CanopenMaster master(master_cfg, &shared_state);
-
-  if (!master.Start()) {
+  if (!lifecycle.Init(dcf_path, joints_path)) {
     return 1;
   }
 
@@ -114,11 +83,11 @@ int main(int argc, char** argv) {
   // 后续接入 ROS controller_manager 后，这里将替换为 ros::Rate + cm.update()。
   const auto period = std::chrono::milliseconds(10);
   while (g_run.load()) {
-    robot_hw.ReadFromSharedState();
-    robot_hw.WriteToSharedState();
+    lifecycle.robot_hw()->ReadFromSharedState();
+    lifecycle.robot_hw()->WriteToSharedState();
     std::this_thread::sleep_for(period);
   }
 
-  master.Stop();
+  lifecycle.Shutdown();
   return 0;
 }
