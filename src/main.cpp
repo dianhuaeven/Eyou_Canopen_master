@@ -73,17 +73,18 @@ int main(int argc, char** argv) {
   }
 
   if (!FileExists(joints_path)) {
-    CANOPEN_LOG_WARN("joints.yaml not found: {}", joints_path);
+    CANOPEN_LOG_ERROR("joints.yaml not found: {}", joints_path);
+    return 1;
+  }
+
+  std::string error;
+  if (!canopen_hw::LoadJointsYaml(joints_path, &error, &master_cfg)) {
+    CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
+    return 1;
   } else {
-    std::string error;
-    if (!canopen_hw::LoadJointsYaml(joints_path, &error, &master_cfg)) {
-      CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
-      return 1;
-    } else {
-      CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
-                       master_cfg.can_interface,
-                       static_cast<int>(master_cfg.master_node_id));
-    }
+    CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
+                     master_cfg.can_interface,
+                     static_cast<int>(master_cfg.master_node_id));
   }
 
   if (master_cfg.axis_count > canopen_hw::SharedState::kMaxAxisCount) {
