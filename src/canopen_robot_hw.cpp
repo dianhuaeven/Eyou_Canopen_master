@@ -21,6 +21,9 @@ CanopenRobotHw::CanopenRobotHw(SharedState* shared_state)
       joint_vel_(axis_count_, 0.0),
       joint_eff_(axis_count_, 0.0),
       joint_cmd_(axis_count_, 0.0),
+      joint_vel_cmd_(axis_count_, 0.0),
+      joint_torque_cmd_(axis_count_, 0.0),
+      joint_mode_(axis_count_, kMode_CSP),
       axis_conv_(axis_count_) {}
 
 void CanopenRobotHw::ReadFromSharedState() {
@@ -51,6 +54,9 @@ void CanopenRobotHw::WriteToSharedState() {
   for (std::size_t i = 0; i < axis_count_; ++i) {
     AxisCommand cmd;
     cmd.target_position = RadToTicks(i, joint_cmd_[i]);
+    cmd.target_velocity = RadPerSecToTicksPerSec(i, joint_vel_cmd_[i]);
+    cmd.target_torque = NmToTorquePermille(i, joint_torque_cmd_[i]);
+    cmd.mode_of_operation = joint_mode_[i];
     shared_state_->UpdateCommand(i, cmd);
   }
 }
@@ -60,6 +66,29 @@ void CanopenRobotHw::SetJointCommand(std::size_t axis_index, double pos_rad) {
     return;
   }
   joint_cmd_[axis_index] = pos_rad;
+}
+
+void CanopenRobotHw::SetJointVelocityCommand(std::size_t axis_index,
+                                              double vel_rad_s) {
+  if (!IsValidAxis(axis_index)) {
+    return;
+  }
+  joint_vel_cmd_[axis_index] = vel_rad_s;
+}
+
+void CanopenRobotHw::SetJointTorqueCommand(std::size_t axis_index,
+                                            double torque_nm) {
+  if (!IsValidAxis(axis_index)) {
+    return;
+  }
+  joint_torque_cmd_[axis_index] = torque_nm;
+}
+
+void CanopenRobotHw::SetJointMode(std::size_t axis_index, int8_t mode) {
+  if (!IsValidAxis(axis_index)) {
+    return;
+  }
+  joint_mode_[axis_index] = mode;
 }
 
 double CanopenRobotHw::joint_position(std::size_t axis_index) const {
@@ -117,11 +146,28 @@ double CanopenRobotHw::TicksPerSecToRadPerSec(std::size_t axis_index,
          axis_conv_[axis_index].velocity_scale;
 }
 
+int32_t CanopenRobotHw::RadPerSecToTicksPerSec(std::size_t axis_index,
+                                                double rad_per_sec) const {
+  const double counts_per_rev =
+      std::max(1.0, axis_conv_[axis_index].counts_per_rev);
+  const double scale = std::max(1e-9, axis_conv_[axis_index].velocity_scale);
+  return static_cast<int32_t>(
+      std::llround(rad_per_sec / scale * counts_per_rev / (2.0 * kPi)));
+}
+
 double CanopenRobotHw::TorquePermilleToNm(std::size_t axis_index,
                                           int16_t permille) const {
   const double nm = static_cast<double>(permille) / 1000.0 *
                     axis_conv_[axis_index].rated_torque_nm;
   return nm * axis_conv_[axis_index].torque_scale;
+}
+
+int16_t CanopenRobotHw::NmToTorquePermille(std::size_t axis_index,
+                                            double nm) const {
+  const double rated = std::max(1e-9, axis_conv_[axis_index].rated_torque_nm);
+  const double scale = std::max(1e-9, axis_conv_[axis_index].torque_scale);
+  return static_cast<int16_t>(
+      std::llround(nm / scale / rated * 1000.0));
 }
 
 }  // namespace canopen_hw

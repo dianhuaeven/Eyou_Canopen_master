@@ -38,6 +38,15 @@ class CanopenRobotHw {
   // 测试/上层适配接口: 设置某轴目标位置(单位: rad)。
   void SetJointCommand(std::size_t axis_index, double pos_rad);
 
+  // 设置某轴目标速度(单位: rad/s)。
+  void SetJointVelocityCommand(std::size_t axis_index, double vel_rad_s);
+
+  // 设置某轴目标力矩(单位: Nm)。
+  void SetJointTorqueCommand(std::size_t axis_index, double torque_nm);
+
+  // 设置某轴运动模式(kMode_CSP / kMode_CSV / kMode_CST)。
+  void SetJointMode(std::size_t axis_index, int8_t mode);
+
   // 测试/上层适配接口: 读取关节状态缓存。
   double joint_position(std::size_t axis_index) const;
   double joint_velocity(std::size_t axis_index) const;
@@ -61,7 +70,10 @@ class CanopenRobotHw {
   int32_t RadToTicks(std::size_t axis_index, double rad) const;
   double TicksPerSecToRadPerSec(std::size_t axis_index,
                                 int32_t ticks_per_sec) const;
+  int32_t RadPerSecToTicksPerSec(std::size_t axis_index,
+                                 double rad_per_sec) const;
   double TorquePermilleToNm(std::size_t axis_index, int16_t permille) const;
+  int16_t NmToTorquePermille(std::size_t axis_index, double nm) const;
 
   SharedState* shared_state_ = nullptr;  // 非拥有指针。
   const std::size_t axis_count_;
@@ -70,6 +82,9 @@ class CanopenRobotHw {
   std::vector<double> joint_vel_;
   std::vector<double> joint_eff_;
   std::vector<double> joint_cmd_;
+  std::vector<double> joint_vel_cmd_;
+  std::vector<double> joint_torque_cmd_;
+  std::vector<int8_t> joint_mode_;
   std::vector<AxisConversion> axis_conv_;
 
   bool all_operational_ = false;
