@@ -1,6 +1,6 @@
 # 项目文档：CANopen 主站控制栈
 
-日期：2026-03-17  
+日期：2026-03-19
 范围：当前仓库代码与文档（含 PDO 映射验证）
 
 ---
@@ -117,33 +117,159 @@ _docs/
 
 ## 5. 数据流向
 
-### 5.1 线程与数据流
+### 5.1 模块结构与数据流图
 
 ```
-应用线程 (100Hz)
-  CanopenRobotHw::ReadFromSharedState()  <-  SharedState::Snapshot
-  CanopenRobotHw::WriteToSharedState()   ->  SharedState::UpdateCommand
-
-Lely 事件线程
-  AxisDriver::OnRpdoWrite() -> 读取 RPDO-mapped 反馈
-  AxisDriver::InjectFeedback() -> 状态机更新 -> SharedState::UpdateFeedback
-  SharedState::RecomputeAllOperational()
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              canopen_hw_node 进程                                │
+│                                                                                  │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │  启动配置层                                                               │   │
+│  │                                                                           │   │
+│  │   joints.yaml ──► LoadJointsYaml() ──► CanopenRuntimeConfig              │   │
+│  │   master.dcf  ──────────────────────► CanopenMasterConfig                │   │
+│  └───────────────────────────┬───────────────────────┬───────────────────────┘  │
+│                              │                       │                           │
+│                              ▼                       ▼                           │
+│  ┌──────────────────────────��────────┐  ┌────────────────────────────────────┐  │
+│  │         Lely 事件线程              │  │           应用主线程 (100Hz)         │  │
+│  │                                   │  │                                    │  │
+│  │  CanopenMaster                    │  │  CanopenRobotHw                    │  │
+│  │  ├─ AsyncMaster (Lely)            │  │  ├─ ReadFromSharedState()          │  │
+│  │  ├─ IoGuard/Context/Poll/Loop     │  │  │   ticks → rad/rad·s⁻¹/Nm       │  │
+│  │  ├─ CanController/CanChannel      │  │  ├─ WriteToSharedState()           │  │
+│  │  └─ CreateAxisDrivers()           │  │  │   rad → ticks                  │  │
+│  │       │                           │  │  │   (仅全轴 operational 时写入)    │  │
+│  │       │ 每轴一个                   │  │  └─ joint_pos/vel/eff[]            │  │
+│  │       ▼                           │  │       (预留 ROS controller_manager) │  ���
+│  │  AxisDriver × N                   │  └──────────────┬─────────────────────┘  │
+│  │  ├─ OnRpdoWrite()  ◄──── CAN总线  │                 │                         │
+│  │  │   读取 RPDO 字段:              │                 │                         │
+│  │  │   0x6041 statusword           │                 │                         │
+│  │  │   0x6064 actual_position      │                 │                         │
+│  │  │   0x6061 mode_display         │                 │                         │
+│  │  │   0x606C actual_velocity      │                 │                         │
+│  │  │   0x6077 actual_torque        │                 │                         │
+│  │  │        │                      │                 │                         │
+│  │  │        ▼                      │                 │                         │
+│  │  ├─ InjectFeedback()             │                 │                         │
+│  │  │        │                      │                 │                         │
+│  │  │        ▼                      │                 │                         │
+│  │  ├─ CiA402StateMachine           │                 │                         │
+│  │  │   ├─ DecodeState(statusword)  │                 │                         │
+│  │  │   ├─ StepFaultReset()         │                 │                         │
+│  │  │   │   HoldLow→SendEdge        │                 │                         │
+│  │  │   │   →WaitRecovery           │                 │                         │
+│  │  │   ├─ StepOperationEnabled()   │                 │                         │
+│  │  │   │   位置锁定/解锁逻辑        │                 │                         │
+│  │  │   └─ 输出: controlword        │                 │                         │
+│  │  │          safe_target          │                 │                         │
+│  │  │          is_operational       │                 │                         │
+│  │  │        │                      │                 │                         │
+│  │  │        ▼                      │                 │                         │
+│  │  ├─ PublishSnapshot()            │                 │                         │
+│  │  │   UpdateFeedback() ──────────►│◄────────────────┘                         │
+│  │  │   UpdateCommand()             │  UpdateCommand() (写入目标位置)             │
+│  │  │                               │                                            │
+│  │  ├─ SendControlword(0x6040) ────►│──► CAN总线 (TPDO)                         │
+│  │  ├─ SendTargetPosition(0x607A) ──┤──► CAN总线 (TPDO)                         │
+│  │  │                               │                                            │
+│  │  ├─ OnBoot()                     │                                            │
+│  │  │   └─ PdoMappingReader         │                                            │
+│  │  │       ├─ SDO 读回实际映射      │                                            │
+│  │  │       │  (0x1400/1600/        │                                            │
+│  │  │       │   0x1800/1A00)        │                                            │
+│  │  │       ├─ DiffPdoMapping()     │                                            │
+│  │  │       │  对比 DCF 期望值       │                                            │
+│  │  │       └─ 不一致 → 阻断        │                                            │
+│  │  │          该轴 Operational     │                                            │
+│  │  │                               ��                                            │
+│  │  ├─ OnHeartbeat() → 心跳丢失标记 │                                            │
+│  │  └─ OnEmcy()     → EMCY 错误码  │                                            │
+│  └───────────────────────────────────┘                                           │
+│                        ▲  ▼  (mutex 保护)                                        │
+│              ┌─────────┴──┴──────────┐                                           │
+│              │      SharedState       │                                           │
+│              │  ┌─────────────────┐  │                                           │
+│              │  │ AxisFeedback[6] │  │  ← Lely 线程写入                          │
+│              │  │  actual_pos/vel │  │                                           │
+│              │  │  torque/status  │  │                                           │
+│              │  │  state/is_fault │  │                                           │
+│              │  │  heartbeat_lost │  │                                           │
+│              │  │  last_emcy_eec  │  │                                           │
+│              │  ├─────────────────┤  │                                           │
+│              │  │ AxisCommand[6]  │  │  ← 应用线程写入                           │
+│              │  │  target_position│  │                                           │
+│              │  ├─────────────────┤  │                                           │
+│              │  │ all_operational │  │  ← RecomputeAllOperational()              │
+│              │  └─────────────────┘  │                                           │
+│              │  Snapshot(): 锁内拷贝  │                                           │
+│              │  调用方不持锁          │                                           │
+│              └───────────────────────┘                                           │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 启动时序 (关键步骤)
+### 5.2 关键数据流路径
+
+**反馈路径（CAN → 应用）**
+```
+CAN总线 RPDO
+  → OnRpdoWrite()
+  → InjectFeedback()
+  → CiA402StateMachine.Update()
+  → PublishSnapshot() → SharedState.UpdateFeedback()
+  → CanopenRobotHw.ReadFromSharedState()
+  → joint_pos / joint_vel / joint_eff
+```
+
+**控制路径（应用 → CAN）**
+```
+joint_cmd[]
+  → CanopenRobotHw.WriteToSharedState()
+  → SharedState.UpdateCommand()
+  → OnRpdoWrite() 读取 snap.commands
+  → SendTargetPosition()
+  → CAN总线 TPDO (0x607A)
+```
+
+**启动验证路径（仅执行一次）**
+```
+master.dcf
+  → LoadExpectedPdoMappingFromDcf()
+  → OnBoot() 触发 PdoMappingReader
+  → SDO 逐步读回实际映射
+  → DiffPdoMapping()
+  → pdo_verified 标志 → 影响 is_operational
+```
+
+### 5.3 启动时序
 
 ```
-1) 启动 canopen_hw_node
-2) 创建 Lely AsyncMaster
-3) Lely OnConfig 自动下发 DCF
-4) 从站进入 Operational -> OnBoot
-5) 可选：PDO 映射验证
-6) 状态机推进至 OPERATION_ENABLED
+1) 启动 canopen_hw_node，解析 --dcf / --joints 参数
+2) 创建 Lely AsyncMaster，启动事件线程
+3) Lely OnConfig 自动下发 DCF 配置
+4) 从站进入 Operational → 触发 OnBoot()
+5) （可选）PDO 映射验证：SDO 读回 → DiffPdoMapping
+6) CiA402 状态机推进至 OPERATION_ENABLED
+7) 应用主线程 100Hz 循环开始 Read/Write
 ```
 
-### 5.3 SYNC 与应用周期
+### 5.4 关机时序
 
-- SYNC 由主站通过 `ev::Loop` 定时器产生（见 `docs/canopenplan.md`）。
+```
+1) 收到 SIGINT/SIGTERM，g_run = false
+2) 主循环退出，调用 master.Stop()
+3) GracefulShutdown():
+   SendControlword(DisableOperation) → 等待 SwitchedOn（2s）
+   → SendControlword(Shutdown) → 等待 ReadyToSwitchOn（1s）
+   → SendNmtStopAll()
+4) ev_loop 停止，事件线程 join
+5) 资源按序释放
+```
+
+### 5.5 SYNC 与应用周期
+
+- SYNC 由主站通过 `ev::Loop` 定时器产生（历史设计见 `docs/archive/canopenplan.md`）。
 - 目标周期：10ms（与应用线程 100Hz 对齐）。
 - 若未来需要与外部时钟对齐，应明确时间戳与采样对齐策略。
 
@@ -205,12 +331,7 @@ cmake --build /home/dianhua/robot_test/build -j
 
 ## 8. 关机流程
 
-程序退出时执行：
-1) `Disable Operation` (0x6040=0x0007)
-2) 等待 `SwitchedOn`（2s）
-3) `Shutdown` (0x6040=0x0006)
-4) 等待 `ReadyToSwitchOn`（1s）
-5) `NMT Stop`
+见 [5.4 关机时序](#54-关机时序)。
 
 ---
 
@@ -256,7 +377,10 @@ cmake --build /home/dianhua/robot_test/build -j
 
 ## 13. 参考文档
 
+- `docs/README.md`：文档索引与归档规则
+- `docs/quality_9_score_plan.md`：冲 9 分执行清单
 - `docs/usage.md`：运行与联调说明
-- `docs/canopenplan.md`：完整设计规格
-- `docs/pdo_sdo_design.md`：PDO/SDO 设计与验证
-- `docs/change_report_pdo_verify.md`：实现变更报告
+- `docs/archive/canopenplan.md`：完整设计规格（历史）
+- `docs/archive/pdo_sdo_design.md`：PDO/SDO 设计与验证（历史）
+- `docs/archive/change_report_pdo_verify.md`：实现变更报告（历史）
+- `docs/archive/bug_report_2026-03-19.md`：Bug 与悬空问题清单（历史）

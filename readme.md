@@ -143,7 +143,7 @@ Lely 事件线程
 
 ### 5.3 SYNC 与应用周期
 
-- SYNC 由主站通过 `ev::Loop` 定时器产生（见 `docs/canopenplan.md`）。
+- SYNC 由主站通过 `ev::Loop` 定时器产生（历史设计见 `docs/archive/canopenplan.md`）。
 - 目标周期：10ms（与应用线程 100Hz 对齐）。
 - 若未来需要与外部时钟对齐，应明确时间戳与采样对齐策略。
 
@@ -256,7 +256,9 @@ cmake --build /home/dianhua/robot_test/build -j
 
 ## 13. 参考文档
 
+- `docs/README.md`：文档索引与归档规则
+- `docs/quality_9_score_plan.md`：冲 9 分执行清单
 - `docs/usage.md`：运行与联调说明
-- `docs/canopenplan.md`：完整设计规格
-- `docs/pdo_sdo_design.md`：PDO/SDO 设计与验证
-- `docs/change_report_pdo_verify.md`：实现变更报告
+- `docs/archive/canopenplan.md`：完整设计规格（历史）
+- `docs/archive/pdo_sdo_design.md`：PDO/SDO 设计与验证（历史）
+- `docs/archive/change_report_pdo_verify.md`：实现变更报告（历史）
