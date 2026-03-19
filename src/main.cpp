@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
   std::signal(SIGTERM, HandleSignal);
 
   const StartupOptions opts = ParseArgs(argc, argv);
+  const std::string joints_path = MakeAbsolutePath(opts.joints_path);
 
   canopen_hw::CanopenMasterConfig master_cfg;
   master_cfg.can_interface = "can0";
@@ -77,20 +78,17 @@ int main(int argc, char** argv) {
   canopen_hw::SharedState temp_state;
   canopen_hw::CanopenRobotHw temp_hw(&temp_state);
 
-  {
-    const std::string joints_path = MakeAbsolutePath(opts.joints_path);
-    if (!FileExists(joints_path)) {
-      CANOPEN_LOG_WARN("joints.yaml not found: {}", joints_path);
+  if (!FileExists(joints_path)) {
+    CANOPEN_LOG_WARN("joints.yaml not found: {}", joints_path);
+  } else {
+    std::string error;
+    if (!canopen_hw::LoadJointsYaml(joints_path, &temp_hw, &error,
+                                    &master_cfg)) {
+      CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
     } else {
-      std::string error;
-      if (!canopen_hw::LoadJointsYaml(joints_path, &temp_hw, &error,
-                                      &master_cfg)) {
-        CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
-      } else {
-        CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
-                         master_cfg.can_interface,
-                         static_cast<int>(master_cfg.master_node_id));
-      }
+      CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
+                       master_cfg.can_interface,
+                       static_cast<int>(master_cfg.master_node_id));
     }
   }
 
@@ -104,6 +102,9 @@ int main(int argc, char** argv) {
   // 用确定的轴数构造正式的 SharedState 和 RobotHw。
   canopen_hw::SharedState shared_state(master_cfg.axis_count);
   canopen_hw::CanopenRobotHw robot_hw(&shared_state);
+  if (FileExists(joints_path)) {
+    canopen_hw::LoadJointsYaml(joints_path, &robot_hw, nullptr, nullptr);
+  }
 
   canopen_hw::CanopenMaster master(master_cfg, &shared_state);
 
