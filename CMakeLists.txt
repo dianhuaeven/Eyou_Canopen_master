@@ -103,6 +103,10 @@ add_executable(test_startup_integration
   test/test_startup_integration.cpp
 )
 target_link_libraries(test_startup_integration PRIVATE canopen_core GTest::gtest_main)
+target_compile_definitions(test_startup_integration PRIVATE
+  PROJECT_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  PROJECT_BINARY_DIR="${CMAKE_BINARY_DIR}"
+)
 gtest_discover_tests(test_startup_integration)
 
 add_executable(test_shared_state_gtest

@@ -1,11 +1,33 @@
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
+#include <sys/wait.h>
 #include <string>
 
 #include "canopen_hw/canopen_robot_hw.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/shared_state.hpp"
+
+namespace {
+
+int RunAndGetExitCode(const std::string& command) {
+  const int status = std::system(command.c_str());
+  if (status == -1) {
+    return -1;
+  }
+  if (WIFEXITED(status)) {
+    return WEXITSTATUS(status);
+  }
+  return -1;
+}
+
+std::string Quote(const std::string& path) {
+  return "'" + path + "'";
+}
+
+}  // namespace
 
 TEST(StartupIntegration, ConfigPropagationFromYamlToRobotHw) {
   const std::string path = "/tmp/joints_startup_integration.yaml";
@@ -53,4 +75,19 @@ TEST(StartupIntegration, ConfigPropagationFromYamlToRobotHw) {
   EXPECT_NEAR(hw.joint_position(1), 3.1415926, 0.01);
   EXPECT_NEAR(hw.joint_effort(0), 5.0, 0.01);
   EXPECT_NEAR(hw.joint_effort(1), 40.0, 0.01);
+}
+
+TEST(StartupIntegration, MissingJointsYamlAbortsStartup) {
+  const std::filesystem::path node_bin =
+      std::filesystem::path(PROJECT_BINARY_DIR) / "canopen_hw_node";
+  const std::filesystem::path dcf_path =
+      std::filesystem::path(PROJECT_SOURCE_DIR) / "config/master.dcf";
+  const std::filesystem::path missing_joints =
+      std::filesystem::path("/tmp/definitely_missing_joints.yaml");
+  std::filesystem::remove(missing_joints);
+
+  const std::string cmd =
+      Quote(node_bin.string()) + " --dcf " + Quote(dcf_path.string()) +
+      " --joints " + Quote(missing_joints.string()) + " >/tmp/startup_missing_joints.log 2>&1";
+  EXPECT_EQ(RunAndGetExitCode(cmd), 1);
 }
