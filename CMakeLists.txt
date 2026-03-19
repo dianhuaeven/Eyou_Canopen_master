@@ -183,3 +183,9 @@ add_executable(test_diagnostics_collector
 )
 target_link_libraries(test_diagnostics_collector PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_diagnostics_collector)
+
+add_executable(test_multi_mode
+  test/test_multi_mode.cpp
+)
+target_link_libraries(test_multi_mode PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_multi_mode)
