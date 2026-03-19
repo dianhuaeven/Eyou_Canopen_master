@@ -199,22 +199,25 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
 }
 
 PdoMappingReader::~PdoMappingReader() {
+  // 通知超时线程退出
   timeout_stop_.store(true);
   timeout_cv_.notify_all();
+  // 析构函数不可能从超时线程自身调用（因为超时线程持有 shared_ptr，
+  // 析构只会发生在最后一个 shared_ptr 释放时，此时超时线程已退出），
+  // 因此可以安全 join。
   if (timeout_thread_.joinable()) {
-    if (timeout_thread_.get_id() == std::this_thread::get_id()) {
-      timeout_thread_.detach();
-    } else {
-      timeout_thread_.join();
-    }
+    timeout_thread_.join();
   }
 }
 
 void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
                              DoneCallback cb,
                              std::chrono::milliseconds timeout) {
-  if (finished_.load()) {
-    return;
+  {
+    std::lock_guard<std::mutex> lk(finish_mtx_);
+    if (finished_) {
+      return;
+    }
   }
   driver_ = &driver;
   done_cb_ = std::move(cb);
@@ -223,13 +226,11 @@ void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
 
   if (timeout.count() > 0) {
     timeout_stop_.store(false);
-    std::weak_ptr<PdoMappingReader> weak = shared_from_this();
-    timeout_thread_ = std::thread([weak, timeout]() {
-      auto self = weak.lock();
-      if (!self) {
-        return;
-      }
-
+    // 持有 shared_from_this() 的拷贝（而非 weak_ptr），
+    // 确保对象在超时线程执行期间不会被析构。
+    // 超时线程退出后释放 shared_ptr，允许对象正常析构。
+    std::shared_ptr<PdoMappingReader> self = shared_from_this();
+    timeout_thread_ = std::thread([self, timeout]() {
       std::unique_lock<std::mutex> lk(self->timeout_mtx_);
       const bool stopped = self->timeout_cv_.wait_for(
           lk, timeout, [self]() { return self->timeout_stop_.load(); });
@@ -237,6 +238,8 @@ void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
       if (!stopped) {
         self->Finish(false, "PDO verify timeout");
       }
+      // 超时线程在此之后不再访问任何成员，
+      // self 析构时若为最后引用则安全销毁对象。
     });
   }
 }
@@ -318,8 +321,11 @@ void PdoMappingReader::BuildEntrySteps() {
 }
 
 void PdoMappingReader::ScheduleNext() {
-  if (finished_.load()) {
-    return;
+  {
+    std::lock_guard<std::mutex> lk(finish_mtx_);
+    if (finished_) {
+      return;
+    }
   }
   if (step_index_ >= steps_.size()) {
     if (!phase_entries_) {
@@ -372,23 +378,34 @@ void PdoMappingReader::ScheduleNext() {
 }
 
 void PdoMappingReader::Finish(bool ok, const std::string& error) {
-  if (finished_.exchange(true)) {
-    return;
-  }
+  DoneCallback cb;
+  PdoMapping mapping_copy;
+  std::string error_copy;
 
-  timeout_stop_.store(true);
-  timeout_cv_.notify_all();
-  if (timeout_thread_.joinable()) {
-    if (timeout_thread_.get_id() == std::this_thread::get_id()) {
-      timeout_thread_.detach();
-    } else {
-      timeout_thread_.join();
+  {
+    std::lock_guard<std::mutex> lk(finish_mtx_);
+    if (finished_) {
+      return;
     }
+    finished_ = true;
+
+    // 通知超时线程退出（如果从 SDO 回调路径进入）。
+    // 不在此处 join——超时线程可能正是调用者，也可能被阻塞等待 finish_mtx_。
+    // join 留给析构函数处理，此时 timeout_stop_ 已为 true，
+    // 超时线程会立即退出。
+    timeout_stop_.store(true);
+    timeout_cv_.notify_all();
+
+    error_ = error;
+    // 拷贝回调和数据到局部变量，在锁外执行回调，
+    // 避免回调中可能触发的 reset() 导致死锁或生命周期问题。
+    cb = done_cb_;
+    mapping_copy = mapping_;
+    error_copy = error_;
   }
 
-  error_ = error;
-  if (done_cb_) {
-    done_cb_(ok, error_, mapping_);
+  if (cb) {
+    cb(ok, error_copy, mapping_copy);
   }
 }
 

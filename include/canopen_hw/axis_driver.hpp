@@ -73,6 +73,10 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   std::string dcf_path_;
   std::shared_ptr<PdoMapping> expected_pdo_;
   bool expected_pdo_loaded_ = false;
+  // 生命周期由 shared_ptr + PdoMappingReader::finish_mtx_ 串行化保证。
+  // 禁止在 OnBoot 回调内部同步 reset()——回调可能从 reader 超时线程调用，
+  // 在自身方法执行中析构对象会导致 UAF。
+  // reader 会在 pdo_reader_ 下次赋值或 AxisDriver 析构时自然释放。
   std::shared_ptr<PdoMappingReader> pdo_reader_;
   std::atomic<int> boot_retry_count_{0};
   int max_boot_retries_ = 3;

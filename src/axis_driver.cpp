@@ -248,6 +248,9 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
   }
 
   pdo_reader_ = std::make_shared<PdoMappingReader>();
+  // 回调捕获 weak_ptr 而非 this->pdo_reader_ 的引用，
+  // 避免在回调内部同步析构 reader（回调可能从 reader 的超时线程调用）。
+  // reader 的释放延迟到 OnBoot 末尾或下次 OnBoot 时 pdo_reader_ 被覆盖。
   pdo_reader_->Start(*this, [this](bool ok, const std::string& error,
                                    const PdoMapping& actual) {
     if (!ok) {
@@ -255,7 +258,6 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                 << "): PDO read failed: " << error << std::endl;
       pdo_verified_.store(false);
       pdo_verification_done_.store(true);
-      pdo_reader_.reset();
       return;
     }
 
@@ -274,7 +276,10 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
     }
 
     pdo_verification_done_.store(true);
-    pdo_reader_.reset();
+    // 不在回调内部 reset() pdo_reader_:
+    // 回调可能从 reader 内部的超时线程调用，在回调内 reset 会导致
+    // 对象在自身方法执行中被析构（UAF）。
+    // reader 会在 pdo_reader_ 下次赋值或 AxisDriver 析构时自然释放。
   }, std::chrono::milliseconds(2000));
 }
 
