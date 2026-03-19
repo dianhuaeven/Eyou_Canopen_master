@@ -14,9 +14,12 @@
     <param name="loop_hz"     value="$(arg loop_hz)"/>
   </node>
 
-  <!-- 启动 controllers -->
+  <!-- 启动 controllers: joint_state 始终启动，position 默认启动，velocity 加载但不启动 -->
   <node name="controller_spawner" pkg="controller_manager" type="spawner"
-        args="joint_state_controller arm_controller" output="screen"/>
+        args="joint_state_controller arm_position_controller" output="screen"/>
+
+  <node name="controller_spawner_stopped" pkg="controller_manager" type="spawner"
+        args="--stopped arm_velocity_controller" output="screen"/>
 
   <!-- robot_state_publisher（需要 URDF 加载到 robot_description） -->
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
