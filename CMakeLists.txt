@@ -177,3 +177,9 @@ add_executable(test_sdo_accessor
 )
 target_link_libraries(test_sdo_accessor PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_sdo_accessor)
+
+add_executable(test_diagnostics_collector
+  test/test_diagnostics_collector.cpp
+)
+target_link_libraries(test_diagnostics_collector PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_diagnostics_collector)
