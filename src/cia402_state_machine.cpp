@@ -84,6 +84,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
+      safe_target_velocity_ = 0;
+      safe_target_torque_ = 0;
       break;
 
     case CiA402State::SwitchOnDisabled:
@@ -92,6 +94,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
+      safe_target_velocity_ = 0;
+      safe_target_torque_ = 0;
       break;
 
     case CiA402State::ReadyToSwitchOn:
@@ -104,6 +108,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
+      safe_target_velocity_ = 0;
+      safe_target_torque_ = 0;
       break;
 
     case CiA402State::SwitchedOn:
@@ -112,6 +118,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
+      safe_target_velocity_ = 0;
+      safe_target_torque_ = 0;
       break;
 
     case CiA402State::OperationEnabled:
@@ -126,6 +134,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
+      safe_target_velocity_ = 0;
+      safe_target_torque_ = 0;
       break;
 
     case CiA402State::FaultReactionActive:
@@ -134,6 +144,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
+      safe_target_velocity_ = 0;
+      safe_target_torque_ = 0;
       break;
 
     case CiA402State::Fault:
@@ -142,6 +154,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
+      safe_target_velocity_ = 0;
+      safe_target_torque_ = 0;
       break;
   }
 
@@ -154,6 +168,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
     is_operational_ = false;
     position_locked_ = true;
     safe_target_ = actual_position;
+    safe_target_velocity_ = 0;
+    safe_target_torque_ = 0;
   }
 }
 
@@ -219,20 +235,28 @@ void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
   if (!was_operation_enabled_) {
     position_locked_ = true;
     safe_target_ = actual_position;
+    safe_target_velocity_ = 0;
+    safe_target_torque_ = 0;
   }
 
   if (position_locked_) {
     // 锁定阶段强制 target=actual。
     safe_target_ = actual_position;
+    safe_target_velocity_ = 0;
+    safe_target_torque_ = 0;
 
     // 只有当上层期望已接近当前实际位置时才释放锁定。
     if (AbsDiff(ros_target_, actual_position) <=
         static_cast<int64_t>(position_lock_threshold_)) {
       position_locked_ = false;
       safe_target_ = ros_target_;
+      safe_target_velocity_ = ros_target_velocity_;
+      safe_target_torque_ = ros_target_torque_;
     }
   } else {
     safe_target_ = ros_target_;
+    safe_target_velocity_ = ros_target_velocity_;
+    safe_target_torque_ = ros_target_torque_;
   }
 
   is_operational_ = !position_locked_;

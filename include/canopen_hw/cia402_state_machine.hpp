@@ -44,8 +44,17 @@ class CiA402StateMachine {
   // 设置上层(ROS)期望位置。
   void set_ros_target(int32_t target) { ros_target_ = target; }
 
-  // 获取经过“无扰锁定”后的安全目标。
+  // 设置上层(ROS)期望速度。
+  void set_ros_target_velocity(int32_t target) { ros_target_velocity_ = target; }
+
+  // 设置上层(ROS)期望力矩。
+  void set_ros_target_torque(int16_t target) { ros_target_torque_ = target; }
+
+  // 获取经过”无扰锁定”后的安全目标。
   int32_t safe_target() const { return safe_target_; }
+  int32_t safe_target_velocity() const { return safe_target_velocity_; }
+  int16_t safe_target_torque() const { return safe_target_torque_; }
+  int8_t safe_mode_of_operation() const { return target_mode_; }
 
   // 是否仍在位置锁定阶段。
   bool is_position_locked() const { return position_locked_; }
@@ -101,6 +110,12 @@ class CiA402StateMachine {
   int32_t ros_target_ = 0;
   int32_t safe_target_ = 0;
   int32_t last_actual_position_ = 0;
+
+  // 速度/力矩目标。
+  int32_t ros_target_velocity_ = 0;
+  int16_t ros_target_torque_ = 0;
+  int32_t safe_target_velocity_ = 0;
+  int16_t safe_target_torque_ = 0;
 
   // 故障复位相关。
   FaultResetPhase fault_phase_ = FaultResetPhase::Idle;

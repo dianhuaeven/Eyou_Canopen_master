@@ -27,12 +27,18 @@ struct AxisFeedback {
 // 线程间共享的单轴命令(由 ROS 线程写入)。
 struct AxisCommand {
   int32_t target_position = 0;
+  int32_t target_velocity = 0;
+  int16_t target_torque = 0;
+  int8_t mode_of_operation = kMode_CSP;  // 默认 CSP。
 };
 
-// 状态机过滤后的安全目标位置(由 Lely 线程写入)。
+// 状态机过滤后的安全目标(由 Lely 线程写入)。
 // 与 AxisCommand 分离，避免 Lely 线程覆盖 ROS 线程写入的用户期望位置。
 struct AxisSafeCommand {
   int32_t safe_target_position = 0;
+  int32_t safe_target_velocity = 0;
+  int16_t safe_target_torque = 0;
+  int8_t safe_mode_of_operation = kMode_CSP;
 };
 
 // 给调用者返回的快照结构:
