@@ -51,19 +51,12 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
         runtime_cfg->master.can_interface =
             top_canopen["interface"].as<std::string>();
       }
-      if (top_canopen["bitrate"]) {
-        runtime_cfg->master.bitrate = top_canopen["bitrate"].as<int>();
-      }
       if (top_canopen["master_node_id"]) {
         const int master_node_id = top_canopen["master_node_id"].as<int>();
         if (master_node_id > 0 && master_node_id <= 255) {
           runtime_cfg->master.master_node_id =
               static_cast<uint8_t>(master_node_id);
         }
-      }
-      if (top_canopen["sync_period_us"]) {
-        runtime_cfg->master.sync_period_us =
-            top_canopen["sync_period_us"].as<int>();
       }
     }
     runtime_cfg->joints.clear();

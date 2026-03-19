@@ -124,6 +124,14 @@ joints:
 
 ### 3.2 字段说明
 
+`joints.yaml` 顶层 `canopen`（运行时生效）：
+- `interface`：CAN 接口名（例如 `can0`）。
+- `master_node_id`：主站节点号。
+
+说明：
+- `bitrate` / `sync_period_us` 不属于运行时 `joints.yaml` 生效字段。
+- 波特率由系统 `ip link` 配置；SYNC 周期由 `master.dcf`（`master.yaml` 生成）决定。
+
 - `name`：关节名称（仅标识）。
 - `counts_per_rev`：每圈计数，用于位置换算。
 - `rated_torque_nm`：额定扭矩，Nm。
@@ -170,4 +178,3 @@ joints:
 - `joints.yaml` 的 node_id 与 `master.yaml` 一致。
 - SYNC 周期与应用线程周期一致。
 - 如果开启 `verify_pdo_mapping`，确保 DCF 映射与设备一致。
-

@@ -121,8 +121,6 @@ int main(int argc, char** argv) {
                 << runtime_cfg.master.can_interface
                 << " master_node_id="
                 << static_cast<int>(runtime_cfg.master.master_node_id)
-                << " bitrate=" << runtime_cfg.master.bitrate
-                << " sync_period_us=" << runtime_cfg.master.sync_period_us
                 << std::endl;
     }
   }
