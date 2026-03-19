@@ -1,4 +1,4 @@
-#include <cassert>
+#include <gtest/gtest.h>
 
 #include "canopen_hw/cia402_state_machine.hpp"
 
@@ -9,44 +9,79 @@ using canopen_hw::kCtrl_FaultReset;
 using canopen_hw::kCtrl_Shutdown;
 using canopen_hw::kMode_CSP;
 
-int main() {
+TEST(CiA402SM, SwitchOnDisabledSendsShutdown) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
 
-  // 1) SwitchOnDisabled -> 应发 Shutdown
   sm.Update(0x0040, kMode_CSP, 100);
-  assert(sm.state() == CiA402State::SwitchOnDisabled);
-  assert(sm.controlword() == kCtrl_Shutdown);
+  EXPECT_EQ(sm.state(), CiA402State::SwitchOnDisabled);
+  EXPECT_EQ(sm.controlword(), kCtrl_Shutdown);
+}
 
-  // 2) ReadyToSwitchOn + mode ok -> 直接 0x000F
+TEST(CiA402SM, ReadyToSwitchOnJumpEnable) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+
+  sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
-  assert(sm.state() == CiA402State::ReadyToSwitchOn);
-  assert(sm.controlword() == kCtrl_EnableOperation);
+  EXPECT_EQ(sm.state(), CiA402State::ReadyToSwitchOn);
+  EXPECT_EQ(sm.controlword(), kCtrl_EnableOperation);
+}
 
-  // 3) 首次进入 OperationEnabled 时锁定位置
+TEST(CiA402SM, FirstOperationEnabledLocksPosition) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  sm.Update(0x0021, kMode_CSP, 100);
+
   sm.set_ros_target(500000);
   sm.Update(0x0027, kMode_CSP, 12345);
-  assert(sm.state() == CiA402State::OperationEnabled);
-  assert(sm.is_position_locked());
-  assert(sm.safe_target() == 12345);
+  EXPECT_EQ(sm.state(), CiA402State::OperationEnabled);
+  EXPECT_TRUE(sm.is_position_locked());
+  EXPECT_EQ(sm.safe_target(), 12345);
+}
 
-  // 4) ROS 目标接近后解锁
+TEST(CiA402SM, RosTargetCloseUnlocks) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  sm.Update(0x0021, kMode_CSP, 100);
+
+  sm.set_ros_target(500000);
+  sm.Update(0x0027, kMode_CSP, 12345);
+  EXPECT_TRUE(sm.is_position_locked());
+
   sm.set_ros_target(12350);
   sm.Update(0x0027, kMode_CSP, 12348);
-  assert(!sm.is_position_locked());
-  assert(sm.is_operational());
+  EXPECT_FALSE(sm.is_position_locked());
+  EXPECT_TRUE(sm.is_operational());
+}
 
-  // 5) Fault 状态下进入复位流程, 最终应出现 fault reset 边沿
+TEST(CiA402SM, FaultResetThreePhaseFlow) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  sm.Update(0x0021, kMode_CSP, 100);
+  sm.set_ros_target(500000);
+  sm.Update(0x0027, kMode_CSP, 12345);
+  sm.set_ros_target(12350);
+  sm.Update(0x0027, kMode_CSP, 12348);
+
   sm.set_fault_reset_policy(2, 5, 2);
-  sm.Update(0x000F, kMode_CSP, 12348);  // FaultReactionActive: 不应触发复位边沿
-  assert(sm.state() == CiA402State::FaultReactionActive);
-  assert(sm.controlword() != kCtrl_FaultReset);
 
+  // FaultReactionActive: 不应触发复位边沿
+  sm.Update(0x000F, kMode_CSP, 12348);
+  EXPECT_EQ(sm.state(), CiA402State::FaultReactionActive);
+  EXPECT_NE(sm.controlword(), kCtrl_FaultReset);
+
+  // Hold 阶段
   sm.Update(0x0008, kMode_CSP, 12348);  // Hold 1
   sm.Update(0x0008, kMode_CSP, 12348);  // Hold 2
-  sm.Update(0x0008, kMode_CSP, 12348);  // SendEdge
-  assert(sm.controlword() == kCtrl_FaultReset);
-  assert(sm.fault_reset_count() == 1);
-
-  return 0;
+  // SendEdge
+  sm.Update(0x0008, kMode_CSP, 12348);
+  EXPECT_EQ(sm.controlword(), kCtrl_FaultReset);
+  EXPECT_EQ(sm.fault_reset_count(), 1);
 }

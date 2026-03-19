@@ -55,8 +55,8 @@ enable_testing()
 add_executable(test_state_machine
   test/test_state_machine.cpp
 )
-target_link_libraries(test_state_machine PRIVATE canopen_core)
-add_test(NAME test_state_machine COMMAND test_state_machine)
+target_link_libraries(test_state_machine PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_state_machine)
 
 add_executable(test_shared_state
   test/test_shared_state.cpp
@@ -73,8 +73,8 @@ add_test(NAME test_canopen_robot_hw COMMAND test_canopen_robot_hw)
 add_executable(test_unit_conversion
   test/test_unit_conversion.cpp
 )
-target_link_libraries(test_unit_conversion PRIVATE canopen_core)
-add_test(NAME test_unit_conversion COMMAND test_unit_conversion)
+target_link_libraries(test_unit_conversion PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_unit_conversion)
 
 add_executable(test_joints_config
   test/test_joints_config.cpp
