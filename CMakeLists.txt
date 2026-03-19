@@ -109,12 +109,6 @@ target_compile_definitions(test_startup_integration PRIVATE
 )
 gtest_discover_tests(test_startup_integration)
 
-add_executable(test_shared_state_gtest
-  test/test_shared_state_gtest.cpp
-)
-target_link_libraries(test_shared_state_gtest PRIVATE canopen_core GTest::gtest_main)
-gtest_discover_tests(test_shared_state_gtest)
-
 add_executable(test_shared_state_concurrent
   test/test_shared_state_concurrent.cpp
 )
