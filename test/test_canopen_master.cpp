@@ -8,18 +8,18 @@ TEST(MasterConfig, ZeroAxisNormalized) {
   cfg.axis_count = 0;  // 构造时会被归一化为至少 1 轴。
   cfg.master_node_id = 127;
   cfg.can_interface = "can0";
-  cfg.node_ids.clear();
+  cfg.joints.clear();
 
   canopen_hw::CanopenMaster master(cfg, &shared);
 
   const auto& normalized = master.config();
   EXPECT_EQ(normalized.axis_count, 1u);
-  EXPECT_EQ(normalized.node_ids.size(), 1u);
-  EXPECT_EQ(normalized.node_ids[0], 1u);
-  EXPECT_EQ(normalized.verify_pdo_mapping.size(), 1u);
-  EXPECT_EQ(normalized.position_lock_thresholds.size(), 1u);
-  EXPECT_EQ(normalized.max_fault_resets.size(), 1u);
-  EXPECT_EQ(normalized.fault_reset_hold_cycles.size(), 1u);
+  ASSERT_EQ(normalized.joints.size(), 1u);
+  EXPECT_EQ(normalized.joints[0].node_id, 1u);
+  EXPECT_FALSE(normalized.joints[0].verify_pdo_mapping);
+  EXPECT_EQ(normalized.joints[0].position_lock_threshold, 15000);
+  EXPECT_EQ(normalized.joints[0].max_fault_resets, 3);
+  EXPECT_EQ(normalized.joints[0].fault_reset_hold_cycles, 5);
 }
 
 TEST(MasterConfig, NotRunningAfterConstruction) {
@@ -28,7 +28,7 @@ TEST(MasterConfig, NotRunningAfterConstruction) {
   cfg.axis_count = 0;
   cfg.master_node_id = 127;
   cfg.can_interface = "can0";
-  cfg.node_ids.clear();
+  cfg.joints.clear();
 
   canopen_hw::CanopenMaster master(cfg, &shared);
 

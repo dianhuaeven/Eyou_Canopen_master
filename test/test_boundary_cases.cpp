@@ -53,13 +53,13 @@ TEST(Boundary, NodeIdZeroDefaultFill) {
   cfg.axis_count = 3;
   cfg.master_node_id = 127;
   cfg.can_interface = "can0";
-  cfg.node_ids.clear();  // 空时应自动填充 1,2,3
+  cfg.joints.assign(3, canopen_hw::CanopenMasterConfig::JointConfig{});
 
   canopen_hw::CanopenMaster master(cfg, &shared);
-  ASSERT_EQ(master.config().node_ids.size(), 3u);
-  EXPECT_EQ(master.config().node_ids[0], 1u);
-  EXPECT_EQ(master.config().node_ids[1], 2u);
-  EXPECT_EQ(master.config().node_ids[2], 3u);
+  ASSERT_EQ(master.config().joints.size(), 3u);
+  EXPECT_EQ(master.config().joints[0].node_id, 1u);
+  EXPECT_EQ(master.config().joints[1].node_id, 2u);
+  EXPECT_EQ(master.config().joints[2].node_id, 3u);
 }
 
 TEST(Boundary, NodeIdOutOfRange) {

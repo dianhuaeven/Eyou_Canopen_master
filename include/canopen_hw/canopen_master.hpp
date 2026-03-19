@@ -44,34 +44,6 @@ struct CanopenMasterConfig {
     double torque_scale = 1.0;
   };
   std::vector<JointConfig> joints;
-
-  // 便捷视图：从 joints 中提取对应字段的 vector。
-  // 用于 CreateAxisDrivers() 等需要按索引访问的场景。
-  std::vector<uint8_t> node_ids;
-  std::vector<bool> verify_pdo_mapping;
-  std::vector<int32_t> position_lock_thresholds;
-  std::vector<int> max_fault_resets;
-  std::vector<int> fault_reset_hold_cycles;
-
-  // 从 joints 同步到扁平 vector。
-  // 在 CanopenMaster 构造函数或 LoadJointsYaml 之后调用。
-  void SyncFromJoints() {
-    node_ids.resize(joints.size());
-    verify_pdo_mapping.resize(joints.size());
-    position_lock_thresholds.resize(joints.size());
-    max_fault_resets.resize(joints.size());
-    fault_reset_hold_cycles.resize(joints.size());
-    for (std::size_t i = 0; i < joints.size(); ++i) {
-      node_ids[i] = joints[i].node_id;
-      verify_pdo_mapping[i] = joints[i].verify_pdo_mapping;
-      position_lock_thresholds[i] = joints[i].position_lock_threshold;
-      max_fault_resets[i] = joints[i].max_fault_resets;
-      fault_reset_hold_cycles[i] = joints[i].fault_reset_hold_cycles;
-    }
-    if (!joints.empty()) {
-      axis_count = joints.size();
-    }
-  }
 };
 
 class CanopenMaster {

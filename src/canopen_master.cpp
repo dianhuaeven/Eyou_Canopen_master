@@ -13,6 +13,9 @@ namespace canopen_hw {
 CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
                              SharedState* shared_state)
     : config_(config), shared_state_(shared_state) {
+  if (!config_.joints.empty()) {
+    config_.axis_count = config_.joints.size();
+  }
   if (config_.axis_count == 0) {
     config_.axis_count = 1;
   }
@@ -21,30 +24,16 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
                      config_.axis_count, SharedState::kMaxAxisCount);
     config_.axis_count = SharedState::kMaxAxisCount;
   }
-  if (config_.node_ids.size() < config_.axis_count) {
-    config_.node_ids.resize(config_.axis_count);
-  }
+  config_.joints.resize(config_.axis_count);
   for (std::size_t i = 0; i < config_.axis_count; ++i) {
-    const uint8_t id = config_.node_ids[i];
+    const uint8_t id = config_.joints[i].node_id;
     if (id == 0 || id > 127) {
       if (id > 127) {
-        CANOPEN_LOG_WARN("node_ids[{}]={} out of range 1..127, replacing with default {}",
+        CANOPEN_LOG_WARN("joints[{}].node_id={} out of range 1..127, replacing with default {}",
                          i, static_cast<int>(id), (i + 1));
       }
-      config_.node_ids[i] = static_cast<uint8_t>(i + 1);
+      config_.joints[i].node_id = static_cast<uint8_t>(i + 1);
     }
-  }
-  if (config_.verify_pdo_mapping.size() < config_.axis_count) {
-    config_.verify_pdo_mapping.resize(config_.axis_count, false);
-  }
-  if (config_.position_lock_thresholds.size() < config_.axis_count) {
-    config_.position_lock_thresholds.resize(config_.axis_count, 15000);
-  }
-  if (config_.max_fault_resets.size() < config_.axis_count) {
-    config_.max_fault_resets.resize(config_.axis_count, 3);
-  }
-  if (config_.fault_reset_hold_cycles.size() < config_.axis_count) {
-    config_.fault_reset_hold_cycles.resize(config_.axis_count, 5);
   }
   // 预分配驱动容器容量，保证运行阶段不会因为扩容触发堆分配。
   axis_drivers_.reserve(config_.axis_count);
@@ -192,13 +181,14 @@ void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& can_master) {
   axis_drivers_.clear();
 
   for (std::size_t i = 0; i < config_.axis_count; ++i) {
-    const uint8_t node_id = config_.node_ids[i];
+    const auto& joint_cfg = config_.joints[i];
+    const uint8_t node_id = joint_cfg.node_id;
     auto axis = std::make_unique<AxisDriver>(can_master, node_id, i, shared_state_,
-                                             config_.verify_pdo_mapping[i],
+                                             joint_cfg.verify_pdo_mapping,
                                              config_.master_dcf_path);
-    axis->ConfigureStateMachine(config_.position_lock_thresholds[i],
-                                config_.max_fault_resets[i],
-                                config_.fault_reset_hold_cycles[i]);
+    axis->ConfigureStateMachine(joint_cfg.position_lock_threshold,
+                                joint_cfg.max_fault_resets,
+                                joint_cfg.fault_reset_hold_cycles);
     axis_drivers_.emplace_back(std::move(axis));
   }
 }

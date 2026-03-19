@@ -150,8 +150,7 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
     return false;
   }
 
-  // 从 joints 同步到扁平 vector，更新 axis_count。
-  config->SyncFromJoints();
+  config->axis_count = config->joints.size();
   return true;
 }
 
