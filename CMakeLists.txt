@@ -61,14 +61,14 @@ gtest_discover_tests(test_state_machine)
 add_executable(test_shared_state
   test/test_shared_state.cpp
 )
-target_link_libraries(test_shared_state PRIVATE canopen_core)
-add_test(NAME test_shared_state COMMAND test_shared_state)
+target_link_libraries(test_shared_state PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_shared_state)
 
 add_executable(test_canopen_robot_hw
   test/test_canopen_robot_hw.cpp
 )
-target_link_libraries(test_canopen_robot_hw PRIVATE canopen_core)
-add_test(NAME test_canopen_robot_hw COMMAND test_canopen_robot_hw)
+target_link_libraries(test_canopen_robot_hw PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_canopen_robot_hw)
 
 add_executable(test_unit_conversion
   test/test_unit_conversion.cpp
@@ -79,14 +79,14 @@ gtest_discover_tests(test_unit_conversion)
 add_executable(test_joints_config
   test/test_joints_config.cpp
 )
-target_link_libraries(test_joints_config PRIVATE canopen_core)
-add_test(NAME test_joints_config COMMAND test_joints_config)
+target_link_libraries(test_joints_config PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_joints_config)
 
 add_executable(test_canopen_master
   test/test_canopen_master.cpp
 )
-target_link_libraries(test_canopen_master PRIVATE canopen_core)
-add_test(NAME test_canopen_master COMMAND test_canopen_master)
+target_link_libraries(test_canopen_master PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_canopen_master)
 
 add_executable(test_shared_state_gtest
   test/test_shared_state_gtest.cpp

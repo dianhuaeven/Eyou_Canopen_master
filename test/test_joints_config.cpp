@@ -1,11 +1,12 @@
-#include <cassert>
+#include <gtest/gtest.h>
+
 #include <fstream>
 #include <string>
 
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/shared_state.hpp"
 
-int main() {
+TEST(JointsConfig, LoadValidYaml) {
   canopen_hw::SharedState shared;
   canopen_hw::CanopenRobotHw hw(&shared);
 
@@ -34,12 +35,12 @@ int main() {
   std::string error;
   canopen_hw::CanopenRuntimeConfig runtime_cfg;
   const bool ok = canopen_hw::LoadJointsYaml(path, &hw, &error, &runtime_cfg);
-  assert(ok);
-  assert(runtime_cfg.joints.size() == 2);
-  assert(runtime_cfg.joints[0].node_id == 1);
-  assert(runtime_cfg.joints[0].verify_pdo_mapping);
-  assert(runtime_cfg.joints[1].node_id == 2);
-  assert(!runtime_cfg.joints[1].verify_pdo_mapping);
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(runtime_cfg.joints.size(), 2u);
+  EXPECT_EQ(runtime_cfg.joints[0].node_id, 1u);
+  EXPECT_TRUE(runtime_cfg.joints[0].verify_pdo_mapping);
+  EXPECT_EQ(runtime_cfg.joints[1].node_id, 2u);
+  EXPECT_FALSE(runtime_cfg.joints[1].verify_pdo_mapping);
 
   canopen_hw::AxisFeedback fb0;
   fb0.actual_position = 500;  // 0.5 rev -> pi
@@ -53,10 +54,19 @@ int main() {
 
   hw.ReadFromSharedState();
 
-  assert(hw.joint_position(0) > 3.13 && hw.joint_position(0) < 3.15);
-  assert(hw.joint_position(1) > 3.13 && hw.joint_position(1) < 3.15);
-  assert(hw.joint_effort(0) > 4.99 && hw.joint_effort(0) < 5.01);
-  assert(hw.joint_effort(1) > 39.99 && hw.joint_effort(1) < 40.01);
+  EXPECT_GT(hw.joint_position(0), 3.13);
+  EXPECT_LT(hw.joint_position(0), 3.15);
+  EXPECT_GT(hw.joint_position(1), 3.13);
+  EXPECT_LT(hw.joint_position(1), 3.15);
+  EXPECT_GT(hw.joint_effort(0), 4.99);
+  EXPECT_LT(hw.joint_effort(0), 5.01);
+  EXPECT_GT(hw.joint_effort(1), 39.99);
+  EXPECT_LT(hw.joint_effort(1), 40.01);
+}
+
+TEST(JointsConfig, InvalidNodeIdRejected) {
+  canopen_hw::SharedState shared;
+  canopen_hw::CanopenRobotHw hw(&shared);
 
   const std::string invalid_path = "/tmp/joints_test_invalid_node_id.yaml";
   {
@@ -71,8 +81,6 @@ int main() {
   std::string invalid_error;
   const bool invalid_ok =
       canopen_hw::LoadJointsYaml(invalid_path, &hw, &invalid_error, nullptr);
-  assert(!invalid_ok);
-  assert(invalid_error.find("invalid node_id") != std::string::npos);
-
-  return 0;
+  EXPECT_FALSE(invalid_ok);
+  EXPECT_NE(invalid_error.find("invalid node_id"), std::string::npos);
 }
