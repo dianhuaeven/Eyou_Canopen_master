@@ -177,7 +177,12 @@ bool CanopenMaster::WaitForAllState(
     if (all_match) {
       return true;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // 阻塞等待反馈更新通知，而非固定 sleep 轮询。
+    // 每次 UpdateFeedback() 完成后会唤醒，避免空转消耗 CPU。
+    shared_state_->WaitForStateChange(
+        std::min(deadline,
+                 std::chrono::steady_clock::now() +
+                     std::chrono::milliseconds(10)));
   }
   return false;
 }

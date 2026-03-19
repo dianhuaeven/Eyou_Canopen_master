@@ -7,8 +7,12 @@ void SharedState::UpdateFeedback(std::size_t axis_index,
   if (!IsValidAxis(axis_index)) {
     return;
   }
-  std::lock_guard<std::mutex> lk(mtx_);
-  feedback_[axis_index] = feedback;
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    feedback_[axis_index] = feedback;
+  }
+  // 在锁外通知，避免被唤醒线程立即阻塞在 mtx_ 上。
+  state_cv_.notify_all();
 }
 
 void SharedState::RecomputeAllOperational() {
@@ -65,6 +69,12 @@ SharedSnapshot SharedState::Snapshot() const {
 
 bool SharedState::IsValidAxis(std::size_t axis_index) const {
   return axis_index < kAxisCount;
+}
+
+bool SharedState::WaitForStateChange(
+    std::chrono::steady_clock::time_point deadline) {
+  std::unique_lock<std::mutex> lk(mtx_);
+  return state_cv_.wait_until(lk, deadline) == std::cv_status::no_timeout;
 }
 
 }  // namespace canopen_hw

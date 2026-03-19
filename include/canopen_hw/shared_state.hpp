@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 
@@ -69,10 +71,16 @@ class SharedState {
   // 任意线程: 获取完整快照。
   SharedSnapshot Snapshot() const;
 
+  // 阻塞等待反馈状态发生变化（由 UpdateFeedback 通知唤醒）。
+  // 返回 true 表示在 deadline 前被唤醒，false 表示超时。
+  // 用于替代 WaitForAllState 中的 sleep_for busy-wait。
+  bool WaitForStateChange(std::chrono::steady_clock::time_point deadline);
+
  private:
   bool IsValidAxis(std::size_t axis_index) const;
 
   mutable std::mutex mtx_;
+  std::condition_variable state_cv_;  // 由 UpdateFeedback() 通知。
   std::array<AxisFeedback, kAxisCount> feedback_{};
   std::array<AxisCommand, kAxisCount> commands_{};
   std::array<AxisSafeCommand, kAxisCount> safe_commands_{};
