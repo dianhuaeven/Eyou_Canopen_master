@@ -7,6 +7,7 @@
 
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
+#include "canopen_hw/realtime_loop.hpp"
 
 namespace {
 
@@ -74,19 +75,18 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // 应用主循环骨架: 100Hz 执行 read/write。
-  // 运行期约束:
-  // - 循环内禁止任何动态内存分配(不 new、不扩容容器、不构造大临时对象)。
-  // - 所有资源在进入循环前初始化完成。
-  // TODO(realtime): CSP 生产模式切换为 clock_nanosleep(TIMER_ABSTIME) +
-  // SCHED_FIFO，避免 sleep_for 的调度抖动。
-  // 后续接入 ROS controller_manager 后，这里将替换为 ros::Rate + cm.update()。
-  const auto period = std::chrono::milliseconds(10);
-  while (g_run.load()) {
+  // 应用主循环: 100Hz 执行 read/write。
+  // 使用 RealtimeLoop 的 clock_nanosleep 绝对时间等待，消除累积漂移。
+  canopen_hw::RealtimeLoop::Config loop_config;
+  loop_config.period = std::chrono::milliseconds(10);
+  canopen_hw::RealtimeLoop loop(loop_config);
+
+  loop.Run([&]() -> bool {
+    if (!g_run.load()) return false;
     lifecycle.robot_hw()->ReadFromSharedState();
     lifecycle.robot_hw()->WriteToSharedState();
-    std::this_thread::sleep_for(period);
-  }
+    return true;
+  });
 
   lifecycle.Shutdown();
   return 0;

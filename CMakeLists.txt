@@ -31,6 +31,7 @@ add_library(canopen_core
   src/lifecycle_manager.cpp
   src/sdo_accessor.cpp
   src/diagnostics_collector.cpp
+  src/realtime_loop.cpp
 )
 
 target_include_directories(canopen_core
