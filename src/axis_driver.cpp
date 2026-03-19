@@ -10,6 +10,18 @@
 
 namespace canopen_hw {
 
+namespace {
+
+std::vector<uint8_t> PackLe(uint32_t value, std::size_t size) {
+  std::vector<uint8_t> data(size, 0);
+  for (std::size_t i = 0; i < size; ++i) {
+    data[i] = static_cast<uint8_t>((value >> (i * 8)) & 0xFFu);
+  }
+  return data;
+}
+
+}  // namespace
+
 AxisDriver::AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
                        std::size_t axis_index, SharedState* shared_state,
                        bool verify_pdo_mapping, const std::string& dcf_path)
@@ -118,31 +130,89 @@ void AxisDriver::ResetFault() { logic_.ResetFault(); }
 // --- SDO (stays in AxisDriver, Lely-specific) ---
 
 void AxisDriver::AsyncSdoRead(uint16_t index, uint8_t subindex,
-                               SdoReadCallback cb) {
+                              SdoReadCallback cb,
+                              std::size_t expected_size) {
+  if (expected_size == 0 || expected_size > 4) {
+    if (cb) {
+      cb(false, {}, "unsupported SDO read size (expected 1..4 bytes)");
+    }
+    return;
+  }
+
+  if (expected_size == 1) {
+    SubmitRead<uint8_t>(
+        index, subindex,
+        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec, uint8_t value) {
+          if (ec) {
+            if (cb) cb(false, {}, ec.message());
+            return;
+          }
+          if (cb) cb(true, {value}, std::string());
+        });
+    return;
+  }
+
+  if (expected_size == 2) {
+    SubmitRead<uint16_t>(
+        index, subindex,
+        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec, uint16_t value) {
+          if (ec) {
+            if (cb) cb(false, {}, ec.message());
+            return;
+          }
+          if (cb) cb(true, PackLe(value, 2), std::string());
+        });
+    return;
+  }
+
+  // 3/4 字节统一按 u32 读取，再按请求长度裁剪。
   SubmitRead<uint32_t>(
       index, subindex,
-      [cb](uint8_t, uint16_t, uint8_t, std::error_code ec, uint32_t value) {
+      [cb, expected_size](uint8_t, uint16_t, uint8_t, std::error_code ec,
+                          uint32_t value) {
         if (ec) {
           if (cb) cb(false, {}, ec.message());
           return;
         }
-        std::vector<uint8_t> data(4);
-        data[0] = static_cast<uint8_t>(value & 0xFF);
-        data[1] = static_cast<uint8_t>((value >> 8) & 0xFF);
-        data[2] = static_cast<uint8_t>((value >> 16) & 0xFF);
-        data[3] = static_cast<uint8_t>((value >> 24) & 0xFF);
-        if (cb) cb(true, data, std::string());
+        if (cb) cb(true, PackLe(value, expected_size), std::string());
       });
 }
 
 void AxisDriver::AsyncSdoWrite(uint16_t index, uint8_t subindex,
                                 const std::vector<uint8_t>& data,
                                 SdoWriteCallback cb) {
+  if (data.empty()) {
+    if (cb) cb(false, "empty SDO write payload");
+    return;
+  }
+  if (data.size() > 4) {
+    if (cb) cb(false, "unsupported SDO write size (>4 bytes)");
+    return;
+  }
+
   uint32_t value = 0;
   if (data.size() >= 1) value |= static_cast<uint32_t>(data[0]);
   if (data.size() >= 2) value |= static_cast<uint32_t>(data[1]) << 8;
   if (data.size() >= 3) value |= static_cast<uint32_t>(data[2]) << 16;
   if (data.size() >= 4) value |= static_cast<uint32_t>(data[3]) << 24;
+
+  if (data.size() == 1) {
+    SubmitWrite(
+        index, subindex, static_cast<uint8_t>(value),
+        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec) {
+          if (cb) cb(!ec, ec ? ec.message() : std::string());
+        });
+    return;
+  }
+
+  if (data.size() == 2) {
+    SubmitWrite(
+        index, subindex, static_cast<uint16_t>(value),
+        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec) {
+          if (cb) cb(!ec, ec ? ec.message() : std::string());
+        });
+    return;
+  }
 
   SubmitWrite(
       index, subindex, value,

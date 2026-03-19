@@ -69,7 +69,8 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   using SdoWriteCallback =
       std::function<void(bool ok, const std::string& error)>;
 
-  void AsyncSdoRead(uint16_t index, uint8_t subindex, SdoReadCallback cb);
+  void AsyncSdoRead(uint16_t index, uint8_t subindex, SdoReadCallback cb,
+                    std::size_t expected_size = 4);
   void AsyncSdoWrite(uint16_t index, uint8_t subindex,
                      const std::vector<uint8_t>& data, SdoWriteCallback cb);
 

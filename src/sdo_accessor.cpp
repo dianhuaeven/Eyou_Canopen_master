@@ -42,7 +42,7 @@ int32_t SdoResult::as_i32() const {
 SdoAccessor::SdoAccessor(CanopenMaster* master) : master_(master) {}
 
 void SdoAccessor::AsyncRead(uint8_t node_id, uint16_t index, uint8_t subindex,
-                            SdoCallback callback) {
+                            SdoCallback callback, std::size_t expected_size) {
   if (!master_) {
     if (callback) {
       callback(SdoResult{false, {}, "master is null"});
@@ -62,7 +62,7 @@ void SdoAccessor::AsyncRead(uint8_t node_id, uint16_t index, uint8_t subindex,
         if (callback) {
           callback(SdoResult{ok, data, error});
         }
-      });
+      }, expected_size);
 }
 
 void SdoAccessor::AsyncWrite(uint8_t node_id, uint16_t index, uint8_t subindex,
@@ -90,14 +90,15 @@ void SdoAccessor::AsyncWrite(uint8_t node_id, uint16_t index, uint8_t subindex,
 }
 
 SdoResult SdoAccessor::Read(uint8_t node_id, uint16_t index, uint8_t subindex,
-                            std::chrono::milliseconds timeout) {
+                            std::chrono::milliseconds timeout,
+                            std::size_t expected_size) {
   auto promise = std::make_shared<std::promise<SdoResult>>();
   auto future = promise->get_future();
 
   AsyncRead(node_id, index, subindex,
             [promise](const SdoResult& result) {
               promise->set_value(result);
-            });
+            }, expected_size);
 
   if (future.wait_for(timeout) == std::future_status::timeout) {
     return SdoResult{false, {}, "timeout"};

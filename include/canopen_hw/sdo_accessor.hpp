@@ -34,17 +34,19 @@ class SdoAccessor {
  public:
   explicit SdoAccessor(CanopenMaster* master);
 
-  // 异步读取。回调在 Lely 事件线程中执行。
+  // 异步读取。expected_size 支持 1..4 字节；回调在 Lely 事件线程中执行。
   void AsyncRead(uint8_t node_id, uint16_t index, uint8_t subindex,
-                 SdoCallback callback);
+                 SdoCallback callback, std::size_t expected_size = 4);
 
   // 异步写入。
   void AsyncWrite(uint8_t node_id, uint16_t index, uint8_t subindex,
                   const std::vector<uint8_t>& data, SdoCallback callback);
 
   // 同步阻塞读取（内部用 promise/future 包装异步调用）。
+  // expected_size 支持 1..4 字节。
   SdoResult Read(uint8_t node_id, uint16_t index, uint8_t subindex,
-                 std::chrono::milliseconds timeout = std::chrono::milliseconds(1000));
+                 std::chrono::milliseconds timeout = std::chrono::milliseconds(1000),
+                 std::size_t expected_size = 4);
 
   // 同步阻塞写入。
   SdoResult Write(uint8_t node_id, uint16_t index, uint8_t subindex,
