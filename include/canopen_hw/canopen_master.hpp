@@ -65,12 +65,15 @@ class CanopenMaster {
   std::size_t axis_count() const { return axis_drivers_.size(); }
   const CanopenMasterConfig& config() const { return config_; }
 
+  // 优雅关机: 逐步将所有轴退出 OperationEnabled，最后 NMT STOP。
+  // 必须在 Lely 事件循环仍在运行时调用。
+  bool GracefulShutdown();
+
  private:
   // 供后续真实 master 初始化后调用:
   // 基于 node-id 1..N 创建 AxisDriver。
   // 约束: 该函数只能在初始化阶段调用，禁止在运行循环中调用。
   void CreateAxisDrivers(lely::canopen::BasicMaster& can_master);
-  bool GracefulShutdown();
   bool WaitForAllState(CiA402State target_state,
                        std::chrono::steady_clock::time_point deadline);
 
