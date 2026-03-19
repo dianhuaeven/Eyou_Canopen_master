@@ -1,0 +1,16 @@
+# ros_control controller 配置。
+# JointTrajectoryController 供 MoveIt FollowJointTrajectory action 使用。
+
+joint_state_controller:
+  type: joint_state_controller/JointStateController
+  publish_rate: 100
+
+arm_controller:
+  type: position_controllers/JointTrajectoryController
+  joints:
+    - joint_1
+    - joint_2
+    - joint_3
+    - joint_4
+    - joint_5
+    - joint_6

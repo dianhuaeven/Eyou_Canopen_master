@@ -1,14 +1,23 @@
 <launch>
-  <!--
-    ROS launch skeleton for canopen_hw node.
-    NOTE: commit 10 only adds structure; ROS integration will be completed later.
-  -->
-  <node pkg="canopen_hw"
-        type="canopen_hw_node"
-        name="canopen_hw"
-        output="screen">
-    <param name="can_interface" value="can0" />
-    <param name="master_dcf" value="$(find canopen_hw)/config/master.dcf" />
-    <param name="joints_yaml" value="$(find canopen_hw)/config/joints.yaml" />
+  <!-- 配置文件路径 -->
+  <arg name="dcf_path"    default="$(find canopen_hw)/config/master.dcf"/>
+  <arg name="joints_path" default="$(find canopen_hw)/config/joints.yaml"/>
+  <arg name="loop_hz"     default="100.0"/>
+
+  <!-- 加载 controller 参数 -->
+  <rosparam file="$(find canopen_hw)/config/ros/controllers.yaml" command="load"/>
+
+  <!-- CANopen 硬件节点 -->
+  <node name="canopen_hw_node" pkg="canopen_hw" type="canopen_hw_ros_node" output="screen">
+    <param name="dcf_path"    value="$(arg dcf_path)"/>
+    <param name="joints_path" value="$(arg joints_path)"/>
+    <param name="loop_hz"     value="$(arg loop_hz)"/>
   </node>
+
+  <!-- 启动 controllers -->
+  <node name="controller_spawner" pkg="controller_manager" type="spawner"
+        args="joint_state_controller arm_controller" output="screen"/>
+
+  <!-- robot_state_publisher（需要 URDF 加载到 robot_description） -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
 </launch>

@@ -73,6 +73,11 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
     }
     const YAML::Node canopen = joint["canopen"];
     CanopenMasterConfig::JointConfig jcfg;
+    if (joint["name"]) {
+      jcfg.name = joint["name"].as<std::string>();
+    } else {
+      jcfg.name = "joint_" + std::to_string(axis_index + 1);
+    }
     try {
       const bool has_node_id =
           (canopen && canopen.IsMap() && canopen["node_id"]) || joint["node_id"];

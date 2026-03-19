@@ -1,0 +1,45 @@
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include <hardware_interface/joint_command_interface.h>
+#include <hardware_interface/joint_state_interface.h>
+#include <hardware_interface/robot_hw.h>
+
+#include "canopen_hw/canopen_master.hpp"
+#include "canopen_hw/canopen_robot_hw.hpp"
+#include "canopen_hw/shared_state.hpp"
+
+namespace canopen_hw {
+
+// ROS1 ros_control 适配层。
+// 将 CanopenRobotHw 的 read/write 语义桥接到 hardware_interface::RobotHW，
+// 使 controller_manager 和 MoveIt 可以直接驱动。
+class CanopenRobotHwRos : public hardware_interface::RobotHW {
+ public:
+  // joint_names 顺序必须与 CanopenRobotHw 的轴索引一一对应。
+  CanopenRobotHwRos(CanopenRobotHw* hw,
+                    const std::vector<std::string>& joint_names);
+
+  // hardware_interface::RobotHW 接口。
+  void read(const ros::Time& time, const ros::Duration& period) override;
+  void write(const ros::Time& time, const ros::Duration& period) override;
+
+  bool all_operational() const { return hw_->all_operational(); }
+
+ private:
+  CanopenRobotHw* hw_;  // 非拥有指针。
+
+  // ros_control 要求这些数组在注册后地址不变，
+  // 所以用 vector 在构造时一次性分配。
+  std::vector<double> pos_;
+  std::vector<double> vel_;
+  std::vector<double> eff_;
+  std::vector<double> cmd_;
+
+  hardware_interface::JointStateInterface jnt_state_iface_;
+  hardware_interface::PositionJointInterface pos_cmd_iface_;
+};
+
+}  // namespace canopen_hw

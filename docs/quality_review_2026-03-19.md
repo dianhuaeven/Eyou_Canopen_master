@@ -112,5 +112,96 @@
 
 ## 复核记录（2026-03-19）
 
-- 代码复核确认：`BUG-1`、`BUG-2` 结论成立。
+- 代码复核确认：`BUG-1`、`BUG-2`、`BUG-3` 结论成立。
 - 测试复核：在 `build/` 目录执行 `ctest --output-on-failure`，结果 `30/30` 通过（总耗时约 0.48s）。
+
+---
+
+## 修复路径（以 commit 为单位）
+
+依赖关系：
+
+```
+C01 (BUG-1 止血) ──→ C04 (根治，替代 C01 临时方案)
+C02 (BUG-3)       ──→ 独立
+C03 (BUG-2)       ──→ 独立
+C04 (ISSUE-3)     ──→ C06 (集成测试验证 C04，同时覆盖 C02 负路径)
+C04               ──→ C07 (在 C04 基础上继续清理)
+C05 (ISSUE-11)    ──→ 独立，但建议在 C04 之后做（接口可能变动）
+C08~C12           ──→ 互相独立
+```
+
+### C01 — `fix: reload axis conversion on final robot_hw` (BUG-1)
+
+- 优先级：P0 | 工作量：小
+- 止血修复。在 `src/main.cpp:106` 构造正式 `robot_hw` 后，再调一次 `LoadJointsYaml` 将换算参数写入正式对象，并检查返回值，失败时 `return 1` 中止启动。
+- 注意：此为临时热修，C04 落地后该调用会被 `robot_hw.ApplyConfig(master_cfg)` 替代。
+- 改动文件：`src/main.cpp`（+3~4 行）
+
+### C02 — `fix: abort startup on joints.yaml load failure` (BUG-3)
+
+- 优先级：P0 | 工作量：小
+- `src/main.cpp:86-89`：`LoadJointsYaml` 返回 false 时 `return 1` 中止启动，而非仅打日志继续运行。
+- 改动文件：`src/main.cpp`（改 1 个分支）
+
+### C03 — `perf: add GetCommand single-axis read to SharedState` (BUG-2)
+
+- 优先级：P0 | 工作量：小
+- `include/canopen_hw/shared_state.hpp`：声明 `bool GetCommand(size_t axis_index, AxisCommand* out) const`，越界返回 false，避免默认值与合法零命令混淆
+- `src/shared_state.cpp`：实现，越界返回 false，合法时锁内拷贝单个 `AxisCommand` 到 `*out` 并返回 true
+- `src/axis_driver.cpp:125-128`：`Snapshot()` 替换为 `GetCommand(axis_index_)`
+
+### C04 — `refactor: move AxisConversion into CanopenMasterConfig` (ISSUE-3)
+
+- 优先级：P1 | 工作量：中
+- 根治 BUG-1 的设计根因，消除 temp_state/temp_hw 模式。
+- `include/canopen_hw/canopen_master.hpp`：`JointConfig` 加 `counts_per_rev`、`rated_torque_nm`、`velocity_scale`、`torque_scale`
+- `src/joints_config.cpp`：换算参数写入 `config->joints[i]` 而非 `robot_hw->ConfigureAxisConversion()`
+- `include/canopen_hw/canopen_robot_hw.hpp` / `src/canopen_robot_hw.cpp`：加 `ApplyConfig(const CanopenMasterConfig&)` 批量应用换算参数
+- `src/main.cpp`：删除 `temp_state`/`temp_hw`，构造后调 `robot_hw.ApplyConfig(master_cfg)`
+
+### C05 — `fix: catch YAML field type exceptions in LoadJointsYaml` (ISSUE-11)
+
+- 优先级：P1 | 工作量：小
+- `src/joints_config.cpp:68-147`：将 joints 循环体内的 `as<>()` 调用包裹在 `try/catch(YAML::Exception)` 中，通过 `error` 输出字段路径与原因后返回 false。
+
+### C06 — `test: add startup integration test` (ISSUE-4)
+
+- 优先级：P1 | 工作量：小
+- 新增 `test/test_startup_integration.cpp`，覆盖正路径和负路径：
+  - 正路径：加载 YAML → 构造 SharedState → 构造 RobotHw → 验证换算参数正确传递（验证 C04）
+  - 负路径：YAML 加载失败时启动中止、返回错误信息（验证 C02 / BUG-3）
+- `CMakeLists.txt` 注册新测试。
+
+### C07 — `refactor: remove flat vectors from CanopenMasterConfig` (ISSUE-5)
+
+- 优先级：P1 | 工作量：小
+- `include/canopen_hw/canopen_master.hpp`：删除 `node_ids`/`verify_pdo_mapping` 等扁平 vector 和 `SyncFromJoints()`
+- `src/canopen_master.cpp`：`CreateAxisDrivers` 改用 `config_.joints[i].xxx`
+- `src/joints_config.cpp`：删 `SyncFromJoints()` 调用，改为手动设 `axis_count`
+
+### C08 — `test: merge duplicate shared_state test files` (ISSUE-6)
+
+- 优先级：P2 | 工作量：小
+- 合并 `test/test_shared_state.cpp` 和 `test/test_shared_state_gtest.cpp`，去重用例。
+
+### C09 — `fix: use predicate overload in WaitForStateChange` (ISSUE-7)
+
+- 优先级：P2 | 工作量：小
+- `src/shared_state.cpp:73-77`：`wait_until` 改为带谓词重载，消除虚假唤醒语义问题。
+
+### C10 — `fix: fallback to 0 axes when shared_state is null` (ISSUE-8)
+
+- 优先级：P2 | 工作量：小
+- `src/canopen_robot_hw.cpp:17`：`? 6` 改为 `? 0`。
+
+### C11 — `chore: document realtime loop TODO` (ISSUE-9)
+
+- 优先级：P2 | 工作量：小
+- `src/main.cpp:119`：标注 TODO，CSP 模式切换前暂不改动 `sleep_for`。
+
+### C12 — `refactor: make PdoMapping channel count configurable` (ISSUE-10)
+
+- 优先级：P2 | 工作量：中（波及 PdoMappingReader、DiffPdoMapping、LoadExpectedPdoMappingFromDcf 及相关测试）
+- `include/canopen_hw/pdo_mapping.hpp:28-31`：`std::array<..., 4>` 改为 `std::vector` 或模板参数。
+- 需同步修改所有读取/比对/构造 `PdoMapping` 的调用点和测试用例。

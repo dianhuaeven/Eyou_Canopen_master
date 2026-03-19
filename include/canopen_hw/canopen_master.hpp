@@ -33,6 +33,7 @@ struct CanopenMasterConfig {
   // 每轴配置。C08 之前分散在 JointCanopenConfig / CanopenRuntimeConfig，
   // 现在合并为单一 JointConfig，消除 main.cpp 中的手动对拷。
   struct JointConfig {
+    std::string name;  // URDF / ros_control 关节名，来自 joints.yaml。
     uint8_t node_id = 0;
     bool verify_pdo_mapping = false;
     int32_t position_lock_threshold = 15000;

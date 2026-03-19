@@ -60,6 +60,42 @@ target_link_libraries(canopen_hw_node
     canopen_core
 )
 
+# ── ROS1 适配层（可选） ──────────────────────────────────
+option(WITH_ROS "Build ROS1 ros_control adapter" OFF)
+
+if(WITH_ROS)
+  find_package(catkin REQUIRED COMPONENTS
+    roscpp
+    hardware_interface
+    controller_manager
+  )
+
+  add_library(canopen_ros_adapter
+    src/canopen_robot_hw_ros.cpp
+  )
+  target_include_directories(canopen_ros_adapter
+    PUBLIC
+      ${catkin_INCLUDE_DIRS}
+  )
+  target_link_libraries(canopen_ros_adapter
+    PUBLIC
+      canopen_core
+      ${catkin_LIBRARIES}
+  )
+  target_compile_options(canopen_ros_adapter
+    PRIVATE
+      -Wall -Wextra -Werror
+  )
+
+  add_executable(canopen_hw_ros_node
+    src/canopen_hw_ros_node.cpp
+  )
+  target_link_libraries(canopen_hw_ros_node
+    PRIVATE
+      canopen_ros_adapter
+  )
+endif()
+
 # Tests
 enable_testing()
 
