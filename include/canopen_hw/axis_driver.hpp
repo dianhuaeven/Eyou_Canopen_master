@@ -29,9 +29,6 @@ class AxisDriver final : public lely::canopen::BasicDriver {
              std::size_t axis_index, SharedState* shared_state,
              bool verify_pdo_mapping, const std::string& dcf_path);
 
-  // ROS 线程每周期调用: 更新上层期望位置(仅写入本地缓存, 不直接触发总线发送)。
-  void SetRosTargetPosition(int32_t target_position);
-
   // 由后续 PDO 解析逻辑调用, 将本周期反馈推进状态机。
   // 这里先提供显式入口, 便于在无硬件场景下做逻辑验证。
   void InjectFeedback(int32_t actual_position, int32_t actual_velocity,
@@ -48,6 +45,9 @@ class AxisDriver final : public lely::canopen::BasicDriver {
                              int fault_reset_hold_cycles);
 
  private:
+  // 在 RPDO 回调中使用: 更新上层期望位置(仅写入本地缓存, 不直接触发总线发送)。
+  void SetRosTargetPosition(int32_t target_position);
+
   // Lely 回调: RPDO/SDO 写入了 RPDO-mapped 对象后触发。
   // 当前骨架阶段仅保留钩子，具体对象读取将在下一阶段接入。
   void OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept override;
