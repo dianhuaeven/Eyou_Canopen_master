@@ -58,5 +58,21 @@ int main() {
   assert(hw.joint_effort(0) > 4.99 && hw.joint_effort(0) < 5.01);
   assert(hw.joint_effort(1) > 39.99 && hw.joint_effort(1) < 40.01);
 
+  const std::string invalid_path = "/tmp/joints_test_invalid_node_id.yaml";
+  {
+    std::ofstream ofs(invalid_path);
+    ofs << "joints:\n"
+           "  - name: joint_bad\n"
+           "    canopen:\n"
+           "      node_id: 300\n"
+           "    counts_per_rev: 1000\n";
+  }
+
+  std::string invalid_error;
+  const bool invalid_ok =
+      canopen_hw::LoadJointsYaml(invalid_path, &hw, &invalid_error, nullptr);
+  assert(!invalid_ok);
+  assert(invalid_error.find("invalid node_id") != std::string::npos);
+
   return 0;
 }

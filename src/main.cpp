@@ -109,6 +109,12 @@ int main(int argc, char** argv) {
       if (!master_cfg.node_ids.empty()) {
         master_cfg.axis_count = master_cfg.node_ids.size();
       }
+      if (master_cfg.axis_count > canopen_hw::SharedState::kAxisCount) {
+        std::cerr << "configured axis_count exceeds supported maximum: "
+                  << master_cfg.axis_count << " > "
+                  << canopen_hw::SharedState::kAxisCount << std::endl;
+        return 1;
+      }
       shared_state.SetActiveAxisCount(master_cfg.axis_count);
 
       std::cout << "Loaded top-level canopen config: interface="

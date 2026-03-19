@@ -14,6 +14,10 @@ void SetError(std::string* error, const std::string& msg) {
   }
 }
 
+bool IsValidCanopenNodeId(int node_id) {
+  return node_id >= 1 && node_id <= 127;
+}
+
 }  // namespace
 
 bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
@@ -73,11 +77,20 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
       continue;
     }
     const YAML::Node canopen = joint["canopen"];
+    const bool has_node_id =
+        (canopen && canopen.IsMap() && canopen["node_id"]) || joint["node_id"];
     int node_id = 0;
     if (canopen && canopen.IsMap() && canopen["node_id"]) {
       node_id = canopen["node_id"].as<int>();
     } else if (joint["node_id"]) {
       node_id = joint["node_id"].as<int>();
+    }
+    if (has_node_id && !IsValidCanopenNodeId(node_id)) {
+      std::ostringstream oss;
+      oss << "invalid node_id at joints[" << axis_index
+          << "]: expected 1..127, got " << node_id;
+      SetError(error, oss.str());
+      return false;
     }
 
     CanopenRobotHw::AxisConversion conv;
