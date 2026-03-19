@@ -87,3 +87,9 @@ add_executable(test_shared_state_gtest
 )
 target_link_libraries(test_shared_state_gtest PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_shared_state_gtest)
+
+add_executable(test_shared_state_concurrent
+  test/test_shared_state_concurrent.cpp
+)
+target_link_libraries(test_shared_state_concurrent PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_shared_state_concurrent)
