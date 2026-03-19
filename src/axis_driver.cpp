@@ -288,12 +288,13 @@ void AxisDriver::PublishSnapshot() {
     return;
   }
 
-  // 将状态机过滤后的目标位置同步回命令面，后续 write PDO 时直接读取该值。
-  AxisCommand cmd;
-  cmd.target_position = state_machine_.safe_target();
+  // 将状态机过滤后的目标位置写入 safe_commands（Lely 线程专用），
+  // 不再写入 commands（ROS 线程专用），避免覆盖 ROS 侧用户期望位置。
+  AxisSafeCommand safe_cmd;
+  safe_cmd.safe_target_position = state_machine_.safe_target();
 
   shared_state_->UpdateFeedback(axis_index_, feedback_cache_);
-  shared_state_->UpdateCommand(axis_index_, cmd);
+  shared_state_->UpdateSafeCommand(axis_index_, safe_cmd);
 }
 
 }  // namespace canopen_hw

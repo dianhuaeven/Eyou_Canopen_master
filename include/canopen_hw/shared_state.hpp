@@ -27,12 +27,19 @@ struct AxisCommand {
   int32_t target_position = 0;
 };
 
+// 状态机过滤后的安全目标位置(由 Lely 线程写入)。
+// 与 AxisCommand 分离，避免 Lely 线程覆盖 ROS 线程写入的用户期望位置。
+struct AxisSafeCommand {
+  int32_t safe_target_position = 0;
+};
+
 // 给调用者返回的快照结构:
 // - read() 一次锁内拷贝即可拿到 6 轴一致视图
 // - 调用方后续使用不需要持锁
 struct SharedSnapshot {
   std::array<AxisFeedback, 6> feedback{};
   std::array<AxisCommand, 6> commands{};
+  std::array<AxisSafeCommand, 6> safe_commands{};
   bool all_operational = false;
 };
 
@@ -47,6 +54,10 @@ class SharedState {
 
   // ROS 线程: 更新某轴目标位置命令。
   void UpdateCommand(std::size_t axis_index, const AxisCommand& command);
+
+  // Lely 线程: 更新某轴状态机过滤后的安全目标位置。
+  void UpdateSafeCommand(std::size_t axis_index,
+                         const AxisSafeCommand& safe_command);
 
   // 由 Lely 线程在每个 SYNC/RPDO 更新后调用，汇总全轴状态。
   void RecomputeAllOperational();
@@ -64,6 +75,7 @@ class SharedState {
   mutable std::mutex mtx_;
   std::array<AxisFeedback, kAxisCount> feedback_{};
   std::array<AxisCommand, kAxisCount> commands_{};
+  std::array<AxisSafeCommand, kAxisCount> safe_commands_{};
   bool all_operational_ = false;
   std::size_t active_axis_count_ = kAxisCount;
 };

@@ -44,11 +44,21 @@ void SharedState::UpdateCommand(std::size_t axis_index,
   commands_[axis_index] = command;
 }
 
+void SharedState::UpdateSafeCommand(std::size_t axis_index,
+                                    const AxisSafeCommand& safe_command) {
+  if (!IsValidAxis(axis_index)) {
+    return;
+  }
+  std::lock_guard<std::mutex> lk(mtx_);
+  safe_commands_[axis_index] = safe_command;
+}
+
 SharedSnapshot SharedState::Snapshot() const {
   std::lock_guard<std::mutex> lk(mtx_);
   SharedSnapshot s;
   s.feedback = feedback_;
   s.commands = commands_;
+  s.safe_commands = safe_commands_;
   s.all_operational = all_operational_;
   return s;
 }
