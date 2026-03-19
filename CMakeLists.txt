@@ -5,6 +5,21 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# ── catkin ─────────────────────────────��────────────────
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  hardware_interface
+  controller_manager
+  std_srvs
+)
+
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES canopen_core canopen_ros_adapter
+  CATKIN_DEPENDS roscpp hardware_interface controller_manager std_srvs
+)
+
+# ── 第三方依赖 ─────────────────────────────────────────
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LELY REQUIRED liblely-coapp liblely-io2 liblely-ev liblely-co)
 find_package(Threads REQUIRED)
@@ -12,14 +27,25 @@ find_package(yaml-cpp REQUIRED)
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
-include(FetchContent)
-FetchContent_Declare(
-  spdlog
-  GIT_REPOSITORY https://github.com/gabime/spdlog.git
-  GIT_TAG        v1.12.0
-)
-FetchContent_MakeAvailable(spdlog)
+option(CANOPEN_FETCH_SPDLOG
+  "Allow downloading spdlog via FetchContent when system package is unavailable"
+  ON)
+find_package(spdlog QUIET CONFIG)
+if(NOT spdlog_FOUND)
+  if(NOT CANOPEN_FETCH_SPDLOG)
+    message(FATAL_ERROR
+      "spdlog not found. Install system spdlog or configure with -DCANOPEN_FETCH_SPDLOG=ON.")
+  endif()
+  include(FetchContent)
+  FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/gabime/spdlog.git
+    GIT_TAG        v1.12.0
+  )
+  FetchContent_MakeAvailable(spdlog)
+endif()
 
+# ── canopen_core 库（不依赖 ROS） ──────────────────────
 add_library(canopen_core
   src/cia402_state_machine.cpp
   src/shared_state.cpp
@@ -56,6 +82,7 @@ target_compile_options(canopen_core
     ${LELY_CFLAGS_OTHER}
 )
 
+# ── 独立可执行（不依赖 ROS） ──────────────────────────
 add_executable(canopen_hw_node
   src/main.cpp
 )
@@ -65,43 +92,48 @@ target_link_libraries(canopen_hw_node
     canopen_core
 )
 
-# ── ROS1 适配层（可选） ──────────────────────────────────
-option(WITH_ROS "Build ROS1 ros_control adapter" OFF)
+# ── ROS1 适配层 ───────────────────────────────────────
+add_library(canopen_ros_adapter
+  src/canopen_robot_hw_ros.cpp
+)
+target_include_directories(canopen_ros_adapter
+  PUBLIC
+    ${catkin_INCLUDE_DIRS}
+)
+target_link_libraries(canopen_ros_adapter
+  PUBLIC
+    canopen_core
+    ${catkin_LIBRARIES}
+)
+target_compile_options(canopen_ros_adapter
+  PRIVATE
+    -Wall -Wextra -Werror
+)
 
-if(WITH_ROS)
-  find_package(catkin REQUIRED COMPONENTS
-    roscpp
-    hardware_interface
-    controller_manager
-  )
+add_executable(canopen_hw_ros_node
+  src/canopen_hw_ros_node.cpp
+)
+target_link_libraries(canopen_hw_ros_node
+  PRIVATE
+    canopen_ros_adapter
+)
 
-  add_library(canopen_ros_adapter
-    src/canopen_robot_hw_ros.cpp
-  )
-  target_include_directories(canopen_ros_adapter
-    PUBLIC
-      ${catkin_INCLUDE_DIRS}
-  )
-  target_link_libraries(canopen_ros_adapter
-    PUBLIC
-      canopen_core
-      ${catkin_LIBRARIES}
-  )
-  target_compile_options(canopen_ros_adapter
-    PRIVATE
-      -Wall -Wextra -Werror
-  )
+# ── Install ───────────────────────────────────────────
+install(TARGETS canopen_core canopen_ros_adapter canopen_hw_node canopen_hw_ros_node
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
-  add_executable(canopen_hw_ros_node
-    src/canopen_hw_ros_node.cpp
-  )
-  target_link_libraries(canopen_hw_ros_node
-    PRIVATE
-      canopen_ros_adapter
-  )
-endif()
+install(DIRECTORY include/canopen_hw/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+)
 
-# Tests
+install(DIRECTORY launch config
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+# ── Tests ─────────────────────────────────────────────
 enable_testing()
 
 add_executable(test_state_machine
