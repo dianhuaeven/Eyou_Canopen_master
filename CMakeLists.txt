@@ -99,6 +99,12 @@ add_executable(test_canopen_master
 target_link_libraries(test_canopen_master PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_canopen_master)
 
+add_executable(test_startup_integration
+  test/test_startup_integration.cpp
+)
+target_link_libraries(test_startup_integration PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_startup_integration)
+
 add_executable(test_shared_state_gtest
   test/test_shared_state_gtest.cpp
 )
