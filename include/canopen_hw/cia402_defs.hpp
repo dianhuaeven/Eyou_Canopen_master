@@ -32,7 +32,6 @@ constexpr uint16_t kCtrl_SwitchOn = 0x0007;
 constexpr uint16_t kCtrl_EnableOperation = 0x000F;
 constexpr uint16_t kCtrl_DisableVoltage = 0x0000;
 constexpr uint16_t kCtrl_EnableVoltage = 0x0002;
-constexpr uint16_t kCtrl_QuickStop = 0x0002;
 constexpr uint16_t kCtrl_DisableOperation = 0x0007;
 constexpr uint16_t kCtrl_FaultReset = 0x0080;
 
