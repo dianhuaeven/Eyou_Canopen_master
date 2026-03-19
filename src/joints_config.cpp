@@ -100,11 +100,25 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
       conv.torque_scale = joint["torque_scale"].as<double>();
     }
 
-    if (node_id > 0 &&
-        node_id <= static_cast<int>(CanopenRobotHw::kAxisCount)) {
-      robot_hw->ConfigureAxisConversion(static_cast<std::size_t>(node_id - 1),
-                                        conv);
-    } else if (axis_index < CanopenRobotHw::kAxisCount) {
+    // 参数合法性校验: counts_per_rev 和 rated_torque_nm 必须为正值。
+    if (conv.counts_per_rev <= 0) {
+      std::ostringstream oss;
+      oss << "invalid counts_per_rev at joints[" << axis_index
+          << "]: expected > 0, got " << conv.counts_per_rev;
+      SetError(error, oss.str());
+      return false;
+    }
+    if (conv.rated_torque_nm <= 0) {
+      std::ostringstream oss;
+      oss << "invalid rated_torque_nm at joints[" << axis_index
+          << "]: expected > 0, got " << conv.rated_torque_nm;
+      SetError(error, oss.str());
+      return false;
+    }
+
+    // 统一映射规则: YAML 中第 N 个 joint 映射到 axis_index = N (从 0 开始),
+    // node_id 仅用于总线通信, 不参与数组索引。
+    if (axis_index < CanopenRobotHw::kAxisCount) {
       robot_hw->ConfigureAxisConversion(axis_index, conv);
     }
 

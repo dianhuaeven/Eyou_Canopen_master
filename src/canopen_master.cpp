@@ -16,12 +16,24 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
   if (config_.axis_count == 0) {
     config_.axis_count = 1;
   }
+  if (config_.axis_count > SharedState::kAxisCount) {
+    std::cerr << "axis_count " << config_.axis_count
+              << " exceeds max " << SharedState::kAxisCount
+              << ", clamping" << std::endl;
+    config_.axis_count = SharedState::kAxisCount;
+  }
   if (config_.node_ids.size() < config_.axis_count) {
     config_.node_ids.resize(config_.axis_count);
-    for (std::size_t i = 0; i < config_.axis_count; ++i) {
-      if (config_.node_ids[i] == 0) {
-        config_.node_ids[i] = static_cast<uint8_t>(i + 1);
+  }
+  for (std::size_t i = 0; i < config_.axis_count; ++i) {
+    const uint8_t id = config_.node_ids[i];
+    if (id == 0 || id > 127) {
+      if (id > 127) {
+        std::cerr << "node_ids[" << i << "]=" << static_cast<int>(id)
+                  << " out of range 1..127, replacing with default "
+                  << (i + 1) << std::endl;
       }
+      config_.node_ids[i] = static_cast<uint8_t>(i + 1);
     }
   }
   if (config_.verify_pdo_mapping.size() < config_.axis_count) {
