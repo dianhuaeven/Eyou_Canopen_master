@@ -77,38 +77,13 @@ int main(int argc, char** argv) {
 
   {
     std::string error;
-    canopen_hw::CanopenRuntimeConfig runtime_cfg;
     const std::string joints_path = MakeAbsolutePath(opts.joints_path);
     if (!FileExists(joints_path)) {
       std::cerr << "joints.yaml not found: " << joints_path << std::endl;
     } else if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error,
-                                           &runtime_cfg)) {
+                                           &master_cfg)) {
       std::cerr << "Load joints.yaml failed: " << error << std::endl;
     } else {
-      master_cfg.can_interface = runtime_cfg.master.can_interface;
-      master_cfg.master_node_id = runtime_cfg.master.master_node_id;
-      master_cfg.node_ids.clear();
-      master_cfg.verify_pdo_mapping.clear();
-      master_cfg.position_lock_thresholds.clear();
-      master_cfg.max_fault_resets.clear();
-      master_cfg.fault_reset_hold_cycles.clear();
-      master_cfg.node_ids.reserve(runtime_cfg.joints.size());
-      master_cfg.verify_pdo_mapping.reserve(runtime_cfg.joints.size());
-      master_cfg.position_lock_thresholds.reserve(runtime_cfg.joints.size());
-      master_cfg.max_fault_resets.reserve(runtime_cfg.joints.size());
-      master_cfg.fault_reset_hold_cycles.reserve(runtime_cfg.joints.size());
-      for (const auto& joint : runtime_cfg.joints) {
-        master_cfg.node_ids.push_back(joint.node_id);
-        master_cfg.verify_pdo_mapping.push_back(joint.verify_pdo_mapping);
-        master_cfg.position_lock_thresholds.push_back(
-            joint.position_lock_threshold);
-        master_cfg.max_fault_resets.push_back(joint.max_fault_resets);
-        master_cfg.fault_reset_hold_cycles.push_back(
-            joint.fault_reset_hold_cycles);
-      }
-      if (!master_cfg.node_ids.empty()) {
-        master_cfg.axis_count = master_cfg.node_ids.size();
-      }
       if (master_cfg.axis_count > canopen_hw::SharedState::kAxisCount) {
         std::cerr << "configured axis_count exceeds supported maximum: "
                   << master_cfg.axis_count << " > "
@@ -118,9 +93,9 @@ int main(int argc, char** argv) {
       shared_state.SetActiveAxisCount(master_cfg.axis_count);
 
       std::cout << "Loaded top-level canopen config: interface="
-                << runtime_cfg.master.can_interface
+                << master_cfg.can_interface
                 << " master_node_id="
-                << static_cast<int>(runtime_cfg.master.master_node_id)
+                << static_cast<int>(master_cfg.master_node_id)
                 << std::endl;
     }
   }

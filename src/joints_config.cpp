@@ -22,7 +22,7 @@ bool IsValidCanopenNodeId(int node_id) {
 
 bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
                     std::string* error,
-                    CanopenRuntimeConfig* runtime_cfg) {
+                    CanopenMasterConfig* config) {
   if (!robot_hw) {
     SetError(error, "robot_hw is null");
     return false;
@@ -44,23 +44,23 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
     return false;
   }
 
-  if (runtime_cfg) {
+  if (config) {
     const YAML::Node top_canopen = root["canopen"];
     if (top_canopen && top_canopen.IsMap()) {
       if (top_canopen["interface"]) {
-        runtime_cfg->master.can_interface =
+        config->can_interface =
             top_canopen["interface"].as<std::string>();
       }
       if (top_canopen["master_node_id"]) {
         const int master_node_id = top_canopen["master_node_id"].as<int>();
         if (master_node_id > 0 && master_node_id <= 255) {
-          runtime_cfg->master.master_node_id =
+          config->master_node_id =
               static_cast<uint8_t>(master_node_id);
         }
       }
     }
-    runtime_cfg->joints.clear();
-    runtime_cfg->joints.reserve(joints.size());
+    config->joints.clear();
+    config->joints.reserve(joints.size());
   }
 
   std::size_t loaded = 0;
@@ -122,24 +122,24 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
       robot_hw->ConfigureAxisConversion(axis_index, conv);
     }
 
-    if (runtime_cfg) {
-      JointCanopenConfig cfg;
-      cfg.node_id = node_id > 0 ? static_cast<uint8_t>(node_id)
-                                : static_cast<uint8_t>(axis_index + 1);
+    if (config) {
+      CanopenMasterConfig::JointConfig jcfg;
+      jcfg.node_id = node_id > 0 ? static_cast<uint8_t>(node_id)
+                                  : static_cast<uint8_t>(axis_index + 1);
       if (canopen && canopen.IsMap() && canopen["verify_pdo_mapping"]) {
-        cfg.verify_pdo_mapping = canopen["verify_pdo_mapping"].as<bool>();
+        jcfg.verify_pdo_mapping = canopen["verify_pdo_mapping"].as<bool>();
       }
       if (joint["position_lock_threshold"]) {
-        cfg.position_lock_threshold = joint["position_lock_threshold"].as<int>();
+        jcfg.position_lock_threshold = joint["position_lock_threshold"].as<int>();
       }
       if (joint["max_fault_resets"]) {
-        cfg.max_fault_resets = joint["max_fault_resets"].as<int>();
+        jcfg.max_fault_resets = joint["max_fault_resets"].as<int>();
       }
       if (joint["fault_reset_hold_cycles"]) {
-        cfg.fault_reset_hold_cycles =
+        jcfg.fault_reset_hold_cycles =
             joint["fault_reset_hold_cycles"].as<int>();
       }
-      runtime_cfg->joints.push_back(cfg);
+      config->joints.push_back(jcfg);
     }
 
     ++loaded;
@@ -149,6 +149,11 @@ bool LoadJointsYaml(const std::string& path, CanopenRobotHw* robot_hw,
   if (loaded == 0) {
     SetError(error, "no joints loaded");
     return false;
+  }
+
+  // 从 joints 同步到扁平 vector，更新 axis_count。
+  if (config) {
+    config->SyncFromJoints();
   }
 
   return true;

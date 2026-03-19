@@ -33,14 +33,14 @@ TEST(JointsConfig, LoadValidYaml) {
   }
 
   std::string error;
-  canopen_hw::CanopenRuntimeConfig runtime_cfg;
-  const bool ok = canopen_hw::LoadJointsYaml(path, &hw, &error, &runtime_cfg);
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(path, &hw, &error, &master_cfg);
   EXPECT_TRUE(ok);
-  EXPECT_EQ(runtime_cfg.joints.size(), 2u);
-  EXPECT_EQ(runtime_cfg.joints[0].node_id, 1u);
-  EXPECT_TRUE(runtime_cfg.joints[0].verify_pdo_mapping);
-  EXPECT_EQ(runtime_cfg.joints[1].node_id, 2u);
-  EXPECT_FALSE(runtime_cfg.joints[1].verify_pdo_mapping);
+  EXPECT_EQ(master_cfg.joints.size(), 2u);
+  EXPECT_EQ(master_cfg.joints[0].node_id, 1u);
+  EXPECT_TRUE(master_cfg.joints[0].verify_pdo_mapping);
+  EXPECT_EQ(master_cfg.joints[1].node_id, 2u);
+  EXPECT_FALSE(master_cfg.joints[1].verify_pdo_mapping);
 
   canopen_hw::AxisFeedback fb0;
   fb0.actual_position = 500;  // 0.5 rev -> pi

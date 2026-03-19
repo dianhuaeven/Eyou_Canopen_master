@@ -22,17 +22,52 @@
 
 namespace canopen_hw {
 
-// 主站基础配置。当前 commit 仅保留最小字段，后续再扩展到完整 YAML 参数。
+// 主站基础配置，包含总线参数和每轴参数。
+// 由 LoadJointsYaml() 一次性填充，运行期只读。
 struct CanopenMasterConfig {
   std::string can_interface = "can0";
   std::string master_dcf_path;
   uint8_t master_node_id = 127;
   std::size_t axis_count = 6;
+
+  // 每轴配置。C08 之前分散在 JointCanopenConfig / CanopenRuntimeConfig，
+  // 现在合并为单一 JointConfig，消除 main.cpp 中的手动对拷。
+  struct JointConfig {
+    uint8_t node_id = 0;
+    bool verify_pdo_mapping = false;
+    int32_t position_lock_threshold = 15000;
+    int max_fault_resets = 3;
+    int fault_reset_hold_cycles = 5;
+  };
+  std::vector<JointConfig> joints;
+
+  // 便捷视图：从 joints 中提取对应字段的 vector。
+  // 用于 CreateAxisDrivers() 等需要按索引访问的场景。
   std::vector<uint8_t> node_ids;
   std::vector<bool> verify_pdo_mapping;
   std::vector<int32_t> position_lock_thresholds;
   std::vector<int> max_fault_resets;
   std::vector<int> fault_reset_hold_cycles;
+
+  // 从 joints 同步到扁平 vector。
+  // 在 CanopenMaster 构造函数或 LoadJointsYaml 之后调用。
+  void SyncFromJoints() {
+    node_ids.resize(joints.size());
+    verify_pdo_mapping.resize(joints.size());
+    position_lock_thresholds.resize(joints.size());
+    max_fault_resets.resize(joints.size());
+    fault_reset_hold_cycles.resize(joints.size());
+    for (std::size_t i = 0; i < joints.size(); ++i) {
+      node_ids[i] = joints[i].node_id;
+      verify_pdo_mapping[i] = joints[i].verify_pdo_mapping;
+      position_lock_thresholds[i] = joints[i].position_lock_threshold;
+      max_fault_resets[i] = joints[i].max_fault_resets;
+      fault_reset_hold_cycles[i] = joints[i].fault_reset_hold_cycles;
+    }
+    if (!joints.empty()) {
+      axis_count = joints.size();
+    }
+  }
 };
 
 class CanopenMaster {
