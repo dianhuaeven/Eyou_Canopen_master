@@ -2,11 +2,11 @@
 
 #include <algorithm>
 #include <chrono>
-#include <iostream>
 #include <thread>
 #include <ctime>
 
 #include "canopen_hw/cia402_defs.hpp"
+#include "canopen_hw/logging.hpp"
 
 namespace canopen_hw {
 
@@ -17,9 +17,8 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
     config_.axis_count = 1;
   }
   if (config_.axis_count > SharedState::kAxisCount) {
-    std::cerr << "axis_count " << config_.axis_count
-              << " exceeds max " << SharedState::kAxisCount
-              << ", clamping" << std::endl;
+    CANOPEN_LOG_WARN("axis_count {} exceeds max {}, clamping",
+                     config_.axis_count, SharedState::kAxisCount);
     config_.axis_count = SharedState::kAxisCount;
   }
   if (config_.node_ids.size() < config_.axis_count) {
@@ -29,9 +28,8 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
     const uint8_t id = config_.node_ids[i];
     if (id == 0 || id > 127) {
       if (id > 127) {
-        std::cerr << "node_ids[" << i << "]=" << static_cast<int>(id)
-                  << " out of range 1..127, replacing with default "
-                  << (i + 1) << std::endl;
+        CANOPEN_LOG_WARN("node_ids[{}]={} out of range 1..127, replacing with default {}",
+                         i, static_cast<int>(id), (i + 1));
       }
       config_.node_ids[i] = static_cast<uint8_t>(i + 1);
     }
@@ -83,7 +81,7 @@ bool CanopenMaster::Start() {
     running_.store(true);
     return true;
   } catch (const std::exception& e) {
-    std::cerr << "CanopenMaster start failed: " << e.what() << std::endl;
+    CANOPEN_LOG_ERROR("CanopenMaster start failed: {}", e.what());
     if (ev_loop_) {
       ev_loop_->stop();
     }

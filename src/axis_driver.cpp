@@ -1,11 +1,11 @@
 #include "canopen_hw/axis_driver.hpp"
 
 #include <chrono>
-#include <iostream>
 #include <system_error>
 
 #include <lely/coapp/node.hpp>
 
+#include "canopen_hw/logging.hpp"
 #include "canopen_hw/pdo_mapping.hpp"
 
 namespace canopen_hw {
@@ -24,9 +24,8 @@ AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
   if (verify_pdo_mapping_) {
     expected_pdo_ = std::make_shared<PdoMapping>();
     if (dcf_path_.empty()) {
-      std::cerr << "Axis " << axis_index_ << " (node "
-                << static_cast<int>(id())
-                << "): DCF path empty, skip PDO verify" << std::endl;
+      CANOPEN_LOG_WARN("axis={} node={}: DCF path empty, skip PDO verify",
+                       axis_index_, static_cast<int>(id()));
       pdo_verified_.store(false);
       pdo_verification_done_.store(true);
     } else {
@@ -36,9 +35,8 @@ AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
         pdo_verified_.store(false);
         pdo_verification_done_.store(false);
       } else {
-        std::cerr << "Axis " << axis_index_ << " (node "
-                  << static_cast<int>(id())
-                  << "): DCF load failed: " << err << std::endl;
+        CANOPEN_LOG_ERROR("axis={} node={}: DCF load failed: {}",
+                          axis_index_, static_cast<int>(id()), err);
         pdo_verified_.store(false);
         pdo_verification_done_.store(true);
       }
@@ -177,10 +175,10 @@ void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
     std::lock_guard<std::mutex> lk(mtx_);
     feedback_cache_.last_emcy_eec = eec;
   }
-  std::cerr << "Axis " << axis_index_ << " EMCY eec=0x"
-            << std::hex << static_cast<unsigned int>(eec)
-            << " er=0x" << static_cast<unsigned int>(er) << std::dec
-            << std::endl;
+  health_.emcy_count.fetch_add(1, std::memory_order_relaxed);
+  CANOPEN_LOG_ERROR("axis={} EMCY eec=0x{:04x} er=0x{:02x}",
+                    axis_index_, static_cast<unsigned int>(eec),
+                    static_cast<unsigned int>(er));
   PublishSnapshot();
 }
 
@@ -196,6 +194,15 @@ void AxisDriver::OnHeartbeat(bool occurred) noexcept {
       feedback_cache_.is_operational =
           state_machine_.is_operational() && !feedback_cache_.is_fault;
     }
+  }
+  if (occurred) {
+    health_.heartbeat_lost.fetch_add(1, std::memory_order_relaxed);
+    CANOPEN_LOG_WARN("axis={} node={}: heartbeat lost",
+                     axis_index_, static_cast<int>(id()));
+  } else {
+    health_.heartbeat_recovered.fetch_add(1, std::memory_order_relaxed);
+    CANOPEN_LOG_INFO("axis={} node={}: heartbeat recovered",
+                     axis_index_, static_cast<int>(id()));
   }
   PublishSnapshot();
   if (shared_state_) {
@@ -224,24 +231,24 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
     }
     if (retry_count < max_boot_retries_) {
       const int attempt = retry_count + 1;
-      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-                << "): OnConfig failed (es=" << static_cast<int>(es)
-                << "), retry " << attempt << "/" << max_boot_retries_
-                << " with RESET_NODE" << std::endl;
+      health_.boot_retries.fetch_add(1, std::memory_order_relaxed);
+      CANOPEN_LOG_WARN("axis={} node={}: OnConfig failed (es={}), retry {}/{} with RESET_NODE",
+                       axis_index_, static_cast<int>(id()), static_cast<int>(es),
+                       attempt, max_boot_retries_);
       master.Command(lely::canopen::NmtCommand::RESET_NODE, id());
       return;
     }
-    std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-              << "): OnConfig failed (es=" << static_cast<int>(es)
-              << "), retries exhausted; mark PDO verify failed" << std::endl;
+    CANOPEN_LOG_ERROR("axis={} node={}: OnConfig failed (es={}), retries exhausted; mark PDO verify failed",
+                      axis_index_, static_cast<int>(id()), static_cast<int>(es));
     pdo_verified_.store(false);
     pdo_verification_done_.store(true);
+    health_.pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
     return;
   }
   boot_retry_count_.store(0);
   if (!expected_pdo_loaded_ || !expected_pdo_) {
-    std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-              << "): DCF not loaded, skip PDO verify" << std::endl;
+    CANOPEN_LOG_WARN("axis={} node={}: DCF not loaded, skip PDO verify",
+                     axis_index_, static_cast<int>(id()));
     pdo_verified_.store(false);
     pdo_verification_done_.store(true);
     return;
@@ -254,25 +261,32 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
   pdo_reader_->Start(*this, [this](bool ok, const std::string& error,
                                    const PdoMapping& actual) {
     if (!ok) {
-      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-                << "): PDO read failed: " << error << std::endl;
+      CANOPEN_LOG_ERROR("axis={} node={}: PDO read failed: {}",
+                        axis_index_, static_cast<int>(id()), error);
       pdo_verified_.store(false);
       pdo_verification_done_.store(true);
+      if (error.find("timeout") != std::string::npos) {
+        health_.pdo_verify_timeout.fetch_add(1, std::memory_order_relaxed);
+      } else {
+        health_.pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
+      }
       return;
     }
 
     std::vector<std::string> diffs;
     if (!DiffPdoMapping(*expected_pdo_, actual, &diffs)) {
-      std::cerr << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-                << "): PDO mapping mismatch" << std::endl;
+      CANOPEN_LOG_WARN("axis={} node={}: PDO mapping mismatch",
+                       axis_index_, static_cast<int>(id()));
       for (const auto& diff : diffs) {
-        std::cerr << "  " << diff << std::endl;
+        CANOPEN_LOG_WARN("  {}", diff);
       }
       pdo_verified_.store(false);
+      health_.pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
     } else {
-      std::cout << "Axis " << axis_index_ << " (node " << static_cast<int>(id())
-                << "): PDO mapping verified" << std::endl;
+      CANOPEN_LOG_INFO("axis={} node={}: PDO mapping verified",
+                       axis_index_, static_cast<int>(id()));
       pdo_verified_.store(true);
+      health_.pdo_verify_ok.fetch_add(1, std::memory_order_relaxed);
     }
 
     pdo_verification_done_.store(true);

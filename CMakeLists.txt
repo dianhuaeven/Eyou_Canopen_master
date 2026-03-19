@@ -12,6 +12,14 @@ find_package(yaml-cpp REQUIRED)
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
+include(FetchContent)
+FetchContent_Declare(
+  spdlog
+  GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_TAG        v1.12.0
+)
+FetchContent_MakeAvailable(spdlog)
+
 add_library(canopen_core
   src/cia402_state_machine.cpp
   src/shared_state.cpp
@@ -33,6 +41,7 @@ target_link_libraries(canopen_core
     ${LELY_LIBRARIES}
     Threads::Threads
     yaml-cpp
+    spdlog::spdlog
 )
 
 target_compile_options(canopen_core

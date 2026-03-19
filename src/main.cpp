@@ -2,13 +2,13 @@
 #include <chrono>
 #include <csignal>
 #include <filesystem>
-#include <iostream>
 #include <string>
 #include <thread>
 
 #include "canopen_hw/canopen_master.hpp"
 #include "canopen_hw/canopen_robot_hw.hpp"
 #include "canopen_hw/joints_config.hpp"
+#include "canopen_hw/logging.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 namespace {
@@ -68,8 +68,8 @@ int main(int argc, char** argv) {
   master_cfg.axis_count = 6;
   master_cfg.master_dcf_path = MakeAbsolutePath(opts.dcf_path);
   if (!FileExists(master_cfg.master_dcf_path)) {
-    std::cerr << "master_dcf_path not found: " << master_cfg.master_dcf_path
-              << std::endl;
+    CANOPEN_LOG_ERROR("master_dcf_path not found: {}",
+                      master_cfg.master_dcf_path);
     return 1;
   }
 
@@ -79,24 +79,22 @@ int main(int argc, char** argv) {
     std::string error;
     const std::string joints_path = MakeAbsolutePath(opts.joints_path);
     if (!FileExists(joints_path)) {
-      std::cerr << "joints.yaml not found: " << joints_path << std::endl;
+      CANOPEN_LOG_WARN("joints.yaml not found: {}", joints_path);
     } else if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error,
                                            &master_cfg)) {
-      std::cerr << "Load joints.yaml failed: " << error << std::endl;
+      CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
     } else {
       if (master_cfg.axis_count > canopen_hw::SharedState::kAxisCount) {
-        std::cerr << "configured axis_count exceeds supported maximum: "
-                  << master_cfg.axis_count << " > "
-                  << canopen_hw::SharedState::kAxisCount << std::endl;
+        CANOPEN_LOG_ERROR("configured axis_count exceeds supported maximum: {} > {}",
+                          master_cfg.axis_count,
+                          canopen_hw::SharedState::kAxisCount);
         return 1;
       }
       shared_state.SetActiveAxisCount(master_cfg.axis_count);
 
-      std::cout << "Loaded top-level canopen config: interface="
-                << master_cfg.can_interface
-                << " master_node_id="
-                << static_cast<int>(master_cfg.master_node_id)
-                << std::endl;
+      CANOPEN_LOG_INFO("Loaded config: interface={} master_node_id={}",
+                       master_cfg.can_interface,
+                       static_cast<int>(master_cfg.master_node_id));
     }
   }
 

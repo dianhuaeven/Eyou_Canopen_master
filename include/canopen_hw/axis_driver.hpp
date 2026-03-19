@@ -10,6 +10,7 @@
 #include <lely/coapp/driver.hpp>
 
 #include "canopen_hw/cia402_state_machine.hpp"
+#include "canopen_hw/health_counters.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 namespace canopen_hw {
@@ -43,6 +44,7 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   void ConfigureStateMachine(int32_t position_lock_threshold,
                              int max_fault_resets,
                              int fault_reset_hold_cycles);
+  const HealthCounters& health() const { return health_; }
 
  private:
   // 在 RPDO 回调中使用: 更新上层期望位置(仅写入本地缓存, 不直接触发总线发送)。
@@ -87,6 +89,9 @@ class AxisDriver final : public lely::canopen::BasicDriver {
 
   // 最近一帧反馈缓存(由 Lely 线程写入)。
   AxisFeedback feedback_cache_{};
+
+  // 运行时健康计数器(由 Lely 回调线程递增, 可由上层监控线程读取)。
+  HealthCounters health_;
 };
 
 }  // namespace canopen_hw
