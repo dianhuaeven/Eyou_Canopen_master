@@ -11,8 +11,8 @@
 
 #include <lely/coapp/driver.hpp>
 
-#include "canopen_hw/cia402_state_machine.hpp"
-#include "canopen_hw/health_counters.hpp"
+#include "canopen_hw/axis_logic.hpp"
+#include "canopen_hw/bus_io.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 namespace canopen_hw {
@@ -20,36 +20,42 @@ namespace canopen_hw {
 struct PdoMapping;
 class PdoMappingReader;
 
-// 单轴驱动骨架:
+// 单轴 Lely 适配器:
 // - 继承 Lely BasicDriver，挂接节点事件回调
-// - 维护本轴 CiA402 状态机
-// - 通过 SharedState 与 ROS 线程交换数据
-//
-// 说明: 当前 commit 仅建立结构和最小行为，PDO 字段读取/写入将放在后续 commit 完成。
-class AxisDriver final : public lely::canopen::BasicDriver {
+// - 实现 BusIO 接口，将 PDO 写入委托给 tpdo_mapped
+// - 核心逻辑委托给 AxisLogic（状态机、反馈缓存、健康计数）
+class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
  public:
   AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
              std::size_t axis_index, SharedState* shared_state,
              bool verify_pdo_mapping, const std::string& dcf_path);
 
-  // 由后续 PDO 解析逻辑调用, 将本周期反馈推进状态机。
-  // 这里先提供显式入口, 便于在无硬件场景下做逻辑验证。
+  // 显式反馈注入（无硬件场景下的逻辑验证入口）。
   void InjectFeedback(int32_t actual_position, int32_t actual_velocity,
                       int16_t actual_torque, uint16_t statusword,
                       int8_t mode_display);
 
-  // 关机流程辅助接口。
-  bool SendControlword(uint16_t controlword);
-  bool SendTargetPosition(int32_t target_position);
-  bool SendTargetVelocity(int32_t target_velocity);
-  bool SendTargetTorque(int16_t target_torque);
-  bool SendModeOfOperation(int8_t mode);
+  // BusIO 实现。
+  bool WriteControlword(uint16_t cw) override;
+  bool WriteTargetPosition(int32_t pos) override;
+  bool WriteTargetVelocity(int32_t vel) override;
+  bool WriteTargetTorque(int16_t torque) override;
+  bool WriteModeOfOperation(int8_t mode) override;
+
+  // 兼容别名（关机流程等外部调用）。
+  bool SendControlword(uint16_t cw) { return WriteControlword(cw); }
+  bool SendTargetPosition(int32_t pos) { return WriteTargetPosition(pos); }
+  bool SendTargetVelocity(int32_t vel) { return WriteTargetVelocity(vel); }
+  bool SendTargetTorque(int16_t torque) { return WriteTargetTorque(torque); }
+  bool SendModeOfOperation(int8_t mode) { return WriteModeOfOperation(mode); }
   bool SendNmtStopAll();
+
   CiA402State feedback_state() const;
   void ConfigureStateMachine(int32_t position_lock_threshold,
                              int max_fault_resets,
                              int fault_reset_hold_cycles);
-  const HealthCounters& health() const { return health_; }
+  const HealthCounters& health() const { return logic_.health(); }
+  HealthCounters& mutable_health() { return logic_.mutable_health(); }
 
   // 手动控制接口（由 CanopenMaster 从上层线程调用）。
   void RequestEnable();
@@ -57,7 +63,6 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   void ResetFault();
 
   // SDO 异步读写（由 SdoAccessor 通过 CanopenMaster 调用）。
-  // 回调在 Lely 事件线程中执行。
   using SdoReadCallback =
       std::function<void(bool ok, const std::vector<uint8_t>& data,
                          const std::string& error)>;
@@ -69,51 +74,26 @@ class AxisDriver final : public lely::canopen::BasicDriver {
                      const std::vector<uint8_t>& data, SdoWriteCallback cb);
 
  private:
-  // 在 RPDO 回调中使用: 更新上层期望位置(仅写入本地缓存, 不直接触发总线发送)。
-  void SetRosTargetPosition(int32_t target_position);
-
-  // Lely 回调: RPDO/SDO 写入了 RPDO-mapped 对象后触发。
-  // 当前骨架阶段仅保留钩子，具体对象读取将在下一阶段接入。
   void OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept override;
-
-  // Lely 回调: EMCY 上报。
   void OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept override;
-
-  // Lely 回调: 心跳超时事件发生/恢复。
   void OnHeartbeat(bool occurred) noexcept override;
-
-  // Lely 回调: 节点 boot 过程完成。
   void OnBoot(lely::canopen::NmtState st, char es,
               const std::string& what) noexcept override;
 
-  // 将状态机输出和反馈打包到 SharedState。
-  void PublishSnapshot();
-
   std::size_t axis_index_ = 0;
-  SharedState* shared_state_ = nullptr;  // 非拥有指针，生命周期由 Master 管理。
+  SharedState* shared_state_ = nullptr;
+  AxisLogic logic_;
+
+  // PDO 验证相关。
   bool verify_pdo_mapping_ = false;
   std::atomic<bool> pdo_verified_{true};
   std::atomic<bool> pdo_verification_done_{false};
   std::string dcf_path_;
   std::shared_ptr<PdoMapping> expected_pdo_;
   bool expected_pdo_loaded_ = false;
-  // 生命周期由 shared_ptr + PdoMappingReader::finish_mtx_ 串行化保证。
-  // 禁止在 OnBoot 回调内部同步 reset()——回调可能从 reader 超时线程调用，
-  // 在自身方法执行中析构对象会导致 UAF。
-  // reader 会在 pdo_reader_ 下次赋值或 AxisDriver 析构时自然释放。
   std::shared_ptr<PdoMappingReader> pdo_reader_;
   std::atomic<int> boot_retry_count_{0};
   int max_boot_retries_ = 3;
-
-  // 保护本轴缓存, 避免 ROS 设置目标与 Lely 回调并发冲突。
-  mutable std::mutex mtx_;
-  CiA402StateMachine state_machine_;
-
-  // 最近一帧反馈缓存(由 Lely 线程写入)。
-  AxisFeedback feedback_cache_{};
-
-  // 运行时健康计数器(由 Lely 回调线程递增, 可由上层监控线程读取)。
-  HealthCounters health_;
 };
 
 }  // namespace canopen_hw

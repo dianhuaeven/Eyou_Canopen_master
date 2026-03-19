@@ -32,6 +32,7 @@ add_library(canopen_core
   src/sdo_accessor.cpp
   src/diagnostics_collector.cpp
   src/realtime_loop.cpp
+  src/axis_logic.cpp
 )
 
 target_include_directories(canopen_core

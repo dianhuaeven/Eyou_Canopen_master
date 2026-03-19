@@ -16,9 +16,9 @@ AxisDriver::AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
     : lely::canopen::BasicDriver(can_master, node_id),
       axis_index_(axis_index),
       shared_state_(shared_state),
+      logic_(axis_index, this, shared_state),
       verify_pdo_mapping_(verify_pdo_mapping),
       dcf_path_(dcf_path) {
-  state_machine_.set_target_mode(kMode_CSP);
   pdo_verified_.store(!verify_pdo_mapping_);
   pdo_verification_done_.store(!verify_pdo_mapping_);
   if (verify_pdo_mapping_) {
@@ -44,85 +44,51 @@ AxisDriver::AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
   }
 }
 
-void AxisDriver::SetRosTargetPosition(int32_t target_position) {
-  std::lock_guard<std::mutex> lk(mtx_);
-  state_machine_.set_ros_target(target_position);
-}
-
 void AxisDriver::InjectFeedback(int32_t actual_position, int32_t actual_velocity,
                                 int16_t actual_torque, uint16_t statusword,
                                 int8_t mode_display) {
-  std::lock_guard<std::mutex> lk(mtx_);
-
-  feedback_cache_.actual_position = actual_position;
-  feedback_cache_.actual_velocity = actual_velocity;
-  feedback_cache_.actual_torque = actual_torque;
-  feedback_cache_.statusword = statusword;
-  feedback_cache_.mode_display = mode_display;
-
-  // 这里是单轴状态机核心入口:
-  // 每次收到一帧同步反馈，都用最新 statusword/mode 推进一步。
-  state_machine_.Update(statusword, mode_display, actual_position);
-
-  feedback_cache_.state = state_machine_.state();
-  feedback_cache_.is_operational = state_machine_.is_operational();
-  feedback_cache_.is_fault = state_machine_.is_fault();
-  if (verify_pdo_mapping_ &&
-      (!pdo_verification_done_.load() || !pdo_verified_.load())) {
-    feedback_cache_.is_operational = false;
-  }
-
-  PublishSnapshot();
+  logic_.ProcessRpdo(statusword, actual_position, actual_velocity,
+                     actual_torque, mode_display);
 }
 
-bool AxisDriver::SendControlword(uint16_t controlword) {
-  // 从主站视角发送 TPDO（从站视角接收 RPDO），用于下发 0x6040。
+// --- BusIO implementation ---
+
+bool AxisDriver::WriteControlword(uint16_t cw) {
   std::error_code ec;
-  tpdo_mapped[0x6040][0].Write(controlword, ec);
-  if (ec) {
-    return false;
-  }
+  tpdo_mapped[0x6040][0].Write(cw, ec);
+  if (ec) return false;
   tpdo_mapped[0x6040][0].WriteEvent(ec);
   return !ec;
 }
 
-bool AxisDriver::SendTargetPosition(int32_t target_position) {
-  // 从主站视角发送 TPDO（从站视角接收 RPDO），用于下发 0x607A。
+bool AxisDriver::WriteTargetPosition(int32_t pos) {
   std::error_code ec;
-  tpdo_mapped[0x607A][0].Write(target_position, ec);
-  if (ec) {
-    return false;
-  }
+  tpdo_mapped[0x607A][0].Write(pos, ec);
+  if (ec) return false;
   tpdo_mapped[0x607A][0].WriteEvent(ec);
   return !ec;
 }
 
-bool AxisDriver::SendTargetVelocity(int32_t target_velocity) {
+bool AxisDriver::WriteTargetVelocity(int32_t vel) {
   std::error_code ec;
-  tpdo_mapped[0x60FF][0].Write(target_velocity, ec);
-  if (ec) {
-    return false;
-  }
+  tpdo_mapped[0x60FF][0].Write(vel, ec);
+  if (ec) return false;
   tpdo_mapped[0x60FF][0].WriteEvent(ec);
   return !ec;
 }
 
-bool AxisDriver::SendTargetTorque(int16_t target_torque) {
+bool AxisDriver::WriteTargetTorque(int16_t torque) {
   std::error_code ec;
-  tpdo_mapped[0x6071][0].Write(target_torque, ec);
-  if (ec) {
-    return false;
-  }
+  tpdo_mapped[0x6071][0].Write(torque, ec);
+  if (ec) return false;
   tpdo_mapped[0x6071][0].WriteEvent(ec);
   return !ec;
 }
 
-bool AxisDriver::SendModeOfOperation(int8_t mode) {
+bool AxisDriver::WriteModeOfOperation(int8_t mode) {
   std::error_code ec;
   tpdo_mapped[0x6060][0].Write(mode, ec);
-  if (ec) {
-    return false;
-  }
+  if (ec) return false;
   tpdo_mapped[0x6060][0].WriteEvent(ec);
   return !ec;
 }
@@ -132,36 +98,24 @@ bool AxisDriver::SendNmtStopAll() {
   return true;
 }
 
+// --- Delegated to AxisLogic ---
+
 CiA402State AxisDriver::feedback_state() const {
-  std::lock_guard<std::mutex> lk(mtx_);
-  return feedback_cache_.state;
+  return logic_.feedback_state();
 }
 
 void AxisDriver::ConfigureStateMachine(int32_t position_lock_threshold,
                                        int max_fault_resets,
                                        int fault_reset_hold_cycles) {
-  std::lock_guard<std::mutex> lk(mtx_);
-  state_machine_.set_position_lock_threshold(position_lock_threshold);
-  // wait_cycles 保持状态机默认值 100，仅接通当前 YAML 中已定义的参数。
-  state_machine_.set_fault_reset_policy(fault_reset_hold_cycles, 100,
-                                        max_fault_resets);
+  logic_.Configure(position_lock_threshold, max_fault_resets,
+                   fault_reset_hold_cycles);
 }
 
-void AxisDriver::RequestEnable() {
-  std::lock_guard<std::mutex> lk(mtx_);
-  state_machine_.request_enable();
-}
+void AxisDriver::RequestEnable() { logic_.RequestEnable(); }
+void AxisDriver::RequestDisable() { logic_.RequestDisable(); }
+void AxisDriver::ResetFault() { logic_.ResetFault(); }
 
-void AxisDriver::RequestDisable() {
-  std::lock_guard<std::mutex> lk(mtx_);
-  state_machine_.request_disable();
-}
-
-void AxisDriver::ResetFault() {
-  std::lock_guard<std::mutex> lk(mtx_);
-  state_machine_.ResetFaultCounter();
-  state_machine_.request_enable();
-}
+// --- SDO (stays in AxisDriver, Lely-specific) ---
 
 void AxisDriver::AsyncSdoRead(uint16_t index, uint8_t subindex,
                                SdoReadCallback cb) {
@@ -169,9 +123,7 @@ void AxisDriver::AsyncSdoRead(uint16_t index, uint8_t subindex,
       index, subindex,
       [cb](uint8_t, uint16_t, uint8_t, std::error_code ec, uint32_t value) {
         if (ec) {
-          if (cb) {
-            cb(false, {}, ec.message());
-          }
+          if (cb) cb(false, {}, ec.message());
           return;
         }
         std::vector<uint8_t> data(4);
@@ -179,9 +131,7 @@ void AxisDriver::AsyncSdoRead(uint16_t index, uint8_t subindex,
         data[1] = static_cast<uint8_t>((value >> 8) & 0xFF);
         data[2] = static_cast<uint8_t>((value >> 16) & 0xFF);
         data[3] = static_cast<uint8_t>((value >> 24) & 0xFF);
-        if (cb) {
-          cb(true, data, std::string());
-        }
+        if (cb) cb(true, data, std::string());
       });
 }
 
@@ -197,109 +147,51 @@ void AxisDriver::AsyncSdoWrite(uint16_t index, uint8_t subindex,
   SubmitWrite(
       index, subindex, value,
       [cb](uint8_t, uint16_t, uint8_t, std::error_code ec) {
-        if (cb) {
-          cb(!ec, ec ? ec.message() : std::string());
-        }
+        if (cb) cb(!ec, ec ? ec.message() : std::string());
       });
 }
+
+// --- Lely callbacks ---
 
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;
+
+  // 从 SharedState 读取 ROS 侧命令并注入 AxisLogic。
   if (shared_state_) {
     AxisCommand cmd;
     if (shared_state_->GetCommand(axis_index_, &cmd)) {
-      std::lock_guard<std::mutex> lk(mtx_);
-      state_machine_.set_ros_target(cmd.target_position);
-      state_machine_.set_ros_target_velocity(cmd.target_velocity);
-      state_machine_.set_ros_target_torque(cmd.target_torque);
-      state_machine_.set_target_mode(cmd.mode_of_operation);
+      logic_.SetRosTarget(cmd.target_position);
+      logic_.SetRosTargetVelocity(cmd.target_velocity);
+      logic_.SetRosTargetTorque(cmd.target_torque);
+      logic_.SetTargetMode(cmd.mode_of_operation);
     }
   }
 
-  // RPDO 触发后读取关键反馈字段并推进状态机。
+  // 读取 RPDO 反馈字段。
   std::error_code ec;
   const auto statusword = rpdo_mapped[0x6041][0].Read<uint16_t>(ec);
-  if (ec) {
-    return;
-  }
+  if (ec) return;
   const auto actual_position = rpdo_mapped[0x6064][0].Read<int32_t>(ec);
-  if (ec) {
-    return;
-  }
+  if (ec) return;
   const auto mode_display = rpdo_mapped[0x6061][0].Read<int8_t>(ec);
-  if (ec) {
-    return;
-  }
+  if (ec) return;
   const auto actual_velocity = rpdo_mapped[0x606C][0].Read<int32_t>(ec);
-  if (ec) {
-    return;
-  }
+  if (ec) return;
   const auto actual_torque = rpdo_mapped[0x6077][0].Read<int16_t>(ec);
-  if (ec) {
-    return;
-  }
+  if (ec) return;
 
-  InjectFeedback(actual_position, actual_velocity, actual_torque, statusword,
-                 mode_display);
-
-  int32_t safe_target_ticks = 0;
-  int32_t safe_target_velocity = 0;
-  int16_t safe_target_torque = 0;
-  {
-    std::lock_guard<std::mutex> lk(mtx_);
-    safe_target_ticks = state_machine_.safe_target();
-    safe_target_velocity = state_machine_.safe_target_velocity();
-    safe_target_torque = state_machine_.safe_target_torque();
-  }
-
-  if (shared_state_) {
-    shared_state_->RecomputeAllOperational();
-  }
-  (void)SendTargetPosition(safe_target_ticks);
-  (void)SendTargetVelocity(safe_target_velocity);
-  (void)SendTargetTorque(safe_target_torque);
+  logic_.ProcessRpdo(statusword, actual_position, actual_velocity,
+                     actual_torque, mode_display);
 }
 
 void AxisDriver::OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept {
   (void)msef;
-  {
-    std::lock_guard<std::mutex> lk(mtx_);
-    feedback_cache_.last_emcy_eec = eec;
-  }
-  health_.emcy_count.fetch_add(1, std::memory_order_relaxed);
-  CANOPEN_LOG_ERROR("axis={} EMCY eec=0x{:04x} er=0x{:02x}",
-                    axis_index_, static_cast<unsigned int>(eec),
-                    static_cast<unsigned int>(er));
-  PublishSnapshot();
+  logic_.ProcessEmcy(eec, er);
 }
 
 void AxisDriver::OnHeartbeat(bool occurred) noexcept {
-  {
-    std::lock_guard<std::mutex> lk(mtx_);
-    feedback_cache_.heartbeat_lost = occurred;
-    if (occurred) {
-      feedback_cache_.is_fault = true;
-      feedback_cache_.is_operational = false;
-    } else {
-      feedback_cache_.is_fault = state_machine_.is_fault();
-      feedback_cache_.is_operational =
-          state_machine_.is_operational() && !feedback_cache_.is_fault;
-    }
-  }
-  if (occurred) {
-    health_.heartbeat_lost.fetch_add(1, std::memory_order_relaxed);
-    CANOPEN_LOG_WARN("axis={} node={}: heartbeat lost",
-                     axis_index_, static_cast<int>(id()));
-  } else {
-    health_.heartbeat_recovered.fetch_add(1, std::memory_order_relaxed);
-    CANOPEN_LOG_INFO("axis={} node={}: heartbeat recovered",
-                     axis_index_, static_cast<int>(id()));
-  }
-  PublishSnapshot();
-  if (shared_state_) {
-    shared_state_->RecomputeAllOperational();
-  }
+  logic_.ProcessHeartbeat(occurred);
 }
 
 void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
@@ -323,7 +215,7 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
     }
     if (retry_count < max_boot_retries_) {
       const int attempt = retry_count + 1;
-      health_.boot_retries.fetch_add(1, std::memory_order_relaxed);
+      logic_.mutable_health().boot_retries.fetch_add(1, std::memory_order_relaxed);
       CANOPEN_LOG_WARN("axis={} node={}: OnConfig failed (es={}), retry {}/{} with RESET_NODE",
                        axis_index_, static_cast<int>(id()), static_cast<int>(es),
                        attempt, max_boot_retries_);
@@ -334,7 +226,7 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                       axis_index_, static_cast<int>(id()), static_cast<int>(es));
     pdo_verified_.store(false);
     pdo_verification_done_.store(true);
-    health_.pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
+    logic_.mutable_health().pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
     return;
   }
   boot_retry_count_.store(0);
@@ -347,9 +239,6 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
   }
 
   pdo_reader_ = std::make_shared<PdoMappingReader>();
-  // 回调捕获 weak_ptr 而非 this->pdo_reader_ 的引用，
-  // 避免在回调内部同步析构 reader（回调可能从 reader 的超时线程调用）。
-  // reader 的释放延迟到 OnBoot 末尾或下次 OnBoot 时 pdo_reader_ 被覆盖。
   pdo_reader_->Start(*this, [this](bool ok, const std::string& error,
                                    const PdoMapping& actual) {
     if (!ok) {
@@ -358,9 +247,9 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
       pdo_verified_.store(false);
       pdo_verification_done_.store(true);
       if (error.find("timeout") != std::string::npos) {
-        health_.pdo_verify_timeout.fetch_add(1, std::memory_order_relaxed);
+        logic_.mutable_health().pdo_verify_timeout.fetch_add(1, std::memory_order_relaxed);
       } else {
-        health_.pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
+        logic_.mutable_health().pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
       }
       return;
     }
@@ -373,37 +262,16 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
         CANOPEN_LOG_WARN("  {}", diff);
       }
       pdo_verified_.store(false);
-      health_.pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
+      logic_.mutable_health().pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
     } else {
       CANOPEN_LOG_INFO("axis={} node={}: PDO mapping verified",
                        axis_index_, static_cast<int>(id()));
       pdo_verified_.store(true);
-      health_.pdo_verify_ok.fetch_add(1, std::memory_order_relaxed);
+      logic_.mutable_health().pdo_verify_ok.fetch_add(1, std::memory_order_relaxed);
     }
 
     pdo_verification_done_.store(true);
-    // 不在回调内部 reset() pdo_reader_:
-    // 回调可能从 reader 内部的超时线程调用，在回调内 reset 会导致
-    // 对象在自身方法执行中被析构（UAF）。
-    // reader 会在 pdo_reader_ 下次赋值或 AxisDriver 析构时自然释放。
   }, std::chrono::milliseconds(2000));
-}
-
-void AxisDriver::PublishSnapshot() {
-  if (!shared_state_) {
-    return;
-  }
-
-  // 将状态机过滤后的目标位置写入 safe_commands（Lely 线程专用），
-  // 不再写入 commands（ROS 线程专用），避免覆盖 ROS 侧用户期望位置。
-  AxisSafeCommand safe_cmd;
-  safe_cmd.safe_target_position = state_machine_.safe_target();
-  safe_cmd.safe_target_velocity = state_machine_.safe_target_velocity();
-  safe_cmd.safe_target_torque = state_machine_.safe_target_torque();
-  safe_cmd.safe_mode_of_operation = state_machine_.safe_mode_of_operation();
-
-  shared_state_->UpdateFeedback(axis_index_, feedback_cache_);
-  shared_state_->UpdateSafeCommand(axis_index_, safe_cmd);
 }
 
 }  // namespace canopen_hw
