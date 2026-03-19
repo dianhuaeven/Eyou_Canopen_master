@@ -1,6 +1,7 @@
 #include "canopen_hw/canopen_robot_hw.hpp"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 
@@ -151,8 +152,10 @@ int32_t CanopenRobotHw::RadPerSecToTicksPerSec(std::size_t axis_index,
   const double counts_per_rev =
       std::max(1.0, axis_conv_[axis_index].counts_per_rev);
   const double scale = std::max(1e-9, axis_conv_[axis_index].velocity_scale);
-  return static_cast<int32_t>(
-      std::llround(rad_per_sec / scale * counts_per_rev / (2.0 * kPi)));
+  const long long raw =
+      std::llround(rad_per_sec / scale * counts_per_rev / (2.0 * kPi));
+  return static_cast<int32_t>(std::clamp(raw,
+      static_cast<long long>(INT32_MIN), static_cast<long long>(INT32_MAX)));
 }
 
 double CanopenRobotHw::TorquePermilleToNm(std::size_t axis_index,
@@ -166,8 +169,9 @@ int16_t CanopenRobotHw::NmToTorquePermille(std::size_t axis_index,
                                             double nm) const {
   const double rated = std::max(1e-9, axis_conv_[axis_index].rated_torque_nm);
   const double scale = std::max(1e-9, axis_conv_[axis_index].torque_scale);
-  return static_cast<int16_t>(
-      std::llround(nm / scale / rated * 1000.0));
+  const long long raw = std::llround(nm / scale / rated * 1000.0);
+  return static_cast<int16_t>(std::clamp(raw,
+      static_cast<long long>(INT16_MIN), static_cast<long long>(INT16_MAX)));
 }
 
 }  // namespace canopen_hw
