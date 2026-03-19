@@ -60,6 +60,9 @@ class CiA402StateMachine {
   // wait_cycles: 发复位沿后等待恢复的最大周期数
   void set_fault_reset_policy(int hold_cycles, int wait_cycles, int max_attempts);
 
+  // 手动重置故障计数器，使 PermanentFault 状态可以重新进入自动复位流程。
+  void ResetFaultCounter();
+
  private:
   enum class FaultResetPhase {
     Idle,

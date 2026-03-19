@@ -69,6 +69,14 @@ class CanopenMaster {
   // 必须在 Lely 事件循环仍在运行时调用。
   bool GracefulShutdown();
 
+  // 单轴手动控制接口。
+  bool EnableAxis(std::size_t axis_index);
+  bool DisableAxis(std::size_t axis_index);
+  bool ResetAxisFault(std::size_t axis_index);
+
+  // 全轴紧急停止: 对所有轴发送 DisableVoltage。
+  void EmergencyStop();
+
  private:
   // 供后续真实 master 初始化后调用:
   // 基于 node-id 1..N 创建 AxisDriver。

@@ -117,6 +117,22 @@ void AxisDriver::ConfigureStateMachine(int32_t position_lock_threshold,
                                         max_fault_resets);
 }
 
+void AxisDriver::RequestEnable() {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.request_enable();
+}
+
+void AxisDriver::RequestDisable() {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.request_disable();
+}
+
+void AxisDriver::ResetFault() {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.ResetFaultCounter();
+  state_machine_.request_enable();
+}
+
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;

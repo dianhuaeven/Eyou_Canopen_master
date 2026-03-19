@@ -46,6 +46,11 @@ class AxisDriver final : public lely::canopen::BasicDriver {
                              int fault_reset_hold_cycles);
   const HealthCounters& health() const { return health_; }
 
+  // 手动控制接口（由 CanopenMaster 从上层线程调用）。
+  void RequestEnable();
+  void RequestDisable();
+  void ResetFault();
+
  private:
   // 在 RPDO 回调中使用: 更新上层期望位置(仅写入本地缓存, 不直接触发总线发送)。
   void SetRosTargetPosition(int32_t target_position);

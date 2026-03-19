@@ -246,4 +246,9 @@ void CiA402StateMachine::ResetFaultFlowContext() {
   // 复位尝试次数保持累计值，用于故障诊断与限次保护。
 }
 
+void CiA402StateMachine::ResetFaultCounter() {
+  fault_reset_count_ = 0;
+  ResetFaultFlowContext();
+}
+
 }  // namespace canopen_hw

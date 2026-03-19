@@ -193,4 +193,37 @@ void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& can_master) {
   }
 }
 
+bool CanopenMaster::EnableAxis(std::size_t axis_index) {
+  if (axis_index >= axis_drivers_.size() || !axis_drivers_[axis_index]) {
+    return false;
+  }
+  axis_drivers_[axis_index]->RequestEnable();
+  return true;
+}
+
+bool CanopenMaster::DisableAxis(std::size_t axis_index) {
+  if (axis_index >= axis_drivers_.size() || !axis_drivers_[axis_index]) {
+    return false;
+  }
+  axis_drivers_[axis_index]->RequestDisable();
+  return true;
+}
+
+bool CanopenMaster::ResetAxisFault(std::size_t axis_index) {
+  if (axis_index >= axis_drivers_.size() || !axis_drivers_[axis_index]) {
+    return false;
+  }
+  axis_drivers_[axis_index]->ResetFault();
+  return true;
+}
+
+void CanopenMaster::EmergencyStop() {
+  for (const auto& axis : axis_drivers_) {
+    if (axis) {
+      axis->RequestDisable();
+      axis->SendControlword(kCtrl_DisableVoltage);
+    }
+  }
+}
+
 }  // namespace canopen_hw
