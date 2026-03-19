@@ -113,7 +113,39 @@
 
 ---
 
-## 5. 任务映射（代码位置）
+## 5. 按 Commit 拆分（对应 A-F 阶段）
+
+总计建议：10 个 commits。
+
+1. 阶段A（2 commits）
+   - C1: `fix(pdo): remove reader lifetime race between timeout and SDO callbacks`
+   - C2: `refactor(pdo): serialize finish path and document callback-thread contract`
+
+2. 阶段B（3 commits）
+   - C3: `test: migrate test_state_machine and test_unit_conversion from assert to gtest`
+   - C4: `test: migrate test_canopen_master and test_joints_config from assert to gtest`
+   - C5: `test: add boundary cases for axis_count/node_id/pdo-timeout-once semantics`
+
+3. 阶段C（1 commit）
+   - C6: `fix(master): enforce axis_count upper bound and fail-fast config validation`
+
+4. 阶段D（1 commit）
+   - C7: `feat(observability): add structured logs and runtime health counters`
+
+5. 阶段E（2 commits）
+   - C8: `ci: add debug/release build and ctest gating workflow`
+   - C9: `ci: add clang-tidy and warning-as-error quality gates`
+
+6. 阶段F（1 commit）
+   - C10: `docs(verification): add soak/fault-injection report and release readiness checklist`
+
+说明：
+- Bug 4（`AbsDiff` 极端值保护）不单独占用 commit，可并入 C5（测试）或 C6（防御性修正）。
+- 若阶段D范围扩大（如导出 metrics endpoint），可将 C7 拆为 2 个 commits。
+
+---
+
+## 6. 任务映射（代码位置）
 
 1. 并发与生命周期：
    - `include/canopen_hw/pdo_mapping.hpp`
@@ -134,7 +166,7 @@
 
 ---
 
-## 6. 当前状态（2026-03-19）
+## 7. 当前状态（2026-03-19）
 
 1. 已具备可运行基础与测试框架（本地 `ctest` 可通过）。
 2. 尚未达 9 分的关键缺口：

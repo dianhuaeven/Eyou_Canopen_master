@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libyaml-cpp-dev \
+            libgtest-dev \
+            liblely-dev
+
+      - name: Configure (${{ matrix.build_type }})
+        run: |
+          cmake -S . -B build/${{ matrix.build_type }} \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Build (${{ matrix.build_type }})
+        run: cmake --build build/${{ matrix.build_type }} --parallel
+
+      - name: Test (${{ matrix.build_type }})
+        run: ctest --test-dir build/${{ matrix.build_type }} --output-on-failure
+
+      - name: Upload CTest logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-logs-${{ matrix.build_type }}
+          path: |
+            build/${{ matrix.build_type }}/Testing/**
+          if-no-files-found: ignore
