@@ -109,6 +109,8 @@ int main(int argc, char** argv) {
   // 运行期约束:
   // - 循环内禁止任何动态内存分配(不 new、不扩容容器、不构造大临时对象)。
   // - 所有资源在进入循环前初始化完成。
+  // TODO(realtime): CSP 生产模式切换为 clock_nanosleep(TIMER_ABSTIME) +
+  // SCHED_FIFO，避免 sleep_for 的调度抖动。
   // 后续接入 ROS controller_manager 后，这里将替换为 ros::Rate + cm.update()。
   const auto period = std::chrono::milliseconds(10);
   while (g_run.load()) {
