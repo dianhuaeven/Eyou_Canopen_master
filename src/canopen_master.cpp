@@ -187,13 +187,13 @@ bool CanopenMaster::WaitForAllState(
   return false;
 }
 
-void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& master) {
+void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& can_master) {
   // 初始化阶段函数: clear 后重新 emplace，不会超过预留容量。
   axis_drivers_.clear();
 
   for (std::size_t i = 0; i < config_.axis_count; ++i) {
     const uint8_t node_id = config_.node_ids[i];
-    auto axis = std::make_unique<AxisDriver>(master, node_id, i, shared_state_,
+    auto axis = std::make_unique<AxisDriver>(can_master, node_id, i, shared_state_,
                                              config_.verify_pdo_mapping[i],
                                              config_.master_dcf_path);
     axis->ConfigureStateMachine(config_.position_lock_thresholds[i],

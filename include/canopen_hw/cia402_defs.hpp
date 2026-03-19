@@ -28,11 +28,13 @@ constexpr uint16_t kStatusBit_FollowingError = (1u << 13);
 
 // Controlword commands.
 constexpr uint16_t kCtrl_Shutdown = 0x0006;
+// CiA 402 协议规定 SwitchOn 与 DisableOperation 共用 0x0007，
+// 两者语义由当前状态机状态决定（见 CiA 402 Table 39）。
 constexpr uint16_t kCtrl_SwitchOn = 0x0007;
 constexpr uint16_t kCtrl_EnableOperation = 0x000F;
 constexpr uint16_t kCtrl_DisableVoltage = 0x0000;
 constexpr uint16_t kCtrl_EnableVoltage = 0x0002;
-constexpr uint16_t kCtrl_DisableOperation = 0x0007;
+constexpr uint16_t kCtrl_DisableOperation = 0x0007;  // 同 kCtrl_SwitchOn
 constexpr uint16_t kCtrl_FaultReset = 0x0080;
 
 // Mode of operation for CSP.

@@ -26,7 +26,7 @@ class PdoMappingReader;
 // 说明: 当前 commit 仅建立结构和最小行为，PDO 字段读取/写入将放在后续 commit 完成。
 class AxisDriver final : public lely::canopen::BasicDriver {
  public:
-  AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
+  AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
              std::size_t axis_index, SharedState* shared_state,
              bool verify_pdo_mapping, const std::string& dcf_path);
 

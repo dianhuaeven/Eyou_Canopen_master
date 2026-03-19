@@ -33,6 +33,7 @@ add_library(canopen_core
 target_include_directories(canopen_core
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+  SYSTEM PUBLIC
     ${LELY_INCLUDE_DIRS}
 )
 
@@ -46,6 +47,7 @@ target_link_libraries(canopen_core
 
 target_compile_options(canopen_core
   PRIVATE
+    -Wall -Wextra -Werror
     ${LELY_CFLAGS_OTHER}
 )
 

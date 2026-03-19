@@ -10,10 +10,10 @@
 
 namespace canopen_hw {
 
-AxisDriver::AxisDriver(lely::canopen::BasicMaster& master, uint8_t node_id,
+AxisDriver::AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
                        std::size_t axis_index, SharedState* shared_state,
                        bool verify_pdo_mapping, const std::string& dcf_path)
-    : lely::canopen::BasicDriver(master, node_id),
+    : lely::canopen::BasicDriver(can_master, node_id),
       axis_index_(axis_index),
       shared_state_(shared_state),
       verify_pdo_mapping_(verify_pdo_mapping),
