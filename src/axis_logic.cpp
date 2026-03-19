@@ -34,6 +34,9 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
     feedback_cache_.state = state_machine_.state();
     feedback_cache_.is_operational = state_machine_.is_operational();
     feedback_cache_.is_fault = state_machine_.is_fault();
+    health_.fault_reset_attempts.store(
+        static_cast<uint32_t>(state_machine_.fault_reset_count()),
+        std::memory_order_relaxed);
 
     safe_target_ticks = state_machine_.safe_target();
     safe_target_velocity = state_machine_.safe_target_velocity();
@@ -135,6 +138,7 @@ void AxisLogic::RequestDisable() {
 void AxisLogic::ResetFault() {
   std::lock_guard<std::mutex> lk(mtx_);
   state_machine_.ResetFaultCounter();
+  health_.fault_reset_attempts.store(0, std::memory_order_relaxed);
   state_machine_.request_enable();
 }
 
