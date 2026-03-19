@@ -4,6 +4,7 @@
 
 int main() {
   canopen_hw::SharedState shared;
+  shared.SetActiveAxisCount(1);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   // 准备一帧反馈数据并标记可运行。
@@ -11,8 +12,9 @@ int main() {
   fb.actual_position = 5308416;  // 1 rev
   fb.actual_velocity = 5308416;  // 1 rev/s
   fb.actual_torque = 500;        // 50%
+  fb.is_operational = true;
   shared.UpdateFeedback(0, fb);
-  shared.SetAllOperational(true);
+  shared.RecomputeAllOperational();
 
   // read: ticks -> rad 换算应接近 2*pi。
   hw.ReadFromSharedState();

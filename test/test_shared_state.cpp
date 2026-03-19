@@ -4,6 +4,7 @@
 
 int main() {
   canopen_hw::SharedState shared;
+  shared.SetActiveAxisCount(1);
 
   canopen_hw::AxisFeedback fb;
   fb.actual_position = 123456;
@@ -15,7 +16,7 @@ int main() {
 
   shared.UpdateFeedback(0, fb);
   shared.UpdateCommand(0, cmd);
-  shared.SetAllOperational(true);
+  shared.RecomputeAllOperational();
 
   const canopen_hw::SharedSnapshot snap = shared.Snapshot();
   assert(snap.feedback[0].actual_position == 123456);

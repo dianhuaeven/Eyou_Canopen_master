@@ -4,6 +4,7 @@
 
 TEST(SharedStateGTest, UpdateAndSnapshot) {
   canopen_hw::SharedState shared;
+  shared.SetActiveAxisCount(1);
 
   canopen_hw::AxisFeedback fb;
   fb.actual_position = 123;
@@ -15,7 +16,7 @@ TEST(SharedStateGTest, UpdateAndSnapshot) {
 
   shared.UpdateFeedback(0, fb);
   shared.UpdateCommand(0, cmd);
-  shared.SetAllOperational(true);
+  shared.RecomputeAllOperational();
 
   const auto snap = shared.Snapshot();
   EXPECT_EQ(snap.feedback[0].actual_position, 123);

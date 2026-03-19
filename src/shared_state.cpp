@@ -44,11 +44,6 @@ void SharedState::UpdateCommand(std::size_t axis_index,
   commands_[axis_index] = command;
 }
 
-void SharedState::SetAllOperational(bool value) {
-  std::lock_guard<std::mutex> lk(mtx_);
-  all_operational_ = value;
-}
-
 SharedSnapshot SharedState::Snapshot() const {
   std::lock_guard<std::mutex> lk(mtx_);
   SharedSnapshot s;

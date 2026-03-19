@@ -48,9 +48,6 @@ class SharedState {
   // ROS 线程: 更新某轴目标位置命令。
   void UpdateCommand(std::size_t axis_index, const AxisCommand& command);
 
-  // 由 Lely 线程更新全局“可控”标志。
-  void SetAllOperational(bool value);
-
   // 由 Lely 线程在每个 SYNC/RPDO 更新后调用，汇总全轴状态。
   void RecomputeAllOperational();
 

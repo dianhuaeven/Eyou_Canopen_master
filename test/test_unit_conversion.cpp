@@ -4,13 +4,15 @@
 
 int main() {
   canopen_hw::SharedState shared;
+  shared.SetActiveAxisCount(1);
   canopen_hw::CanopenRobotHw hw(&shared);
 
   // 轴0使用默认参数: 1 rev -> 2*pi rad
   canopen_hw::AxisFeedback fb0;
   fb0.actual_position = 5308416;
+  fb0.is_operational = true;
   shared.UpdateFeedback(0, fb0);
-  shared.SetAllOperational(true);
+  shared.RecomputeAllOperational();
   hw.ReadFromSharedState();
   assert(hw.joint_position(0) > 6.27 && hw.joint_position(0) < 6.29);
 
@@ -37,7 +39,10 @@ int main() {
   canopen_hw::AxisCommand cmd_before;
   cmd_before.target_position = 777;
   shared.UpdateCommand(2, cmd_before);
-  shared.SetAllOperational(false);
+  fb0.is_operational = false;
+  fb0.is_fault = true;
+  shared.UpdateFeedback(0, fb0);
+  shared.RecomputeAllOperational();
   hw.ReadFromSharedState();
   hw.SetJointCommand(2, 1.23);
   hw.WriteToSharedState();
