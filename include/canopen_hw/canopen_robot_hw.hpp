@@ -7,6 +7,8 @@
 
 namespace canopen_hw {
 
+struct CanopenMasterConfig;
+
 // ROS 硬件层骨架:
 // - 当前阶段不直接依赖 ROS 头文件，先把 read/write 数据流封装稳定
 // - 后续 commit 再替换为 hardware_interface::RobotHW 继承实现
@@ -47,6 +49,9 @@ class CanopenRobotHw {
   // 配置某轴单位换算参数，供 joints.yaml 参数加载后调用。
   void ConfigureAxisConversion(std::size_t axis_index,
                                const AxisConversion& conversion);
+
+  // 从主配置中批量应用单位换算参数。
+  void ApplyConfig(const CanopenMasterConfig& config);
 
  private:
   bool IsValidAxis(std::size_t axis_index) const;

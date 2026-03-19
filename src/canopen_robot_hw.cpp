@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "canopen_hw/canopen_master.hpp"
+
 namespace canopen_hw {
 
 namespace {
@@ -82,6 +84,18 @@ void CanopenRobotHw::ConfigureAxisConversion(
     return;
   }
   axis_conv_[axis_index] = conversion;
+}
+
+void CanopenRobotHw::ApplyConfig(const CanopenMasterConfig& config) {
+  const std::size_t n = std::min(axis_count_, config.joints.size());
+  for (std::size_t i = 0; i < n; ++i) {
+    AxisConversion conv;
+    conv.counts_per_rev = config.joints[i].counts_per_rev;
+    conv.rated_torque_nm = config.joints[i].rated_torque_nm;
+    conv.velocity_scale = config.joints[i].velocity_scale;
+    conv.torque_scale = config.joints[i].torque_scale;
+    ConfigureAxisConversion(i, conv);
+  }
 }
 
 double CanopenRobotHw::TicksToRad(std::size_t axis_index, int32_t ticks) const {

@@ -63,9 +63,6 @@ TEST(Boundary, NodeIdZeroDefaultFill) {
 }
 
 TEST(Boundary, NodeIdOutOfRange) {
-  canopen_hw::SharedState shared(6);
-  canopen_hw::CanopenRobotHw hw(&shared);
-
   // node_id: 0 应被拒绝
   {
     const std::string path = "/tmp/joints_test_node0.yaml";
@@ -78,8 +75,9 @@ TEST(Boundary, NodeIdOutOfRange) {
     ofs.close();
 
     std::string error;
+    canopen_hw::CanopenMasterConfig cfg;
     const bool ok =
-        canopen_hw::LoadJointsYaml(path, &hw, &error, nullptr);
+        canopen_hw::LoadJointsYaml(path, &error, &cfg);
     EXPECT_FALSE(ok);
     EXPECT_NE(error.find("invalid node_id"), std::string::npos);
   }
@@ -96,8 +94,9 @@ TEST(Boundary, NodeIdOutOfRange) {
     ofs.close();
 
     std::string error;
+    canopen_hw::CanopenMasterConfig cfg;
     const bool ok =
-        canopen_hw::LoadJointsYaml(path, &hw, &error, nullptr);
+        canopen_hw::LoadJointsYaml(path, &error, &cfg);
     EXPECT_FALSE(ok);
     EXPECT_NE(error.find("invalid node_id"), std::string::npos);
   }

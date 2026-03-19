@@ -72,18 +72,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // 先用临时 SharedState 解析 joints.yaml 以确定轴数和参数。
-  // LoadJointsYaml 需要 CanopenRobotHw 指针来配置单位换算，
-  // 但此时还不知道最终轴数，所以先用默认值构造。
-  canopen_hw::SharedState temp_state;
-  canopen_hw::CanopenRobotHw temp_hw(&temp_state);
-
   if (!FileExists(joints_path)) {
     CANOPEN_LOG_WARN("joints.yaml not found: {}", joints_path);
   } else {
     std::string error;
-    if (!canopen_hw::LoadJointsYaml(joints_path, &temp_hw, &error,
-                                    &master_cfg)) {
+    if (!canopen_hw::LoadJointsYaml(joints_path, &error, &master_cfg)) {
       CANOPEN_LOG_ERROR("Load joints.yaml failed: {}", error);
       return 1;
     } else {
@@ -103,13 +96,7 @@ int main(int argc, char** argv) {
   // 用确定的轴数构造正式的 SharedState 和 RobotHw。
   canopen_hw::SharedState shared_state(master_cfg.axis_count);
   canopen_hw::CanopenRobotHw robot_hw(&shared_state);
-  if (FileExists(joints_path)) {
-    std::string error;
-    if (!canopen_hw::LoadJointsYaml(joints_path, &robot_hw, &error, nullptr)) {
-      CANOPEN_LOG_ERROR("Reload joints.yaml failed: {}", error);
-      return 1;
-    }
-  }
+  robot_hw.ApplyConfig(master_cfg);
 
   canopen_hw::CanopenMaster master(master_cfg, &shared_state);
 

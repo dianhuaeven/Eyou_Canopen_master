@@ -38,6 +38,10 @@ struct CanopenMasterConfig {
     int32_t position_lock_threshold = 15000;
     int max_fault_resets = 3;
     int fault_reset_hold_cycles = 5;
+    double counts_per_rev = 5308416.0;
+    double rated_torque_nm = 6.0;
+    double velocity_scale = 1.0;
+    double torque_scale = 1.0;
   };
   std::vector<JointConfig> joints;
 

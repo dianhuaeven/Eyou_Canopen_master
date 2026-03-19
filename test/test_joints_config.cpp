@@ -4,6 +4,7 @@
 #include <string>
 
 #include "canopen_hw/joints_config.hpp"
+#include "canopen_hw/canopen_robot_hw.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 TEST(JointsConfig, LoadValidYaml) {
@@ -34,8 +35,9 @@ TEST(JointsConfig, LoadValidYaml) {
 
   std::string error;
   canopen_hw::CanopenMasterConfig master_cfg;
-  const bool ok = canopen_hw::LoadJointsYaml(path, &hw, &error, &master_cfg);
+  const bool ok = canopen_hw::LoadJointsYaml(path, &error, &master_cfg);
   EXPECT_TRUE(ok);
+  hw.ApplyConfig(master_cfg);
   EXPECT_EQ(master_cfg.joints.size(), 2u);
   EXPECT_EQ(master_cfg.joints[0].node_id, 1u);
   EXPECT_TRUE(master_cfg.joints[0].verify_pdo_mapping);
@@ -65,9 +67,6 @@ TEST(JointsConfig, LoadValidYaml) {
 }
 
 TEST(JointsConfig, InvalidNodeIdRejected) {
-  canopen_hw::SharedState shared(6);
-  canopen_hw::CanopenRobotHw hw(&shared);
-
   const std::string invalid_path = "/tmp/joints_test_invalid_node_id.yaml";
   {
     std::ofstream ofs(invalid_path);
@@ -79,8 +78,9 @@ TEST(JointsConfig, InvalidNodeIdRejected) {
   }
 
   std::string invalid_error;
+  canopen_hw::CanopenMasterConfig master_cfg;
   const bool invalid_ok =
-      canopen_hw::LoadJointsYaml(invalid_path, &hw, &invalid_error, nullptr);
+      canopen_hw::LoadJointsYaml(invalid_path, &invalid_error, &master_cfg);
   EXPECT_FALSE(invalid_ok);
   EXPECT_NE(invalid_error.find("invalid node_id"), std::string::npos);
 }
