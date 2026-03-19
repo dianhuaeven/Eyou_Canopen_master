@@ -91,6 +91,7 @@ class SharedState {
   std::vector<AxisCommand> commands_;
   std::vector<AxisSafeCommand> safe_commands_;
   bool all_operational_ = false;
+  uint64_t state_change_seq_ = 0;
 };
 
 }  // namespace canopen_hw

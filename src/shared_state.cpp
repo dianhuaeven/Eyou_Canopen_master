@@ -20,6 +20,7 @@ void SharedState::UpdateFeedback(std::size_t axis_index,
   {
     std::lock_guard<std::mutex> lk(mtx_);
     feedback_[axis_index] = feedback;
+    ++state_change_seq_;
   }
   // 在锁外通知，避免被唤醒线程立即阻塞在 mtx_ 上。
   state_cv_.notify_all();
@@ -82,7 +83,9 @@ bool SharedState::IsValidAxis(std::size_t axis_index) const {
 bool SharedState::WaitForStateChange(
     std::chrono::steady_clock::time_point deadline) {
   std::unique_lock<std::mutex> lk(mtx_);
-  return state_cv_.wait_until(lk, deadline) == std::cv_status::no_timeout;
+  const uint64_t observed_seq = state_change_seq_;
+  return state_cv_.wait_until(
+      lk, deadline, [&]() { return state_change_seq_ != observed_seq; });
 }
 
 }  // namespace canopen_hw

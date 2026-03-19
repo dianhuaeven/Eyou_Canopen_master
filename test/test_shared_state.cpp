@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <thread>
+
 #include "canopen_hw/shared_state.hpp"
 
 TEST(SharedState, BasicUpdateAndSnapshot) {
@@ -88,4 +91,26 @@ TEST(SharedState, RecomputeUsesConfiguredAxisCount) {
   shared.RecomputeAllOperational();
   const auto snap = shared.Snapshot();
   EXPECT_TRUE(snap.all_operational);
+}
+
+TEST(SharedState, WaitForStateChangeTimeout) {
+  canopen_hw::SharedState shared(1);
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(20);
+  EXPECT_FALSE(shared.WaitForStateChange(deadline));
+}
+
+TEST(SharedState, WaitForStateChangeNotifiedByFeedbackUpdate) {
+  canopen_hw::SharedState shared(1);
+  std::thread notifier([&shared]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    canopen_hw::AxisFeedback fb;
+    fb.actual_position = 42;
+    shared.UpdateFeedback(0, fb);
+  });
+
+  const auto deadline =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
+  EXPECT_TRUE(shared.WaitForStateChange(deadline));
+  notifier.join();
 }
