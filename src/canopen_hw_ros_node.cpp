@@ -6,6 +6,7 @@
 
 #include <ros/ros.h>
 #include <controller_manager/controller_manager.h>
+#include <std_srvs/Trigger.h>
 
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 #include "canopen_hw/joints_config.hpp"
@@ -78,6 +79,32 @@ int main(int argc, char** argv) {
 
   // ROS 适配层。
   canopen_hw::CanopenRobotHwRos robot_hw_ros(lifecycle.robot_hw(), joint_names);
+
+  // 生命周期 services。
+  auto halt_srv = pnh.advertiseService<std_srvs::Trigger::Request,
+                                       std_srvs::Trigger::Response>(
+      "halt", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+        res.success = lifecycle.Halt();
+        res.message = res.success ? "halted" : "halt failed";
+        return true;
+      });
+
+  auto recover_srv = pnh.advertiseService<std_srvs::Trigger::Request,
+                                          std_srvs::Trigger::Response>(
+      "recover", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+        res.success = lifecycle.Recover();
+        res.message = res.success ? "recovered" : "recover failed";
+        return true;
+      });
+
+  auto shutdown_srv = pnh.advertiseService<std_srvs::Trigger::Request,
+                                           std_srvs::Trigger::Response>(
+      "shutdown", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+        res.success = lifecycle.Shutdown();
+        res.message = res.success ? "shutdown" : "shutdown failed";
+        g_run.store(false);
+        return true;
+      });
 
   controller_manager::ControllerManager cm(&robot_hw_ros, nh);
 
