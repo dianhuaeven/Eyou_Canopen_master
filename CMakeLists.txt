@@ -190,3 +190,9 @@ add_executable(test_multi_mode
 )
 target_link_libraries(test_multi_mode PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_multi_mode)
+
+add_executable(test_realtime_loop
+  test/test_realtime_loop.cpp
+)
+target_link_libraries(test_realtime_loop PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_realtime_loop)
