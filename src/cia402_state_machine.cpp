@@ -239,13 +239,27 @@ void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
     safe_target_torque_ = 0;
   }
 
+  // CSV/CST 模式: 速度/力矩默认 0 本身安全，不需要位置锁定。
+  // 首帧保持归零（上面已设），次帧起直接解锁透传。
+  if (target_mode_ == kMode_CSV || target_mode_ == kMode_CST) {
+    if (!was_operation_enabled_) {
+      is_operational_ = false;
+      return;
+    }
+    position_locked_ = false;
+    safe_target_ = actual_position;  // 位置跟随实际���防止意外切回 CSP 时跳变。
+    safe_target_velocity_ = ros_target_velocity_;
+    safe_target_torque_ = ros_target_torque_;
+    is_operational_ = true;
+    return;
+  }
+
+  // CSP 模式: 位置锁定，上层目标接近实际位置后才放行。
   if (position_locked_) {
-    // 锁定阶段强制 target=actual。
     safe_target_ = actual_position;
     safe_target_velocity_ = 0;
     safe_target_torque_ = 0;
 
-    // 只有当上层期望已接近当前实际位置时才释放锁定。
     if (AbsDiff(ros_target_, actual_position) <=
         static_cast<int64_t>(position_lock_threshold_)) {
       position_locked_ = false;

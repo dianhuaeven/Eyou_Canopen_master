@@ -28,21 +28,34 @@ class StateMachineMultiMode : public ::testing::Test {
 };
 
 TEST_F(StateMachineMultiMode, CSVModeEnablesCorrectly) {
-  DriveToOperational(kMode_CSV);
+  // CSV 模式首帧归零，次帧解锁。
+  sm.set_target_mode(kMode_CSV);
+  sm.request_enable();
+  sm.set_ros_target_velocity(500);
+
+  sm.Update(kState_SwitchOnDisabled, kMode_CSV, 1000);
+  sm.Update(kState_ReadyToSwitchOn | (1u << 9), kMode_CSV, 1000);
+  // 首帧进入 OperationEnabled: 归零，not operational
+  sm.Update(kState_OperationEnabled, kMode_CSV, 1000);
+  EXPECT_FALSE(sm.is_operational());
+  EXPECT_EQ(sm.safe_target_velocity(), 0);
+  // 次帧: 解锁，透传速度
+  sm.Update(kState_OperationEnabled, kMode_CSV, 1000);
   EXPECT_TRUE(sm.is_operational());
-  EXPECT_EQ(sm.safe_target_velocity(), 0);  // 还在锁定阶段第一帧
+  EXPECT_EQ(sm.safe_target_velocity(), 500);
 }
 
 TEST_F(StateMachineMultiMode, CSVModePassesVelocityAfterUnlock) {
   sm.set_target_mode(kMode_CSV);
   sm.request_enable();
-  sm.set_ros_target(0);
   sm.set_ros_target_velocity(500);
-  sm.set_position_lock_threshold(50000);
 
   sm.Update(kState_SwitchOnDisabled, kMode_CSV, 0);
   sm.Update(kState_ReadyToSwitchOn | (1u << 9), kMode_CSV, 0);
-  // 首次进入 OperationEnabled: position locked, velocity=0
+  // 首帧: 归零
+  sm.Update(kState_OperationEnabled, kMode_CSV, 0);
+  EXPECT_EQ(sm.safe_target_velocity(), 0);
+  // 次帧: 透传
   sm.Update(kState_OperationEnabled, kMode_CSV, 0);
   EXPECT_TRUE(sm.is_operational());
   EXPECT_EQ(sm.safe_target_velocity(), 500);
@@ -51,12 +64,14 @@ TEST_F(StateMachineMultiMode, CSVModePassesVelocityAfterUnlock) {
 TEST_F(StateMachineMultiMode, CSTModePassesTorqueAfterUnlock) {
   sm.set_target_mode(kMode_CST);
   sm.request_enable();
-  sm.set_ros_target(0);
   sm.set_ros_target_torque(200);
-  sm.set_position_lock_threshold(50000);
 
   sm.Update(kState_SwitchOnDisabled, kMode_CST, 0);
   sm.Update(kState_ReadyToSwitchOn | (1u << 9), kMode_CST, 0);
+  // 首帧: 归零
+  sm.Update(kState_OperationEnabled, kMode_CST, 0);
+  EXPECT_EQ(sm.safe_target_torque(), 0);
+  // 次帧: 透传
   sm.Update(kState_OperationEnabled, kMode_CST, 0);
   EXPECT_TRUE(sm.is_operational());
   EXPECT_EQ(sm.safe_target_torque(), 200);
@@ -65,13 +80,12 @@ TEST_F(StateMachineMultiMode, CSTModePassesTorqueAfterUnlock) {
 TEST_F(StateMachineMultiMode, VelocityZeroedOnFault) {
   sm.set_target_mode(kMode_CSV);
   sm.request_enable();
-  sm.set_ros_target(0);
   sm.set_ros_target_velocity(500);
-  sm.set_position_lock_threshold(50000);
 
   sm.Update(kState_SwitchOnDisabled, kMode_CSV, 0);
   sm.Update(kState_ReadyToSwitchOn | (1u << 9), kMode_CSV, 0);
-  sm.Update(kState_OperationEnabled, kMode_CSV, 0);
+  sm.Update(kState_OperationEnabled, kMode_CSV, 0);  // 首帧归零
+  sm.Update(kState_OperationEnabled, kMode_CSV, 0);  // 次帧解锁
   EXPECT_EQ(sm.safe_target_velocity(), 500);
 
   // Fault
@@ -84,13 +98,12 @@ TEST_F(StateMachineMultiMode, VelocityZeroedOnFault) {
 TEST_F(StateMachineMultiMode, TorqueZeroedOnDisable) {
   sm.set_target_mode(kMode_CST);
   sm.request_enable();
-  sm.set_ros_target(0);
   sm.set_ros_target_torque(300);
-  sm.set_position_lock_threshold(50000);
 
   sm.Update(kState_SwitchOnDisabled, kMode_CST, 0);
   sm.Update(kState_ReadyToSwitchOn | (1u << 9), kMode_CST, 0);
-  sm.Update(kState_OperationEnabled, kMode_CST, 0);
+  sm.Update(kState_OperationEnabled, kMode_CST, 0);  // 首帧归零
+  sm.Update(kState_OperationEnabled, kMode_CST, 0);  // 次帧解锁
   EXPECT_EQ(sm.safe_target_torque(), 300);
 
   // Disable
@@ -105,6 +118,36 @@ TEST_F(StateMachineMultiMode, SafeModeReflectsTargetMode) {
   EXPECT_EQ(sm.safe_mode_of_operation(), kMode_CSV);
   sm.set_target_mode(kMode_CST);
   EXPECT_EQ(sm.safe_mode_of_operation(), kMode_CST);
+}
+
+TEST_F(StateMachineMultiMode, CSVUnlocksAtNonZeroPosition) {
+  // BUG-5 核心场景: 电机在非零位，ros_target_ 默认 0，
+  // CSP 模式下位置锁定永远不会释放，但 CSV 模式应该不受影响。
+  sm.set_target_mode(kMode_CSV);
+  sm.request_enable();
+  sm.set_ros_target_velocity(100);
+  sm.set_position_lock_threshold(500);  // 小阈值，CSP 下不可能解锁
+
+  sm.Update(kState_SwitchOnDisabled, kMode_CSV, 100000);
+  sm.Update(kState_ReadyToSwitchOn | (1u << 9), kMode_CSV, 100000);
+  sm.Update(kState_OperationEnabled, kMode_CSV, 100000);  // 首帧
+  sm.Update(kState_OperationEnabled, kMode_CSV, 100000);  // 次帧
+  EXPECT_TRUE(sm.is_operational());
+  EXPECT_EQ(sm.safe_target_velocity(), 100);
+}
+
+TEST_F(StateMachineMultiMode, CSTUnlocksAtNonZeroPosition) {
+  sm.set_target_mode(kMode_CST);
+  sm.request_enable();
+  sm.set_ros_target_torque(50);
+  sm.set_position_lock_threshold(500);
+
+  sm.Update(kState_SwitchOnDisabled, kMode_CST, 80000);
+  sm.Update(kState_ReadyToSwitchOn | (1u << 9), kMode_CST, 80000);
+  sm.Update(kState_OperationEnabled, kMode_CST, 80000);
+  sm.Update(kState_OperationEnabled, kMode_CST, 80000);
+  EXPECT_TRUE(sm.is_operational());
+  EXPECT_EQ(sm.safe_target_torque(), 50);
 }
 
 // --- RobotHw 多模式命令流测试 ---
