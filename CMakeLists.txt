@@ -157,3 +157,15 @@ add_executable(test_boundary_cases
 )
 target_link_libraries(test_boundary_cases PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_boundary_cases)
+
+add_executable(test_lifecycle_manager
+  test/test_lifecycle_manager.cpp
+)
+target_link_libraries(test_lifecycle_manager PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_lifecycle_manager)
+
+add_executable(test_manual_control
+  test/test_manual_control.cpp
+)
+target_link_libraries(test_manual_control PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_manual_control)
