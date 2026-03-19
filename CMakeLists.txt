@@ -82,6 +82,12 @@ add_executable(test_joints_config
 target_link_libraries(test_joints_config PRIVATE canopen_core)
 add_test(NAME test_joints_config COMMAND test_joints_config)
 
+add_executable(test_canopen_master
+  test/test_canopen_master.cpp
+)
+target_link_libraries(test_canopen_master PRIVATE canopen_core)
+add_test(NAME test_canopen_master COMMAND test_canopen_master)
+
 add_executable(test_shared_state_gtest
   test/test_shared_state_gtest.cpp
 )
