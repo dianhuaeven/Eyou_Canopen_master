@@ -26,6 +26,9 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
   void read(const ros::Time& time, const ros::Duration& period) override;
   void write(const ros::Time& time, const ros::Duration& period) override;
 
+  // 设置某轴运动模式（kMode_CSP=8, kMode_CSV=9）。
+  void SetMode(std::size_t axis_index, int8_t mode);
+
   bool all_operational() const { return hw_->all_operational(); }
 
  private:
@@ -36,10 +39,13 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
   std::vector<double> pos_;
   std::vector<double> vel_;
   std::vector<double> eff_;
-  std::vector<double> cmd_;
+  std::vector<double> pos_cmd_;
+  std::vector<double> vel_cmd_;
+  std::vector<int8_t> active_mode_;  // 每轴当前模式，默认 CSP。
 
   hardware_interface::JointStateInterface jnt_state_iface_;
   hardware_interface::PositionJointInterface pos_cmd_iface_;
+  hardware_interface::VelocityJointInterface vel_cmd_iface_;
 };
 
 }  // namespace canopen_hw
