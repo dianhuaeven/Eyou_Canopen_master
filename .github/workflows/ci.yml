@@ -56,7 +56,8 @@ jobs:
         run: cmake --build build/${{ matrix.build_type }} --parallel
 
       - name: Test (${{ matrix.build_type }})
-        run: ctest --test-dir build/${{ matrix.build_type }} --output-on-failure
+        working-directory: build/${{ matrix.build_type }}
+        run: ctest --output-on-failure
 
       - name: Clang-Tidy (Debug only)
         if: matrix.build_type == 'Debug'
@@ -66,8 +67,7 @@ jobs:
             --warnings-as-errors='*' \
             --checks='-*,bugprone-*,performance-*,readability-braces-around-statements' \
             --header-filter='include/canopen_hw/.*' \
-            src/*.cpp \
-          || echo "::warning::clang-tidy found issues (non-blocking for now)"
+            src/*.cpp
 
       - name: Upload CTest logs on failure
         if: failure()
