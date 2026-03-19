@@ -31,59 +31,64 @@ void RealtimeLoop::Run(std::function<bool()> tick) {
   clock_gettime(CLOCK_MONOTONIC, &next);
 
   const int64_t period_ns = config_.period.count();
-  int64_t jitter_sum = 0;
 
   while (true) {
-    // 推进到下一个绝对时间点
-    next.tv_nsec += period_ns;
-    while (next.tv_nsec >= 1000000000L) {
-      next.tv_nsec -= 1000000000L;
-      next.tv_sec += 1;
-    }
+    // 1. 先执行业务逻辑
+    if (!tick()) break;
 
+    // 2. 计算下一次绝对唤醒时间（uint64_t 防止加法溢出）
+    uint64_t total_ns = static_cast<uint64_t>(next.tv_nsec) + period_ns;
+    next.tv_sec += total_ns / 1000000000ULL;
+    next.tv_nsec = total_ns % 1000000000ULL;
+
+    // 3. 绝对时间休眠（若 tick 超时，next 已是过去时间，立即返回实现追赶）
     clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, nullptr);
 
+    // 4. 计算 Jitter
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    const int64_t wake_ns = (now.tv_sec - next.tv_sec) * 1000000000L +
+    const int64_t wake_ns = (now.tv_sec - next.tv_sec) * 1000000000LL +
                             (now.tv_nsec - next.tv_nsec);
     const int64_t jitter_us = std::abs(wake_ns) / 1000;
 
+    // 5. 更新统计（增量法计算平均值，防止长时间运行 sum 溢出）
     stats_.iterations++;
     stats_.last_jitter_us = jitter_us;
     if (jitter_us > stats_.max_jitter_us) {
       stats_.max_jitter_us = jitter_us;
     }
-    jitter_sum += jitter_us;
-    stats_.avg_jitter_us = jitter_sum / static_cast<int64_t>(stats_.iterations);
-
-    if (!tick()) break;
+    stats_.avg_jitter_us += (jitter_us - stats_.avg_jitter_us) /
+                            static_cast<int64_t>(stats_.iterations);
   }
 
 #else
-  // 非 Linux 回退到 sleep_for
-  int64_t jitter_sum = 0;
+  // 非 Linux：用 sleep_until 保证绝对时间，消除累积漂移
+  auto next = std::chrono::steady_clock::now();
 
   while (true) {
-    auto before = std::chrono::steady_clock::now();
-    std::this_thread::sleep_for(config_.period);
-    auto after = std::chrono::steady_clock::now();
+    // 1. 先执行业务逻辑
+    if (!tick()) break;
 
-    const auto actual = std::chrono::duration_cast<std::chrono::microseconds>(
-        after - before);
-    const auto expected = std::chrono::duration_cast<std::chrono::microseconds>(
-        config_.period);
-    const int64_t jitter_us = std::abs(actual.count() - expected.count());
+    // 2. 推进绝对时间
+    next += config_.period;
 
+    // 3. 绝对时间休眠
+    std::this_thread::sleep_until(next);
+
+    // 4. 计算 Jitter
+    auto now = std::chrono::steady_clock::now();
+    const auto wake_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        now - next).count();
+    const int64_t jitter_us = std::abs(wake_ns) / 1000;
+
+    // 5. 更新统计
     stats_.iterations++;
     stats_.last_jitter_us = jitter_us;
     if (jitter_us > stats_.max_jitter_us) {
       stats_.max_jitter_us = jitter_us;
     }
-    jitter_sum += jitter_us;
-    stats_.avg_jitter_us = jitter_sum / static_cast<int64_t>(stats_.iterations);
-
-    if (!tick()) break;
+    stats_.avg_jitter_us += (jitter_us - stats_.avg_jitter_us) /
+                            static_cast<int64_t>(stats_.iterations);
   }
 #endif
 }
