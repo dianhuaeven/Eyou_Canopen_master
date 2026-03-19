@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   controller_manager
   std_srvs
   message_generation
+  diagnostic_updater
 )
 
 add_service_files(FILES
@@ -25,7 +26,7 @@ generate_messages(DEPENDENCIES
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES canopen_core canopen_ros_adapter
-  CATKIN_DEPENDS roscpp hardware_interface controller_manager std_srvs message_runtime
+  CATKIN_DEPENDS roscpp hardware_interface controller_manager std_srvs message_runtime diagnostic_updater
 )
 
 # ── 第三方依赖 ─────────────────────────────────────────

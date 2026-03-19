@@ -7,6 +7,7 @@
 #include <ros/ros.h>
 #include <controller_manager/controller_manager.h>
 #include <std_srvs/Trigger.h>
+#include <diagnostic_updater/diagnostic_updater.h>
 
 #include "canopen_hw/SetMode.h"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
@@ -124,6 +125,40 @@ int main(int argc, char** argv) {
 
   controller_manager::ControllerManager cm(&robot_hw_ros, nh);
 
+  // Diagnostics。
+  diagnostic_updater::Updater diag_updater;
+  diag_updater.setHardwareID("canopen_hw");
+
+  for (std::size_t i = 0; i < joint_names.size(); ++i) {
+    diag_updater.add(joint_names[i], [&lifecycle, i](diagnostic_updater::DiagnosticStatusWrapper& stat) {
+      const auto* counters = lifecycle.master() ? lifecycle.master()->GetHealthCounters(i) : nullptr;
+      canopen_hw::AxisFeedback fb;
+      bool got_fb = lifecycle.master() && lifecycle.master()->GetAxisFeedback(i, &fb);
+
+      if (!counters || !got_fb) {
+        stat.summary(diagnostic_msgs::DiagnosticStatus::STALE, "no data");
+        return;
+      }
+
+      stat.add("heartbeat_lost", counters->heartbeat_lost.load());
+      stat.add("emcy_count", counters->emcy_count.load());
+      stat.add("fault_reset_attempts", counters->fault_reset_attempts.load());
+      stat.add("is_operational", fb.is_operational);
+      stat.add("is_fault", fb.is_fault);
+      stat.add("heartbeat_lost_flag", fb.heartbeat_lost);
+
+      if (fb.is_fault) {
+        stat.summary(diagnostic_msgs::DiagnosticStatus::ERROR, "fault");
+      } else if (fb.heartbeat_lost) {
+        stat.summary(diagnostic_msgs::DiagnosticStatus::WARN, "heartbeat lost");
+      } else if (!fb.is_operational) {
+        stat.summary(diagnostic_msgs::DiagnosticStatus::WARN, "not operational");
+      } else {
+        stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "operational");
+      }
+    });
+  }
+
   double loop_hz = 100.0;
   pnh.param("loop_hz", loop_hz, 100.0);
   ros::Rate rate(loop_hz);
@@ -138,6 +173,7 @@ int main(int argc, char** argv) {
     cm.update(now, period);
     robot_hw_ros.write(now, period);
 
+    diag_updater.update();
     ros::spinOnce();
     rate.sleep();
   }
