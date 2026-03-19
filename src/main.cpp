@@ -109,6 +109,7 @@ int main(int argc, char** argv) {
       if (!master_cfg.node_ids.empty()) {
         master_cfg.axis_count = master_cfg.node_ids.size();
       }
+      shared_state.SetActiveAxisCount(master_cfg.axis_count);
 
       std::cout << "Loaded top-level canopen config: interface="
                 << runtime_cfg.master.can_interface

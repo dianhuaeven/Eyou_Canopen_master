@@ -74,3 +74,18 @@ TEST(SharedStateGTest, RecomputeAllOperationalFalseWhenAnyAxisFault) {
   EXPECT_FALSE(snap.all_operational);
   EXPECT_TRUE(snap.feedback[3].heartbeat_lost);
 }
+
+TEST(SharedStateGTest, RecomputeUsesConfiguredAxisCount) {
+  canopen_hw::SharedState shared;
+  shared.SetActiveAxisCount(1);
+
+  canopen_hw::AxisFeedback axis0;
+  axis0.is_operational = true;
+  axis0.is_fault = false;
+  shared.UpdateFeedback(0, axis0);
+
+  // 其余轴保持默认 false，不应影响只配置 1 轴时的汇总结果。
+  shared.RecomputeAllOperational();
+  const auto snap = shared.Snapshot();
+  EXPECT_TRUE(snap.all_operational);
+}

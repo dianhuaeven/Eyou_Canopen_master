@@ -14,13 +14,25 @@ void SharedState::UpdateFeedback(std::size_t axis_index,
 void SharedState::RecomputeAllOperational() {
   std::lock_guard<std::mutex> lk(mtx_);
   bool all_ok = true;
-  for (const auto& axis_feedback : feedback_) {
+  for (std::size_t i = 0; i < active_axis_count_; ++i) {
+    const auto& axis_feedback = feedback_[i];
     if (!axis_feedback.is_operational || axis_feedback.is_fault) {
       all_ok = false;
       break;
     }
   }
   all_operational_ = all_ok;
+}
+
+void SharedState::SetActiveAxisCount(std::size_t count) {
+  std::lock_guard<std::mutex> lk(mtx_);
+  if (count == 0) {
+    active_axis_count_ = 1;
+  } else if (count > kAxisCount) {
+    active_axis_count_ = kAxisCount;
+  } else {
+    active_axis_count_ = count;
+  }
 }
 
 void SharedState::UpdateCommand(std::size_t axis_index,

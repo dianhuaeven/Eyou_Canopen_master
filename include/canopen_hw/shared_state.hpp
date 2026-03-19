@@ -54,6 +54,10 @@ class SharedState {
   // 由 Lely 线程在每个 SYNC/RPDO 更新后调用，汇总全轴状态。
   void RecomputeAllOperational();
 
+  // 配置有效轴数（用于 all_operational 汇总边界）。
+  // count 会被限制在 [1, kAxisCount]。
+  void SetActiveAxisCount(std::size_t count);
+
   // 任意线程: 获取完整快照。
   SharedSnapshot Snapshot() const;
 
@@ -64,6 +68,7 @@ class SharedState {
   std::array<AxisFeedback, kAxisCount> feedback_{};
   std::array<AxisCommand, kAxisCount> commands_{};
   bool all_operational_ = false;
+  std::size_t active_axis_count_ = kAxisCount;
 };
 
 }  // namespace canopen_hw
