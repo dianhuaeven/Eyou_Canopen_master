@@ -525,9 +525,9 @@ Week 2 (P1 改进 + P2 打磨)
 │
 ├── C08  refactor(config): 合并配置结构         ██████      P1
 ├── C09  feat(log): 结构化日志 + 健康计数器     ████████    P1
-├── C10  refactor(master): cv 替代 busy-wait   ████        P1
-├── C11  build: -Werror + SYSTEM include       ████        P2
-├── C12  ci: GitHub Actions 工作流              ██████      P1
+├── C10  refactor(master): cv 替代 busy-wait ████        P1
+├── C11  build: -Werror + SYSTEM include     ████        P2
+├── C12  ci: GitHub Actions 工作流            ██████      P1
 └── C13  docs: Soak 计划 + 配置补全            ████        P2
 ```
 
