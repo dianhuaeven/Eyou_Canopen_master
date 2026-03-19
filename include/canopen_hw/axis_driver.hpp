@@ -74,7 +74,7 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   std::shared_ptr<PdoMapping> expected_pdo_;
   bool expected_pdo_loaded_ = false;
   std::shared_ptr<PdoMappingReader> pdo_reader_;
-  int boot_retry_count_ = 0;
+  std::atomic<int> boot_retry_count_{0};
   int max_boot_retries_ = 3;
 
   // 保护本轴缓存, 避免 ROS 设置目标与 Lely 回调并发冲突。
