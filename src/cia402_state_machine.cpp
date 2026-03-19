@@ -6,9 +6,9 @@ namespace canopen_hw {
 
 namespace {
 
-int32_t AbsDiff(int32_t a, int32_t b) {
+int64_t AbsDiff(int32_t a, int32_t b) {
   const int64_t d = static_cast<int64_t>(a) - static_cast<int64_t>(b);
-  return static_cast<int32_t>(d < 0 ? -d : d);
+  return d < 0 ? -d : d;
 }
 
 }  // namespace
@@ -226,7 +226,8 @@ void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
     safe_target_ = actual_position;
 
     // 只有当上层期望已接近当前实际位置时才释放锁定。
-    if (AbsDiff(ros_target_, actual_position) <= position_lock_threshold_) {
+    if (AbsDiff(ros_target_, actual_position) <=
+        static_cast<int64_t>(position_lock_threshold_)) {
       position_locked_ = false;
       safe_target_ = ros_target_;
     }

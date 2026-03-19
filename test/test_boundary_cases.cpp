@@ -115,10 +115,9 @@ TEST(Boundary, Int32ExtremePositionSameValue) {
   EXPECT_TRUE(sm.is_operational());
 }
 
-TEST(Boundary, Int32ExtremeAbsDiffTruncation) {
-  // P2-5 记录的截断问题: AbsDiff(INT32_MAX, INT32_MIN) 的 int64 结果
-  // 超出 int32 范围, 截断后变为 -1, 导致误判为"接近"��
-  // 此测试记录当前行为(已知缺陷), 若后续修复 AbsDiff 则更新预期。
+TEST(Boundary, Int32ExtremeAbsDiffKeepsLocked) {
+  // 修复后: AbsDiff(INT32_MAX, INT32_MIN) 以 int64 比较，
+  // 极大差值应保持位置锁定，禁止误解锁。
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
   sm.Update(0x0040, kMode_CSP, INT32_MIN);
@@ -126,9 +125,7 @@ TEST(Boundary, Int32ExtremeAbsDiffTruncation) {
   sm.set_ros_target(INT32_MAX);  // 最大差值
   sm.Update(0x0027, kMode_CSP, INT32_MIN);
 
-  // 当前行为: 截断导致误解锁 (已知 P2-5 缺陷)
-  // 修复后应改为 EXPECT_TRUE(sm.is_position_locked())
-  EXPECT_FALSE(sm.is_position_locked());
+  EXPECT_TRUE(sm.is_position_locked());
 }
 
 // --- 故障复位次数耗尽 ---
