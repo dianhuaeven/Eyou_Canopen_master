@@ -133,6 +133,46 @@ void AxisDriver::ResetFault() {
   state_machine_.request_enable();
 }
 
+void AxisDriver::AsyncSdoRead(uint16_t index, uint8_t subindex,
+                               SdoReadCallback cb) {
+  SubmitRead<uint32_t>(
+      index, subindex,
+      [cb](uint8_t, uint16_t, uint8_t, std::error_code ec, uint32_t value) {
+        if (ec) {
+          if (cb) {
+            cb(false, {}, ec.message());
+          }
+          return;
+        }
+        std::vector<uint8_t> data(4);
+        data[0] = static_cast<uint8_t>(value & 0xFF);
+        data[1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+        data[2] = static_cast<uint8_t>((value >> 16) & 0xFF);
+        data[3] = static_cast<uint8_t>((value >> 24) & 0xFF);
+        if (cb) {
+          cb(true, data, std::string());
+        }
+      });
+}
+
+void AxisDriver::AsyncSdoWrite(uint16_t index, uint8_t subindex,
+                                const std::vector<uint8_t>& data,
+                                SdoWriteCallback cb) {
+  uint32_t value = 0;
+  if (data.size() >= 1) value |= static_cast<uint32_t>(data[0]);
+  if (data.size() >= 2) value |= static_cast<uint32_t>(data[1]) << 8;
+  if (data.size() >= 3) value |= static_cast<uint32_t>(data[2]) << 16;
+  if (data.size() >= 4) value |= static_cast<uint32_t>(data[3]) << 24;
+
+  SubmitWrite(
+      index, subindex, value,
+      [cb](uint8_t, uint16_t, uint8_t, std::error_code ec) {
+        if (cb) {
+          cb(!ec, ec ? ec.message() : std::string());
+        }
+      });
+}
+
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;

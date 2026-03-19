@@ -83,6 +83,9 @@ class CanopenMaster {
   // 每轴健康计数快照（非拷贝，返回指针供读取）。越界返回 nullptr。
   const HealthCounters* GetHealthCounters(std::size_t axis_index) const;
 
+  // 按 node_id 查找 AxisDriver（供 SdoAccessor 使用）。未找到返回 nullptr。
+  AxisDriver* FindDriverByNodeId(uint8_t node_id);
+
  private:
   // 供后续真实 master 初始化后调用:
   // 基于 node-id 1..N 创建 AxisDriver。

@@ -29,6 +29,7 @@ add_library(canopen_core
   src/joints_config.cpp
   src/pdo_mapping.cpp
   src/lifecycle_manager.cpp
+  src/sdo_accessor.cpp
 )
 
 target_include_directories(canopen_core
@@ -169,3 +170,9 @@ add_executable(test_manual_control
 )
 target_link_libraries(test_manual_control PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_manual_control)
+
+add_executable(test_sdo_accessor
+  test/test_sdo_accessor.cpp
+)
+target_link_libraries(test_sdo_accessor PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_sdo_accessor)

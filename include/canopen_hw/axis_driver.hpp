@@ -3,9 +3,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include <lely/coapp/driver.hpp>
 
@@ -50,6 +52,18 @@ class AxisDriver final : public lely::canopen::BasicDriver {
   void RequestEnable();
   void RequestDisable();
   void ResetFault();
+
+  // SDO 异步读写（由 SdoAccessor 通过 CanopenMaster 调用）。
+  // 回调在 Lely 事件线程中执行。
+  using SdoReadCallback =
+      std::function<void(bool ok, const std::vector<uint8_t>& data,
+                         const std::string& error)>;
+  using SdoWriteCallback =
+      std::function<void(bool ok, const std::string& error)>;
+
+  void AsyncSdoRead(uint16_t index, uint8_t subindex, SdoReadCallback cb);
+  void AsyncSdoWrite(uint16_t index, uint8_t subindex,
+                     const std::vector<uint8_t>& data, SdoWriteCallback cb);
 
  private:
   // 在 RPDO 回调中使用: 更新上层期望位置(仅写入本地缓存, 不直接触发总线发送)。

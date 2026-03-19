@@ -247,4 +247,14 @@ const HealthCounters* CanopenMaster::GetHealthCounters(
   return &axis_drivers_[axis_index]->health();
 }
 
+AxisDriver* CanopenMaster::FindDriverByNodeId(uint8_t node_id) {
+  for (std::size_t i = 0; i < config_.joints.size() && i < axis_drivers_.size();
+       ++i) {
+    if (config_.joints[i].node_id == node_id && axis_drivers_[i]) {
+      return axis_drivers_[i].get();
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace canopen_hw
