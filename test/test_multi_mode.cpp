@@ -202,7 +202,7 @@ TEST_F(RobotHwMultiMode, DefaultModeIsCSP) {
   EXPECT_EQ(cmd.mode_of_operation, kMode_CSP);
 }
 
-TEST_F(RobotHwMultiMode, NotOperationalBlocksWrite) {
+TEST_F(RobotHwMultiMode, NotOperationalZerosVelocityButKeepsMode) {
   // Don't call MakeAllOperational.
   hw.SetJointMode(0, kMode_CSV);
   hw.SetJointVelocityCommand(0, 1.0);
@@ -210,9 +210,9 @@ TEST_F(RobotHwMultiMode, NotOperationalBlocksWrite) {
 
   AxisCommand cmd;
   ASSERT_TRUE(state.GetCommand(0, &cmd));
-  // Command should still be default (not written).
-  EXPECT_EQ(cmd.mode_of_operation, kMode_CSP);
+  EXPECT_EQ(cmd.mode_of_operation, kMode_CSV);
   EXPECT_EQ(cmd.target_velocity, 0);
+  EXPECT_EQ(cmd.target_torque, 0);
 }
 
 TEST_F(RobotHwMultiMode, InvalidAxisIgnored) {

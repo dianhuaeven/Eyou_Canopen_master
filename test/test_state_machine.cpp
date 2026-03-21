@@ -30,6 +30,20 @@ TEST(CiA402SM, ReadyToSwitchOnJumpEnable) {
   EXPECT_EQ(sm.controlword(), kCtrl_EnableOperation);
 }
 
+// 回归测试：Recover 后 tpdo 初始为零，驱动器可能短暂收到 mode=0 导致
+// mode_display 归零。状态机不应因此卡死在 ReadyToSwitchOn。
+TEST(CiA402SM, ReadyToSwitchOnEnablesEvenIfModeDisplayIsZero) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  // mode_display=0（驱动器因收到 mode=0 而清除了模式）
+  sm.Update(0x0021, /*mode_display=*/0, 100);
+  EXPECT_EQ(sm.state(), CiA402State::ReadyToSwitchOn);
+  // 修复后：仍应发 EnableOperation，不因 mode_display 不匹配而卡住
+  EXPECT_EQ(sm.controlword(), kCtrl_EnableOperation);
+}
+
 TEST(CiA402SM, FirstOperationEnabledAutoAlignsFarTarget) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);

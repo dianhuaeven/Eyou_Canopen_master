@@ -78,12 +78,24 @@ class AxisLogicTest : public ::testing::Test {
 TEST_F(AxisLogicTest, ProcessRpdoWritesBusIO) {
   logic_->ProcessRpdo(kSW_SwitchOnDisabled, 100, 50, 10, kMode_CSP);
 
-  // 应该写了 mode + position + velocity + torque
-  ASSERT_GE(bus_.calls.size(), 4u);
-  EXPECT_EQ(bus_.calls[0].type, BusCall::kMode);
-  EXPECT_EQ(bus_.calls[1].type, BusCall::kPosition);
-  EXPECT_EQ(bus_.calls[2].type, BusCall::kVelocity);
-  EXPECT_EQ(bus_.calls[3].type, BusCall::kTorque);
+  // 应该写了 controlword + mode + position + velocity + torque
+  ASSERT_GE(bus_.calls.size(), 5u);
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_Shutdown);
+  EXPECT_EQ(bus_.calls[1].type, BusCall::kMode);
+  EXPECT_EQ(bus_.calls[2].type, BusCall::kPosition);
+  EXPECT_EQ(bus_.calls[3].type, BusCall::kVelocity);
+  EXPECT_EQ(bus_.calls[4].type, BusCall::kTorque);
+}
+
+TEST_F(AxisLogicTest, ProcessRpdoWritesEnableOperationControlwordInReadyToSwitchOn) {
+  bus_.calls.clear();
+  logic_->RequestEnable();
+  logic_->ProcessRpdo(kSW_ReadyToSwitchOn, 0, 0, 0, kMode_CSP);
+
+  ASSERT_FALSE(bus_.calls.empty());
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_EnableOperation);
 }
 
 TEST_F(AxisLogicTest, ProcessRpdoUpdatesSharedState) {
@@ -180,6 +192,19 @@ TEST_F(AxisLogicTest, ConfigureDelegatesToStateMachine) {
 TEST_F(AxisLogicTest, ResetFaultReenables) {
   logic_->ResetFault();
   // 验证不崩溃，状态机内部会重置计数器并请求使能
+}
+
+TEST_F(AxisLogicTest, RequestDisableImmediatelyClearsOperationalFlag) {
+  DriveToOperational();
+  logic_->ProcessRpdo(kSW_OperationEnabled, 0, 0, 0, kMode_CSP);
+
+  auto before = shared_->Snapshot();
+  EXPECT_TRUE(before.feedback[0].is_operational);
+
+  logic_->RequestDisable();
+
+  auto after = shared_->Snapshot();
+  EXPECT_FALSE(after.feedback[0].is_operational);
 }
 
 TEST_F(AxisLogicTest, FaultResetAttemptsMirroredToHealthCounters) {

@@ -15,7 +15,7 @@ ModifiedBy=Yiyou Technology
 VendorName=Yiyou Technology
 VendorNumber=0x00000668
 ProductName=EuServo
-ProductNumber=0x00221701
+ProductNumber=0x00220811
 RevisionNumber=0x00000010
 BaudRate_10=1
 BaudRate_20=1
@@ -46,6 +46,15 @@ Dummy0004=1
 Dummy0005=1
 Dummy0006=1
 Dummy0007=1
+
+[DynamicChannels]
+NrOfSeg=1
+;----- UNKNOWN -----
+Type1=0x0000
+Dir1=RO
+Range1=0x0000-0x0000
+PPOffset1=0x00000000
+MaxCnt1=0x00000000
 
 [MandatoryObjects]
 SupportedObjects=3
@@ -167,7 +176,7 @@ AccessType=RO
 DataType=0x0007
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=0x00220811
+DefaultValue=131474
 
 [1001]
 ParameterName=Error Register
@@ -568,7 +577,7 @@ AccessType=RO
 DataType=0x0007
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=0x00221701
+DefaultValue=0x00220811
 
 [1018sub3]
 ParameterName=Revision number
@@ -2058,7 +2067,7 @@ DataType=0x0006
 PDOMapping=1
 ObjFlags=0x00000000
 LowLimit=0
-HighLimit=65535
+HighLimit=65536
 DefaultValue=1
 
 [2024]
@@ -2080,7 +2089,7 @@ DataType=0x0006
 PDOMapping=0
 ObjFlags=0x00000000
 LowLimit=0
-HighLimit=65535
+HighLimit=65536
 DefaultValue=100
 
 [2026]

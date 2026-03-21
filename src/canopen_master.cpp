@@ -127,6 +127,8 @@ bool CanopenMaster::GracefulShutdown() {
   // 下面的等待将只会超时返回。
   for (const auto& axis : axis_drivers_) {
     if (axis) {
+      // 先同步状态机请求，避免周期控制字路径继续拉回使能。
+      axis->RequestDisable();
       axis->SendControlword(kCtrl_DisableOperation);
     }
   }

@@ -1,5 +1,5 @@
 options:
-  dcf_path: /home/dianhua/robot_test/config
+  dcf_path: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
   heartbeat_multiplier: 3.0
 
 master:
@@ -9,41 +9,51 @@ master:
   sync_overflow: 0
 
 joint_1:
-  node_id: 1
-  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.dcfgen.eds
+  node_id: 5
+  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
-      cob_id: 0x201
+      cob_id: 0x205
       transmission: 1
       mapping:
         - {index: 0x6040, sub_index: 0, bits: 16}
         - {index: 0x607A, sub_index: 0, bits: 32}
         - {index: 0x6060, sub_index: 0, bits: 8}
     2:
-      enabled: false
+      cob_id: 0x80000305
+      transmission: 1
+      mapping: []
     3:
-      enabled: false
+      cob_id: 0x80000405
+      transmission: 1
+      mapping: []
     4:
-      enabled: false
+      cob_id: 0x80000505
+      transmission: 1
+      mapping: []
   tpdo:
     1:
-      cob_id: 0x181
+      cob_id: 0x185
       transmission: 1
       mapping:
         - {index: 0x6041, sub_index: 0, bits: 16}
         - {index: 0x6064, sub_index: 0, bits: 32}
         - {index: 0x6061, sub_index: 0, bits: 8}
     2:
-      cob_id: 0x281
+      cob_id: 0x285
       transmission: 1
       mapping:
         - {index: 0x606C, sub_index: 0, bits: 32}
         - {index: 0x6077, sub_index: 0, bits: 16}
     3:
-      enabled: false
+      cob_id: 0x80000385
+      transmission: 1
+      mapping: []
     4:
-      enabled: false
+      cob_id: 0x80000485
+      transmission: 1
+      mapping: []
   sdo:
     - {index: 0x6060, sub_index: 0, value: 8}
 

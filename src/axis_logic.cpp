@@ -19,6 +19,7 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
   int32_t safe_target_velocity = 0;
   int16_t safe_target_torque = 0;
   int8_t safe_mode = kMode_CSP;
+  uint16_t controlword = 0;
 
   {
     std::lock_guard<std::mutex> lk(mtx_);
@@ -30,6 +31,7 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
     feedback_cache_.mode_display = mode_display;
 
     state_machine_.Update(statusword, mode_display, actual_position);
+    controlword = state_machine_.controlword();
 
     feedback_cache_.state = state_machine_.state();
     feedback_cache_.is_operational = state_machine_.is_operational();
@@ -51,6 +53,7 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
   }
 
   if (bus_io_) {
+    bus_io_->WriteControlword(controlword);
     bus_io_->WriteModeOfOperation(safe_mode);
     bus_io_->WriteTargetPosition(safe_target_ticks);
     bus_io_->WriteTargetVelocity(safe_target_velocity);
@@ -131,8 +134,16 @@ void AxisLogic::RequestEnable() {
 }
 
 void AxisLogic::RequestDisable() {
-  std::lock_guard<std::mutex> lk(mtx_);
-  state_machine_.request_disable();
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    state_machine_.request_disable();
+    // 关机路径期望“去使能请求”立即可见，避免等待下一帧 RPDO 才回落。
+    feedback_cache_.is_operational = false;
+  }
+  PublishSnapshot();
+  if (shared_state_) {
+    shared_state_->RecomputeAllOperational();
+  }
 }
 
 void AxisLogic::ResetFault() {

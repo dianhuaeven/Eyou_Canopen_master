@@ -1,16 +1,68 @@
 #include "canopen_hw/axis_driver.hpp"
 
+#include <algorithm>
 #include <chrono>
+#include <cstdint>
+#include <iomanip>
+#include <sstream>
 #include <system_error>
 
 #include <lely/coapp/node.hpp>
 
+#include "canopen_hw/boot_identity_diag.hpp"
 #include "canopen_hw/logging.hpp"
 #include "canopen_hw/pdo_mapping.hpp"
 
 namespace canopen_hw {
 
 namespace {
+
+struct BootIdentityDiagResult {
+  bool has_device_type = false;
+  uint32_t device_type = 0;
+  std::string device_type_error;
+
+  bool has_vendor_id = false;
+  uint32_t vendor_id = 0;
+  std::string vendor_id_error;
+
+  bool has_product_code = false;
+  uint32_t product_code = 0;
+  std::string product_code_error;
+
+  bool has_revision = false;
+  uint32_t revision = 0;
+  std::string revision_error;
+
+  BootIdentityTuple expected;
+  bool has_expected = false;
+};
+
+uint32_t DecodeLeU32(const std::vector<uint8_t>& data) {
+  uint32_t value = 0;
+  const std::size_t n = std::min<std::size_t>(data.size(), 4);
+  for (std::size_t i = 0; i < n; ++i) {
+    value |= static_cast<uint32_t>(data[i]) << (8 * i);
+  }
+  return value;
+}
+
+std::string Hex32(uint32_t value) {
+  std::ostringstream oss;
+  oss << "0x" << std::uppercase << std::hex << std::setw(8)
+      << std::setfill('0') << value;
+  return oss.str();
+}
+
+std::string FormatDiagValue(bool ok, uint32_t value, const std::string& error) {
+  if (ok) {
+    return Hex32(value);
+  }
+  if (!error.empty()) {
+    return std::string("n/a(") + error + ")";
+  }
+  return "n/a";
+}
 
 std::vector<uint8_t> PackLe(uint32_t value, std::size_t size) {
   std::vector<uint8_t> data(size, 0);
@@ -267,39 +319,224 @@ void AxisDriver::OnHeartbeat(bool occurred) noexcept {
 void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                         const std::string& what) noexcept {
   (void)st;
-  (void)what;
-  if (!verify_pdo_mapping_) {
-    pdo_verified_.store(true);
-    pdo_verification_done_.store(true);
-    boot_retry_count_.store(0);
-    return;
-  }
-  if (pdo_verification_done_.load()) {
-    return;
-  }
+
   if (es != 0) {
+    CANOPEN_LOG_ERROR(
+        "axis={} node={}: OnConfig failed (es={}) what='{}'",
+        axis_index_, static_cast<int>(id()), static_cast<int>(es), what);
+
     int retry_count = boot_retry_count_.load();
+    const int observed_retry = retry_count;
+
+    const bool should_dump_identity =
+        (observed_retry == 0 || observed_retry >= max_boot_retries_);
+    if (should_dump_identity) {
+      BootIdentityTuple expected_identity;
+      std::string expected_err;
+      const bool expected_ok =
+          LoadExpectedBootIdentityFromDcf(dcf_path_, id(), &expected_identity,
+                                          &expected_err);
+
+      if (expected_ok) {
+        CANOPEN_LOG_ERROR(
+            "axis={} node={}: expected identity from master.dcf: "
+            "1000:00={} 1018:01={} 1018:02={} 1018:03={}",
+            axis_index_, static_cast<int>(id()),
+            expected_identity.has_device_type ? Hex32(expected_identity.device_type)
+                                              : std::string("n/a"),
+            expected_identity.has_vendor_id ? Hex32(expected_identity.vendor_id)
+                                            : std::string("n/a"),
+            expected_identity.has_product_code
+                ? Hex32(expected_identity.product_code)
+                : std::string("n/a"),
+            expected_identity.has_revision ? Hex32(expected_identity.revision)
+                                           : std::string("n/a"));
+      } else {
+        CANOPEN_LOG_WARN(
+            "axis={} node={}: expected identity unavailable (dcf={}): {}",
+            axis_index_, static_cast<int>(id()), dcf_path_, expected_err);
+      }
+
+      auto diag = std::make_shared<BootIdentityDiagResult>();
+      diag->expected = expected_identity;
+      diag->has_expected = expected_ok;
+
+      auto finalize_diag = [this, diag]() {
+        CANOPEN_LOG_ERROR(
+            "axis={} node={}: actual identity snapshot: "
+            "1000:00={} 1018:01={} 1018:02={} 1018:03={}",
+            axis_index_, static_cast<int>(id()),
+            FormatDiagValue(diag->has_device_type, diag->device_type,
+                            diag->device_type_error),
+            FormatDiagValue(diag->has_vendor_id, diag->vendor_id,
+                            diag->vendor_id_error),
+            FormatDiagValue(diag->has_product_code, diag->product_code,
+                            diag->product_code_error),
+            FormatDiagValue(diag->has_revision, diag->revision,
+                            diag->revision_error));
+
+        if (!diag->has_expected) {
+          return;
+        }
+
+        BootIdentityTuple actual_identity;
+        actual_identity.has_device_type = diag->has_device_type;
+        actual_identity.device_type = diag->device_type;
+        actual_identity.has_vendor_id = diag->has_vendor_id;
+        actual_identity.vendor_id = diag->vendor_id;
+        actual_identity.has_product_code = diag->has_product_code;
+        actual_identity.product_code = diag->product_code;
+        actual_identity.has_revision = diag->has_revision;
+        actual_identity.revision = diag->revision;
+
+        const auto mismatch_fields =
+            DiffBootIdentity(diag->expected, actual_identity);
+        if (mismatch_fields.empty()) {
+          return;
+        }
+
+        std::ostringstream oss;
+        for (std::size_t i = 0; i < mismatch_fields.size(); ++i) {
+          if (i > 0) {
+            oss << ", ";
+          }
+          oss << mismatch_fields[i];
+        }
+
+        CANOPEN_LOG_ERROR(
+            "axis={} node={}: boot identity mismatch fields: {}",
+            axis_index_, static_cast<int>(id()), oss.str());
+      };
+
+      AsyncSdoRead(
+          0x1000, 0,
+          [this, diag, finalize_diag](bool ok, const std::vector<uint8_t>& data,
+                                      const std::string& error) {
+            if (ok) {
+              diag->has_device_type = true;
+              diag->device_type = DecodeLeU32(data);
+            } else {
+              diag->device_type_error = error;
+            }
+
+            AsyncSdoRead(
+                0x1018, 1,
+                [this, diag, finalize_diag](bool ok_1018_1,
+                                            const std::vector<uint8_t>& data_1018_1,
+                                            const std::string& error_1018_1) {
+                  if (ok_1018_1) {
+                    diag->has_vendor_id = true;
+                    diag->vendor_id = DecodeLeU32(data_1018_1);
+                  } else {
+                    diag->vendor_id_error = error_1018_1;
+                  }
+
+                  AsyncSdoRead(
+                      0x1018, 2,
+                      [this, diag,
+                       finalize_diag](bool ok_1018_2,
+                                      const std::vector<uint8_t>& data_1018_2,
+                                      const std::string& error_1018_2) {
+                        if (ok_1018_2) {
+                          diag->has_product_code = true;
+                          diag->product_code = DecodeLeU32(data_1018_2);
+                        } else {
+                          diag->product_code_error = error_1018_2;
+                        }
+
+                        AsyncSdoRead(
+                            0x1018, 3,
+                            [diag, finalize_diag](
+                                bool ok_1018_3,
+                                const std::vector<uint8_t>& data_1018_3,
+                                const std::string& error_1018_3) {
+                              if (ok_1018_3) {
+                                diag->has_revision = true;
+                                diag->revision = DecodeLeU32(data_1018_3);
+                              } else {
+                                diag->revision_error = error_1018_3;
+                              }
+                              finalize_diag();
+                            },
+                            4);
+                      },
+                      4);
+                },
+                4);
+          },
+          4);
+    }
+
     while (retry_count < max_boot_retries_ &&
            !boot_retry_count_.compare_exchange_weak(retry_count,
                                                     retry_count + 1)) {
     }
     if (retry_count < max_boot_retries_) {
       const int attempt = retry_count + 1;
-      logic_.mutable_health().boot_retries.fetch_add(1, std::memory_order_relaxed);
-      CANOPEN_LOG_WARN("axis={} node={}: OnConfig failed (es={}), retry {}/{} with RESET_NODE",
-                       axis_index_, static_cast<int>(id()), static_cast<int>(es),
-                       attempt, max_boot_retries_);
+      logic_.mutable_health().boot_retries.fetch_add(1,
+                                                     std::memory_order_relaxed);
+      CANOPEN_LOG_WARN(
+          "axis={} node={}: OnConfig failed (es={}), retry {}/{} with RESET_NODE",
+          axis_index_, static_cast<int>(id()), static_cast<int>(es), attempt,
+          max_boot_retries_);
       master.Command(lely::canopen::NmtCommand::RESET_NODE, id());
       return;
     }
-    CANOPEN_LOG_ERROR("axis={} node={}: OnConfig failed (es={}), retries exhausted; mark PDO verify failed",
-                      axis_index_, static_cast<int>(id()), static_cast<int>(es));
+    CANOPEN_LOG_ERROR(
+        "axis={} node={}: OnConfig failed (es={}), retries exhausted; "
+        "mark PDO verify failed",
+        axis_index_, static_cast<int>(id()), static_cast<int>(es));
     pdo_verified_.store(false);
     pdo_verification_done_.store(true);
-    logic_.mutable_health().pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
+    logic_.mutable_health().pdo_verify_fail.fetch_add(1,
+                                                      std::memory_order_relaxed);
     return;
   }
+
   boot_retry_count_.store(0);
+
+  // 节点刚进入 Operational 时，tpdo_mapped 缓冲区全零。
+  // Lely 的 SYNC-triggered RPDO 在下一个 SYNC 到来时立即读取快照发送，
+  // 而 OnRpdoWrite 的 WriteEvent 需要再等一个 SYNC 才能覆盖。
+  // 这导致节点会在 boot 完成后的第一两个 SYNC 内收到 mode=0x00，
+  // 进而清除 CSP 模式，造成 mode_display 异常归零。
+  // 修复：在 OnBoot 成功路径中立即预写正确的初始值。
+  {
+    std::error_code ec;
+    // 写入目标模式（CSP=8），防止节点收到 mode=0 后清除模式设置。
+    tpdo_mapped[0x6060][0].Write(kMode_CSP, ec);
+    if (!ec) {
+      tpdo_mapped[0x6060][0].WriteEvent(ec);
+    }
+    if (ec) {
+      CANOPEN_LOG_WARN("axis={} node={}: OnBoot pre-init mode write failed",
+                       axis_index_, static_cast<int>(id()));
+    }
+    // 写入安全的初始 controlword（Shutdown=0x0006），
+    // 驱动器在 SwitchOnDisabled/ReadyToSwitchOn 均可安全接受。
+    ec.clear();
+    tpdo_mapped[0x6040][0].Write(kCtrl_Shutdown, ec);
+    if (!ec) {
+      tpdo_mapped[0x6040][0].WriteEvent(ec);
+    }
+    if (ec) {
+      CANOPEN_LOG_WARN("axis={} node={}: OnBoot pre-init controlword write failed",
+                       axis_index_, static_cast<int>(id()));
+    }
+    CANOPEN_LOG_INFO("axis={} node={}: OnBoot tpdo pre-initialized (mode=CSP, cw=Shutdown)",
+                     axis_index_, static_cast<int>(id()));
+  }
+
+  if (!verify_pdo_mapping_) {
+    pdo_verified_.store(true);
+    pdo_verification_done_.store(true);
+    return;
+  }
+
+  if (pdo_verification_done_.load()) {
+    return;
+  }
+
   if (!expected_pdo_loaded_ || !expected_pdo_) {
     CANOPEN_LOG_WARN("axis={} node={}: DCF not loaded, skip PDO verify",
                      axis_index_, static_cast<int>(id()));
@@ -317,9 +554,11 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
       pdo_verified_.store(false);
       pdo_verification_done_.store(true);
       if (error.find("timeout") != std::string::npos) {
-        logic_.mutable_health().pdo_verify_timeout.fetch_add(1, std::memory_order_relaxed);
+        logic_.mutable_health().pdo_verify_timeout.fetch_add(1,
+                                                             std::memory_order_relaxed);
       } else {
-        logic_.mutable_health().pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
+        logic_.mutable_health().pdo_verify_fail.fetch_add(1,
+                                                          std::memory_order_relaxed);
       }
       return;
     }
@@ -332,12 +571,14 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
         CANOPEN_LOG_WARN("  {}", diff);
       }
       pdo_verified_.store(false);
-      logic_.mutable_health().pdo_verify_fail.fetch_add(1, std::memory_order_relaxed);
+      logic_.mutable_health().pdo_verify_fail.fetch_add(1,
+                                                        std::memory_order_relaxed);
     } else {
       CANOPEN_LOG_INFO("axis={} node={}: PDO mapping verified",
                        axis_index_, static_cast<int>(id()));
       pdo_verified_.store(true);
-      logic_.mutable_health().pdo_verify_ok.fetch_add(1, std::memory_order_relaxed);
+      logic_.mutable_health().pdo_verify_ok.fetch_add(1,
+                                                      std::memory_order_relaxed);
     }
 
     pdo_verification_done_.store(true);

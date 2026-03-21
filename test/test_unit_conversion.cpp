@@ -42,13 +42,15 @@ TEST(UnitConversion, CustomAxisConversion) {
   EXPECT_LT(hw.joint_effort(1), 5.01);
 }
 
-TEST(UnitConversion, NotOperationalSkipsWrite) {
+TEST(UnitConversion, NotOperationalStillWritesPosition) {
   canopen_hw::SharedState shared(3);
   canopen_hw::CanopenRobotHw hw(&shared);
 
-  // all_operational=false 时 write() 不应覆盖命令
+  // all_operational=false 时仍应写入位置目标，速度/力矩保持 0。
   canopen_hw::AxisCommand cmd_before;
   cmd_before.target_position = 777;
+  cmd_before.target_velocity = 123;
+  cmd_before.target_torque = 456;
   shared.UpdateCommand(2, cmd_before);
 
   canopen_hw::AxisFeedback fb0;
@@ -60,5 +62,7 @@ TEST(UnitConversion, NotOperationalSkipsWrite) {
   hw.SetJointCommand(2, 1.23);
   hw.WriteToSharedState();
   const auto snap = shared.Snapshot();
-  EXPECT_EQ(snap.commands[2].target_position, 777);
+  EXPECT_NE(snap.commands[2].target_position, 777);
+  EXPECT_EQ(snap.commands[2].target_velocity, 0);
+  EXPECT_EQ(snap.commands[2].target_torque, 0);
 }

@@ -61,6 +61,9 @@ CiA402State CiA402StateMachine::DecodeState(uint16_t statusword) {
 
 void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
                                 int32_t actual_position) {
+  // mode_display 不再用于状态机内部门控逻辑（见 ReadyToSwitchOn 分支注释），
+  // 由调用层（AxisLogic/AxisDriver）负责存储和上报。
+  (void)mode_display;
   last_actual_position_ = actual_position;
 
   const CiA402State prev_state = state_;
@@ -99,12 +102,12 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       break;
 
     case CiA402State::ReadyToSwitchOn:
-      // 仅当模式显示与目标模式一致时才允许直接 0x000F 跳级使能。
-      if (enable_requested_ && mode_display == target_mode_) {
-        controlword_ = kCtrl_EnableOperation;
-      } else {
-        controlword_ = kCtrl_Shutdown;
-      }
+      // mode_of_operation 由主站每帧写出（tpdo_mapped[0x6060]），
+      // 不用 mode_display 来门控使能序列：
+      //   1. 驱动器在 SwitchOnDisabled/ReadyToSwitchOn 时可以接受模式写入；
+      //   2. 用 mode_display 门控会造成"模式未生效→不发使能→永远等待"的死锁；
+      //   3. 若进入 OperationEnabled 后 mode_display 仍不对，上层可检测并处理。
+      controlword_ = enable_requested_ ? kCtrl_EnableOperation : kCtrl_Shutdown;
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;

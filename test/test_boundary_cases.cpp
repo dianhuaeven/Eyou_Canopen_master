@@ -120,9 +120,9 @@ TEST(Boundary, Int32ExtremePositionSameValue) {
   EXPECT_TRUE(sm.is_operational());
 }
 
-TEST(Boundary, Int32ExtremeAbsDiffKeepsLocked) {
-  // 修复后: AbsDiff(INT32_MAX, INT32_MIN) 以 int64 比较，
-  // 极大差值应保持位置锁定，禁止误解锁。
+TEST(Boundary, Int32ExtremeAbsDiffAutoAlignsAndUnlocks) {
+  // 大偏差场景下，CSP 会先自动重基准到当前实际位置，
+  // 避免长期停留在 not operational。
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
   sm.Update(0x0040, kMode_CSP, INT32_MIN);
@@ -130,7 +130,9 @@ TEST(Boundary, Int32ExtremeAbsDiffKeepsLocked) {
   sm.set_ros_target(INT32_MAX);  // 最大差值
   sm.Update(0x0027, kMode_CSP, INT32_MIN);
 
-  EXPECT_TRUE(sm.is_position_locked());
+  EXPECT_FALSE(sm.is_position_locked());
+  EXPECT_TRUE(sm.is_operational());
+  EXPECT_EQ(sm.safe_target(), INT32_MIN);
 }
 
 // --- 故障复位次数耗尽 ---

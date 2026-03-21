@@ -1,14 +1,16 @@
 <launch>
+  <param name="robot_description" textfile="$(find Eyou_Canopen_Master)/urdf/robot.urdf"/>
+
   <!-- 配置文件路径 -->
-  <arg name="dcf_path"    default="$(find canopen_hw)/config/master.dcf"/>
-  <arg name="joints_path" default="$(find canopen_hw)/config/joints.yaml"/>
+  <arg name="dcf_path"    default="$(find Eyou_Canopen_Master)/config/master.dcf"/>
+  <arg name="joints_path" default="$(find Eyou_Canopen_Master)/config/joints.yaml"/>
   <arg name="loop_hz"     default="100.0"/>
 
   <!-- 加载 controller 参数 -->
-  <rosparam file="$(find canopen_hw)/config/ros/controllers.yaml" command="load"/>
+  <rosparam file="$(find Eyou_Canopen_Master)/config/ros/controllers.yaml" command="load"/>
 
   <!-- CANopen 硬件节点 -->
-  <node name="canopen_hw_node" pkg="canopen_hw" type="canopen_hw_ros_node" output="screen">
+  <node name="canopen_hw_node" pkg="Eyou_Canopen_Master" type="canopen_hw_ros_node" output="screen">
     <param name="dcf_path"    value="$(arg dcf_path)"/>
     <param name="joints_path" value="$(arg joints_path)"/>
     <param name="loop_hz"     value="$(arg loop_hz)"/>
@@ -21,6 +23,6 @@
   <node name="controller_spawner_stopped" pkg="controller_manager" type="spawner"
         args="--stopped arm_velocity_controller" output="screen"/>
 
-  <!-- robot_state_publisher（需要 URDF 加载到 robot_description） -->
-  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+  <!-- robot_state_publisher（需要 URDF 加载到 robot_description，暂时禁用） -->
+  <!-- <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/> -->
 </launch>

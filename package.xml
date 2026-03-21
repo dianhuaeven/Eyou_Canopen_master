@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>canopen_hw</name>
+  <name>Eyou_Canopen_Master</name>
   <version>0.1.0</version>
   <description>CANopen robot hardware interface with ros_control adapter</description>
   <maintainer email="2733239989@qq.com">dianhua</maintainer>
