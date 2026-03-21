@@ -123,7 +123,18 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       break;
 
     case CiA402State::OperationEnabled:
-      controlword_ = enable_requested_ ? kCtrl_EnableOperation : kCtrl_DisableOperation;
+      controlword_ =
+          enable_requested_ ? kCtrl_EnableOperation : kCtrl_DisableOperation;
+      if (!enable_requested_) {
+        // 收到 disable 请求后，立即退出可运行态并回收安全目标，
+        // 不再透传速度/力矩命令，等待状态字回落。
+        is_operational_ = false;
+        position_locked_ = true;
+        safe_target_ = actual_position;
+        safe_target_velocity_ = 0;
+        safe_target_torque_ = 0;
+        break;
+      }
       StepOperationEnabled(actual_position);
       break;
 
@@ -247,7 +258,7 @@ void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
       return;
     }
     position_locked_ = false;
-    safe_target_ = actual_position;  // 位置跟随实际���防止意外切回 CSP 时跳变。
+    safe_target_ = actual_position;  // 位置跟随实际值，防止切回 CSP 时跳变。
     safe_target_velocity_ = ros_target_velocity_;
     safe_target_torque_ = ros_target_torque_;
     is_operational_ = true;
@@ -259,6 +270,13 @@ void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
     safe_target_ = actual_position;
     safe_target_velocity_ = 0;
     safe_target_torque_ = 0;
+
+    // 启动阶段若目标与实际偏差过大，先将内部目标重基准到当前实际值，
+    // 避免长期停留在 not operational（命令链路无法收敛）。
+    if (AbsDiff(ros_target_, actual_position) >
+        static_cast<int64_t>(position_lock_threshold_)) {
+      ros_target_ = actual_position;
+    }
 
     if (AbsDiff(ros_target_, actual_position) <=
         static_cast<int64_t>(position_lock_threshold_)) {

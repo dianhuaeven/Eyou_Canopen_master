@@ -4,10 +4,12 @@
 
 using canopen_hw::CiA402State;
 using canopen_hw::CiA402StateMachine;
+using canopen_hw::kCtrl_DisableOperation;
 using canopen_hw::kCtrl_EnableOperation;
 using canopen_hw::kCtrl_FaultReset;
 using canopen_hw::kCtrl_Shutdown;
 using canopen_hw::kMode_CSP;
+using canopen_hw::kMode_CSV;
 
 TEST(CiA402SM, SwitchOnDisabledSendsShutdown) {
   CiA402StateMachine sm;
@@ -28,17 +30,20 @@ TEST(CiA402SM, ReadyToSwitchOnJumpEnable) {
   EXPECT_EQ(sm.controlword(), kCtrl_EnableOperation);
 }
 
-TEST(CiA402SM, FirstOperationEnabledLocksPosition) {
+TEST(CiA402SM, FirstOperationEnabledAutoAlignsFarTarget) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
 
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
 
+  // 目标位置与实际位置差距很大时，状态机会自动重基准，
+  // 避免长期停留在 not operational。
   sm.set_ros_target(500000);
   sm.Update(0x0027, kMode_CSP, 12345);
   EXPECT_EQ(sm.state(), CiA402State::OperationEnabled);
-  EXPECT_TRUE(sm.is_position_locked());
+  EXPECT_FALSE(sm.is_position_locked());
+  EXPECT_TRUE(sm.is_operational());
   EXPECT_EQ(sm.safe_target(), 12345);
 }
 
@@ -49,14 +54,11 @@ TEST(CiA402SM, RosTargetCloseUnlocks) {
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
 
-  sm.set_ros_target(500000);
-  sm.Update(0x0027, kMode_CSP, 12345);
-  EXPECT_TRUE(sm.is_position_locked());
-
   sm.set_ros_target(12350);
   sm.Update(0x0027, kMode_CSP, 12348);
   EXPECT_FALSE(sm.is_position_locked());
   EXPECT_TRUE(sm.is_operational());
+  EXPECT_EQ(sm.safe_target(), 12350);
 }
 
 TEST(CiA402SM, FaultResetThreePhaseFlow) {
@@ -84,4 +86,29 @@ TEST(CiA402SM, FaultResetThreePhaseFlow) {
   sm.Update(0x0008, kMode_CSP, 12348);
   EXPECT_EQ(sm.controlword(), kCtrl_FaultReset);
   EXPECT_EQ(sm.fault_reset_count(), 1);
+}
+
+TEST(CiA402SM, DisableRequestDropsOperationalInOperationEnabled) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSV);
+
+  sm.request_enable();
+  sm.set_ros_target_velocity(500);
+
+  // 进入 CSV 运行态：首帧归零，次帧解锁透传。
+  sm.Update(0x0040, kMode_CSV, 1000);
+  sm.Update(0x0021, kMode_CSV, 1000);
+  sm.Update(0x0027, kMode_CSV, 1000);
+  sm.Update(0x0027, kMode_CSV, 1000);
+  ASSERT_TRUE(sm.is_operational());
+  ASSERT_EQ(sm.safe_target_velocity(), 500);
+
+  // 即使状态字暂时仍是 OperationEnabled，收到 disable 请求后也应立即回落。
+  sm.request_disable();
+  sm.Update(0x0027, kMode_CSV, 1000);
+
+  EXPECT_EQ(sm.controlword(), kCtrl_DisableOperation);
+  EXPECT_FALSE(sm.is_operational());
+  EXPECT_EQ(sm.safe_target_velocity(), 0);
+  EXPECT_EQ(sm.safe_target_torque(), 0);
 }
