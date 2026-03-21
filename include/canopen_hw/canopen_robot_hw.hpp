@@ -31,8 +31,8 @@ class CanopenRobotHw {
   void ReadFromSharedState();
 
   // 对应 RobotHW::write():
-  // 当 all_operational=true 时将本地命令写入 SharedState。
-  // 若系统不满足可运行条件，则不下发新命令。
+  // 始终刷新目标位置/模式到 SharedState；
+  // 当 all_operational=false 时，速度/力矩命令被强制清零。
   void WriteToSharedState();
 
   // 测试/上层适配接口: 设置某轴目标位置(单位: rad)。

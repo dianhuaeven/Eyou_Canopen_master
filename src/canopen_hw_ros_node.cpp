@@ -1,25 +1,21 @@
-#include <atomic>
-#include <csignal>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include <ros/ros.h>
+#include <ros/spinner.h>
 #include <controller_manager/controller_manager.h>
 #include <std_srvs/Trigger.h>
 #include <diagnostic_updater/diagnostic_updater.h>
 
-#include "canopen_hw/SetMode.h"
+#include "Eyou_Canopen_Master/SetMode.h"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
 
 namespace {
-
-std::atomic<bool> g_run{true};
-
-void HandleSignal(int) { g_run.store(false); }
 
 std::string MakeAbsolutePath(const std::string& path) {
   if (path.empty()) return path;
@@ -37,9 +33,6 @@ int main(int argc, char** argv) {
   ros::init(argc, argv, "canopen_hw_node");
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
-
-  std::signal(SIGINT, HandleSignal);
-  std::signal(SIGTERM, HandleSignal);
 
   // 从 ROS 参数读取配置文件路径。
   std::string dcf_path, joints_path;
@@ -81,11 +74,13 @@ int main(int argc, char** argv) {
 
   // ROS 适配层。
   canopen_hw::CanopenRobotHwRos robot_hw_ros(lifecycle.robot_hw(), joint_names);
+  std::mutex loop_mtx;
 
   // 生命周期 services。
   auto halt_srv = pnh.advertiseService<std_srvs::Trigger::Request,
                                        std_srvs::Trigger::Response>(
       "halt", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+        std::lock_guard<std::mutex> lk(loop_mtx);
         res.success = lifecycle.Halt();
         res.message = res.success ? "halted" : "halt failed";
         return true;
@@ -94,6 +89,7 @@ int main(int argc, char** argv) {
   auto recover_srv = pnh.advertiseService<std_srvs::Trigger::Request,
                                           std_srvs::Trigger::Response>(
       "recover", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+        std::lock_guard<std::mutex> lk(loop_mtx);
         res.success = lifecycle.Recover();
         res.message = res.success ? "recovered" : "recover failed";
         return true;
@@ -102,16 +98,20 @@ int main(int argc, char** argv) {
   auto shutdown_srv = pnh.advertiseService<std_srvs::Trigger::Request,
                                            std_srvs::Trigger::Response>(
       "shutdown", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
-        res.success = lifecycle.Shutdown();
+        {
+          std::lock_guard<std::mutex> lk(loop_mtx);
+          res.success = lifecycle.Shutdown();
+        }
         res.message = res.success ? "shutdown" : "shutdown failed";
-        g_run.store(false);
+        ros::shutdown();
         return true;
       });
 
-  auto set_mode_srv = pnh.advertiseService<canopen_hw::SetMode::Request,
-                                           canopen_hw::SetMode::Response>(
-      "set_mode", [&](canopen_hw::SetMode::Request& req,
-                      canopen_hw::SetMode::Response& res) {
+  auto set_mode_srv = pnh.advertiseService<Eyou_Canopen_Master::SetMode::Request,
+                                           Eyou_Canopen_Master::SetMode::Response>(
+      "set_mode", [&](Eyou_Canopen_Master::SetMode::Request& req,
+                      Eyou_Canopen_Master::SetMode::Response& res) {
+        std::lock_guard<std::mutex> lk(loop_mtx);
         if (req.axis_index >= robot_hw_ros.axis_count()) {
           res.success = false;
           res.message = "axis_index out of range";
@@ -161,23 +161,30 @@ int main(int argc, char** argv) {
 
   double loop_hz = 100.0;
   pnh.param("loop_hz", loop_hz, 100.0);
+  ros::AsyncSpinner spinner(2);
+  spinner.start();
   ros::Rate rate(loop_hz);
   ros::Time last_time = ros::Time::now();
 
-  while (ros::ok() && g_run.load()) {
+  while (ros::ok()) {
     const ros::Time now = ros::Time::now();
     const ros::Duration period = now - last_time;
     last_time = now;
 
-    robot_hw_ros.read(now, period);
-    cm.update(now, period);
-    robot_hw_ros.write(now, period);
-
-    diag_updater.update();
-    ros::spinOnce();
+    {
+      std::lock_guard<std::mutex> lk(loop_mtx);
+      robot_hw_ros.read(now, period);
+      cm.update(now, period);
+      robot_hw_ros.write(now, period);
+      diag_updater.update();
+    }
     rate.sleep();
   }
 
-  lifecycle.Shutdown();
+  spinner.stop();
+  {
+    std::lock_guard<std::mutex> lk(loop_mtx);
+    lifecycle.Shutdown();
+  }
   return 0;
 }

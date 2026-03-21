@@ -47,16 +47,19 @@ void CanopenRobotHw::WriteToSharedState() {
     return;
   }
 
-  // 安全策略: 只有全轴都 operational 才向底层写入新目标。
-  if (!all_operational_) {
-    return;
-  }
-
   for (std::size_t i = 0; i < axis_count_; ++i) {
     AxisCommand cmd;
     cmd.target_position = RadToTicks(i, joint_cmd_[i]);
-    cmd.target_velocity = RadPerSecToTicksPerSec(i, joint_vel_cmd_[i]);
-    cmd.target_torque = NmToTorquePermille(i, joint_torque_cmd_[i]);
+    // 允许在未 fully-operational 阶段下发位置目标，
+    // 让 CiA402 位置锁定逻辑有机会收敛到 operational；
+    // 同时保持速度/力矩为 0，避免在未就绪阶段透传动态命令。
+    if (all_operational_) {
+      cmd.target_velocity = RadPerSecToTicksPerSec(i, joint_vel_cmd_[i]);
+      cmd.target_torque = NmToTorquePermille(i, joint_torque_cmd_[i]);
+    } else {
+      cmd.target_velocity = 0;
+      cmd.target_torque = 0;
+    }
     cmd.mode_of_operation = joint_mode_[i];
     shared_state_->UpdateCommand(i, cmd);
   }

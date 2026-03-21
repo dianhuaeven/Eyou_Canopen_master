@@ -47,3 +47,19 @@ TEST(RobotHw, NullSharedStateUsesZeroAxis) {
   hw.WriteToSharedState();
   EXPECT_FALSE(hw.all_operational());
 }
+
+TEST(RobotHw, WritePositionWhileNotOperationalZerosVelocityAndTorque) {
+  canopen_hw::SharedState shared(1);
+  canopen_hw::CanopenRobotHw hw(&shared);
+
+  // 默认 all_operational=false（尚未进入可运行态）。
+  hw.SetJointCommand(0, 1.0);
+  hw.SetJointVelocityCommand(0, 2.0);
+  hw.SetJointTorqueCommand(0, 3.0);
+  hw.WriteToSharedState();
+
+  const canopen_hw::SharedSnapshot snap = shared.Snapshot();
+  EXPECT_NE(snap.commands[0].target_position, 0);
+  EXPECT_EQ(snap.commands[0].target_velocity, 0);
+  EXPECT_EQ(snap.commands[0].target_torque, 0);
+}
