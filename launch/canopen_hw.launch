@@ -2,18 +2,20 @@
   <param name="robot_description" textfile="$(find Eyou_Canopen_Master)/urdf/robot.urdf"/>
 
   <!-- 配置文件路径 -->
-  <arg name="dcf_path"    default="$(find Eyou_Canopen_Master)/config/master.dcf"/>
+  <arg name="dcf_path" default="$(find Eyou_Canopen_Master)/config/master.dcf"/>
   <arg name="joints_path" default="$(find Eyou_Canopen_Master)/config/joints.yaml"/>
-  <arg name="loop_hz"     default="100.0"/>
+  <arg name="loop_hz" default="100.0"/>
+  <arg name="auto_init" default="false"/>
 
   <!-- 加载 controller 参数 -->
   <rosparam file="$(find Eyou_Canopen_Master)/config/ros/controllers.yaml" command="load"/>
 
   <!-- CANopen 硬件节点 -->
   <node name="canopen_hw_node" pkg="Eyou_Canopen_Master" type="canopen_hw_ros_node" output="screen">
-    <param name="dcf_path"    value="$(arg dcf_path)"/>
+    <param name="dcf_path" value="$(arg dcf_path)"/>
     <param name="joints_path" value="$(arg joints_path)"/>
-    <param name="loop_hz"     value="$(arg loop_hz)"/>
+    <param name="loop_hz" value="$(arg loop_hz)"/>
+    <param name="auto_init" value="$(arg auto_init)"/>
   </node>
 
   <!-- 启动 controllers: joint_state 始终启动，position 默认启动，velocity 加载但不启动 -->

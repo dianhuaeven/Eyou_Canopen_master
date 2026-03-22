@@ -1,0 +1,44 @@
+<launch>
+  <arg name="dcf_path" default="$(find Eyou_Canopen_Master)/config/master.dcf"/>
+  <arg name="joints_path" default="$(find Eyou_Canopen_Master)/config/joints.yaml"/>
+  <arg name="controllers_file" default="$(find Eyou_Canopen_Master)/config/ros/controllers.yaml"/>
+  <arg name="loop_hz" default="100.0"/>
+  <arg name="auto_init" default="false"/>
+
+  <arg name="robot_urdf" default="$(find Eyou_Canopen_Master)/urdf/robot.urdf"/>
+  <arg name="use_robot_state_publisher" default="true"/>
+
+  <arg name="start_position_controller" default="true"/>
+  <arg name="start_velocity_controller" default="false"/>
+
+  <rosparam file="$(arg controllers_file)" command="load"/>
+
+  <node name="canopen_hw_node" pkg="Eyou_Canopen_Master" type="canopen_hw_ros_node" output="screen" required="true">
+    <param name="dcf_path" value="$(arg dcf_path)"/>
+    <param name="joints_path" value="$(arg joints_path)"/>
+    <param name="loop_hz" value="$(arg loop_hz)"/>
+    <param name="auto_init" value="$(arg auto_init)"/>
+  </node>
+
+  <node name="spawner_joint_state_controller" pkg="controller_manager" type="spawner"
+        args="joint_state_controller" output="screen"/>
+
+  <node if="$(arg start_position_controller)" name="spawner_arm_position_controller"
+        pkg="controller_manager" type="spawner"
+        args="arm_position_controller" output="screen"/>
+  <node unless="$(arg start_position_controller)" name="spawner_arm_position_controller_stopped"
+        pkg="controller_manager" type="spawner"
+        args="--stopped arm_position_controller" output="screen"/>
+
+  <node if="$(arg start_velocity_controller)" name="spawner_arm_velocity_controller"
+        pkg="controller_manager" type="spawner"
+        args="arm_velocity_controller" output="screen"/>
+  <node unless="$(arg start_velocity_controller)" name="spawner_arm_velocity_controller_stopped"
+        pkg="controller_manager" type="spawner"
+        args="--stopped arm_velocity_controller" output="screen"/>
+
+  <group if="$(arg use_robot_state_publisher)">
+    <param name="robot_description" textfile="$(arg robot_urdf)"/>
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen"/>
+  </group>
+</launch>
