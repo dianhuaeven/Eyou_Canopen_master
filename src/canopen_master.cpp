@@ -283,6 +283,147 @@ bool CanopenMaster::ResetAxisFault(std::size_t axis_index) {
   return true;
 }
 
+bool CanopenMaster::HaltAll() {
+  if (!running_.load() || axis_drivers_.empty()) {
+    return false;
+  }
+
+  bool ok = true;
+  for (const auto& axis : axis_drivers_) {
+    if (!axis) {
+      ok = false;
+      continue;
+    }
+    axis->RequestEnable();
+    axis->RequestHalt();
+  }
+  return ok;
+}
+
+bool CanopenMaster::ResumeAll() {
+  if (!running_.load() || axis_drivers_.empty()) {
+    return false;
+  }
+
+  bool ok = true;
+  for (const auto& axis : axis_drivers_) {
+    if (!axis) {
+      ok = false;
+      continue;
+    }
+    axis->RequestResume();
+    axis->RequestEnable();
+  }
+  return ok;
+}
+
+bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
+  if (detail) {
+    detail->clear();
+  }
+  if (!running_.load() || axis_drivers_.empty()) {
+    if (detail) {
+      *detail = "master not running";
+    }
+    return false;
+  }
+
+  std::vector<std::size_t> fault_axes;
+  SharedSnapshot initial_snapshot;
+  if (shared_state_) {
+    initial_snapshot = shared_state_->Snapshot();
+  }
+
+  for (std::size_t i = 0; i < axis_drivers_.size(); ++i) {
+    const auto& axis = axis_drivers_[i];
+    if (!axis) {
+      continue;
+    }
+
+    bool is_fault = false;
+    if (shared_state_ && i < initial_snapshot.feedback.size()) {
+      is_fault = initial_snapshot.feedback[i].is_fault;
+    } else {
+      const CiA402State st = axis->feedback_state();
+      is_fault = (st == CiA402State::Fault ||
+                  st == CiA402State::FaultReactionActive);
+    }
+
+    if (!is_fault) {
+      continue;
+    }
+
+    axis->ResetFault();
+    axis->RequestEnable();
+    fault_axes.emplace_back(i);
+  }
+
+  if (fault_axes.empty()) {
+    if (detail) {
+      *detail = "no faulted axis";
+    }
+    return true;
+  }
+
+  const auto deadline = std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(1500);
+  std::vector<std::size_t> pending;
+
+  while (std::chrono::steady_clock::now() < deadline) {
+    pending.clear();
+    SharedSnapshot snap;
+    if (shared_state_) {
+      snap = shared_state_->Snapshot();
+    }
+
+    for (const std::size_t axis_index : fault_axes) {
+      bool still_fault = false;
+      if (shared_state_ && axis_index < snap.feedback.size()) {
+        still_fault = snap.feedback[axis_index].is_fault;
+      } else if (axis_index < axis_drivers_.size() && axis_drivers_[axis_index]) {
+        const CiA402State st = axis_drivers_[axis_index]->feedback_state();
+        still_fault = (st == CiA402State::Fault ||
+                       st == CiA402State::FaultReactionActive);
+      }
+      if (still_fault) {
+        pending.emplace_back(axis_index);
+      }
+    }
+
+    if (pending.empty()) {
+      return true;
+    }
+
+    if (shared_state_) {
+      shared_state_->WaitForStateChange(
+          std::min(deadline,
+                   std::chrono::steady_clock::now() +
+                       std::chrono::milliseconds(20)));
+    } else {
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+  }
+
+  if (detail) {
+    std::ostringstream oss;
+    oss << "fault reset failed for axes: ";
+    for (std::size_t i = 0; i < pending.size(); ++i) {
+      if (i > 0) {
+        oss << ", ";
+      }
+      oss << pending[i];
+      if (pending[i] < config_.joints.size()) {
+        oss << "(node=" << static_cast<int>(config_.joints[pending[i]].node_id)
+            << ")";
+      }
+    }
+    oss << "; try /init to reinitialize";
+    *detail = oss.str();
+  }
+
+  return false;
+}
+
 void CanopenMaster::EmergencyStop() {
   for (const auto& axis : axis_drivers_) {
     if (axis) {

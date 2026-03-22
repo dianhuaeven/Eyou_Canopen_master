@@ -75,6 +75,13 @@ class CanopenMaster {
   bool DisableAxis(std::size_t axis_index);
   bool ResetAxisFault(std::size_t axis_index);
 
+  // 全轴轻量级 halt/resume（保持 Operation Enabled）。
+  bool HaltAll();
+  bool ResumeAll();
+
+  // 仅对 fault 轴执行复位+重使能；失败时 detail 带提示。
+  bool RecoverFaultedAxes(std::string* detail = nullptr);
+
   // 全轴紧急停止: 对所有轴发送 DisableVoltage。
   void EmergencyStop();
 
