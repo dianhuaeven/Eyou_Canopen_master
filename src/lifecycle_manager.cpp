@@ -138,6 +138,16 @@ bool LifecycleManager::Resume() {
     return false;
   }
 
+  if (shared_state_ && shared_state_->GetGlobalFault()) {
+    CANOPEN_LOG_WARN("Resume rejected: global fault latch active, call recover first");
+    return false;
+  }
+
+  if (shared_state_ && shared_state_->GetAllAxesHaltedByFault()) {
+    CANOPEN_LOG_WARN("Resume rejected: all axes halted by fault, call recover first");
+    return false;
+  }
+
   if (!master_ || !master_->running()) {
     CANOPEN_LOG_ERROR("Resume: master not running");
     return false;
@@ -220,6 +230,10 @@ bool LifecycleManager::StopCommunication(std::string* detail) {
 
   // 即使 402 失能超时，也继续执行通信停机，避免 service 卡死。
   master_->Stop();
+  if (shared_state_) {
+    shared_state_->SetGlobalFault(false);
+    shared_state_->SetAllAxesHaltedByFault(false);
+  }
   state_ = LifecycleState::Configured;
   require_init_ = true;
   halted_ = false;
@@ -274,11 +288,37 @@ bool LifecycleManager::Recover(std::string* detail) {
     if (detail) {
       *detail = msg;
     }
+    if (shared_state_) {
+      shared_state_->SetGlobalFault(true);
+      shared_state_->SetAllAxesHaltedByFault(true);
+    }
     return false;
   }
 
   if (detail && !recover_detail.empty()) {
     *detail = recover_detail;
+  }
+
+  if (shared_state_) {
+    const SharedSnapshot snap = shared_state_->Snapshot();
+    bool all_cleared = true;
+    for (const auto& fb : snap.feedback) {
+      if (fb.is_fault) {
+        all_cleared = false;
+        break;
+      }
+    }
+    if (!all_cleared) {
+      if (detail && detail->empty()) {
+        *detail = "recover incomplete: fault still present";
+      }
+      shared_state_->SetGlobalFault(true);
+      shared_state_->SetAllAxesHaltedByFault(true);
+      CANOPEN_LOG_WARN("Recover incomplete: fault latch kept active");
+      return false;
+    }
+    shared_state_->SetGlobalFault(false);
+    shared_state_->SetAllAxesHaltedByFault(false);
   }
 
   CANOPEN_LOG_INFO("LifecycleManager: Active (fault recovered)");
