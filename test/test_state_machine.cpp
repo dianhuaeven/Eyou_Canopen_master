@@ -12,6 +12,23 @@ using canopen_hw::kCtrl_Shutdown;
 using canopen_hw::kMode_CSP;
 using canopen_hw::kMode_CSV;
 
+namespace {
+
+void EnterOperationEnabledAndUnlockCsp(CiA402StateMachine* sm,
+                                       int32_t actual,
+                                       int32_t target) {
+  sm->set_target_mode(kMode_CSP);
+  sm->Update(0x0040, kMode_CSP, actual);
+  sm->Update(0x0021, kMode_CSP, actual);
+  // 首帧进入 OP：epoch 递增，默认不解锁。
+  sm->Update(0x0027, kMode_CSP, actual);
+  const uint32_t epoch = sm->arm_epoch();
+  sm->SetExternalPositionCommand(target, true, epoch);
+  sm->Update(0x0027, kMode_CSP, actual);
+}
+
+}  // namespace
+
 TEST(CiA402SM, SwitchOnDisabledSendsShutdown) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
@@ -41,36 +58,50 @@ TEST(CiA402SM, ReadyToSwitchOnEnablesEvenIfModeDisplayIsZero) {
   // mode_display=0（驱动器因收到 mode=0 而清除了模式）
   sm.Update(0x0021, /*mode_display=*/0, 100);
   EXPECT_EQ(sm.state(), CiA402State::ReadyToSwitchOn);
-  // 修复后：仍应发 EnableOperation，不因 mode_display 不匹配而卡住
   EXPECT_EQ(sm.controlword(), kCtrl_EnableOperation);
 }
 
-TEST(CiA402SM, FirstOperationEnabledAutoAlignsFarTarget) {
+TEST(CiA402SM, FirstOperationEnabledStaysLockedUntilValidEpochCommand) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
 
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
-
-  // 目标位置与实际位置差距很大时，状态机会自动重基准，
-  // 避免长期停留在 not operational。
-  sm.set_ros_target(500000);
   sm.Update(0x0027, kMode_CSP, 12345);
+
   EXPECT_EQ(sm.state(), CiA402State::OperationEnabled);
-  EXPECT_FALSE(sm.is_position_locked());
-  EXPECT_TRUE(sm.is_operational());
+  EXPECT_TRUE(sm.is_position_locked());
+  EXPECT_FALSE(sm.is_operational());
   EXPECT_EQ(sm.safe_target(), 12345);
 }
 
-TEST(CiA402SM, RosTargetCloseUnlocks) {
+TEST(CiA402SM, EpochMismatchKeepsLocked) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
 
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
+  sm.Update(0x0027, kMode_CSP, 100);
 
-  sm.set_ros_target(12350);
+  const uint32_t bad_epoch = sm.arm_epoch() + 1;
+  sm.SetExternalPositionCommand(100, true, bad_epoch);
+  sm.Update(0x0027, kMode_CSP, 100);
+
+  EXPECT_TRUE(sm.is_position_locked());
+  EXPECT_FALSE(sm.is_operational());
+}
+
+TEST(CiA402SM, RosTargetCloseUnlocksWithValidEpoch) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  sm.Update(0x0021, kMode_CSP, 100);
   sm.Update(0x0027, kMode_CSP, 12348);
+
+  sm.SetExternalPositionCommand(12350, true, sm.arm_epoch());
+  sm.Update(0x0027, kMode_CSP, 12348);
+
   EXPECT_FALSE(sm.is_position_locked());
   EXPECT_TRUE(sm.is_operational());
   EXPECT_EQ(sm.safe_target(), 12350);
@@ -78,14 +109,7 @@ TEST(CiA402SM, RosTargetCloseUnlocks) {
 
 TEST(CiA402SM, FaultResetThreePhaseFlow) {
   CiA402StateMachine sm;
-  sm.set_target_mode(kMode_CSP);
-
-  sm.Update(0x0040, kMode_CSP, 100);
-  sm.Update(0x0021, kMode_CSP, 100);
-  sm.set_ros_target(500000);
-  sm.Update(0x0027, kMode_CSP, 12345);
-  sm.set_ros_target(12350);
-  sm.Update(0x0027, kMode_CSP, 12348);
+  EnterOperationEnabledAndUnlockCsp(&sm, 12348, 12350);
 
   sm.set_fault_reset_policy(2, 5, 2);
 
@@ -108,13 +132,12 @@ TEST(CiA402SM, DisableRequestDropsOperationalInOperationEnabled) {
   sm.set_target_mode(kMode_CSV);
 
   sm.request_enable();
-  sm.set_ros_target_velocity(500);
-
-  // 进入 CSV 运行态：首帧归零，次帧解锁透传。
   sm.Update(0x0040, kMode_CSV, 1000);
   sm.Update(0x0021, kMode_CSV, 1000);
-  sm.Update(0x0027, kMode_CSV, 1000);
-  sm.Update(0x0027, kMode_CSV, 1000);
+  sm.Update(0x0027, kMode_CSV, 1000);  // 首帧，epoch 产生
+
+  sm.set_ros_target_velocity(500);     // 绑定当前 epoch
+  sm.Update(0x0027, kMode_CSV, 1000);  // 次帧解锁
   ASSERT_TRUE(sm.is_operational());
   ASSERT_EQ(sm.safe_target_velocity(), 500);
 
@@ -133,12 +156,12 @@ TEST(CiA402SM, HaltBitFreezesTargetsAndResumeClearsBit) {
   sm.set_target_mode(kMode_CSV);
 
   sm.request_enable();
-  sm.set_ros_target_velocity(500);
-
   sm.Update(0x0040, kMode_CSV, 1000);
   sm.Update(0x0021, kMode_CSV, 1000);
-  sm.Update(0x0027, kMode_CSV, 1000);  // CSV 首帧
-  sm.Update(0x0027, kMode_CSV, 1000);  // CSV 解锁
+  sm.Update(0x0027, kMode_CSV, 1000);  // 首帧
+
+  sm.set_ros_target_velocity(500);
+  sm.Update(0x0027, kMode_CSV, 1000);  // 次帧解锁
   ASSERT_TRUE(sm.is_operational());
   ASSERT_EQ(sm.safe_target_velocity(), 500);
 

@@ -104,34 +104,32 @@ TEST(Boundary, NodeIdOutOfRange) {
 
 // --- int32 极值位置 ---
 
-TEST(Boundary, Int32ExtremePositionSameValue) {
-  // ros_target == actual_position 时应能正常解锁
+TEST(Boundary, Int32ExtremePositionSameValueUnlocksWithValidEpoch) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
 
   sm.Update(0x0040, kMode_CSP, INT32_MAX);
   sm.Update(0x0021, kMode_CSP, INT32_MAX);
-  sm.set_ros_target(INT32_MAX);
+  sm.Update(0x0027, kMode_CSP, INT32_MAX);  // 首帧，epoch 产生
+  sm.SetExternalPositionCommand(INT32_MAX, true, sm.arm_epoch());
   sm.Update(0x0027, kMode_CSP, INT32_MAX);
 
-  // ros_target == actual, AbsDiff=0 <= threshold，应解锁
   EXPECT_EQ(sm.safe_target(), INT32_MAX);
   EXPECT_FALSE(sm.is_position_locked());
   EXPECT_TRUE(sm.is_operational());
 }
 
-TEST(Boundary, Int32ExtremeAbsDiffAutoAlignsAndUnlocks) {
-  // 大偏差场景下，CSP 会先自动重基准到当前实际位置，
-  // 避免长期停留在 not operational。
+TEST(Boundary, Int32ExtremeAbsDiffStaysLockedWithoutReasonableTarget) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
   sm.Update(0x0040, kMode_CSP, INT32_MIN);
   sm.Update(0x0021, kMode_CSP, INT32_MIN);
-  sm.set_ros_target(INT32_MAX);  // 最大差值
+  sm.Update(0x0027, kMode_CSP, INT32_MIN);  // 首帧，epoch 产生
+  sm.SetExternalPositionCommand(INT32_MAX, true, sm.arm_epoch());
   sm.Update(0x0027, kMode_CSP, INT32_MIN);
 
-  EXPECT_FALSE(sm.is_position_locked());
-  EXPECT_TRUE(sm.is_operational());
+  EXPECT_TRUE(sm.is_position_locked());
+  EXPECT_FALSE(sm.is_operational());
   EXPECT_EQ(sm.safe_target(), INT32_MIN);
 }
 
@@ -142,48 +140,40 @@ TEST(Boundary, FaultResetMaxAttemptsReached) {
   sm.set_target_mode(kMode_CSP);
   sm.set_fault_reset_policy(1, 2, 2);  // hold=1, wait=2, max=2
 
-  // 推进到 OperationEnabled
+  // 推进到 OperationEnabled 并解锁
   sm.Update(0x0040, kMode_CSP, 100);  // SwitchOnDisabled
   sm.Update(0x0021, kMode_CSP, 100);  // ReadyToSwitchOn
-  sm.set_ros_target(100);
-  sm.Update(0x0027, kMode_CSP, 100);  // OperationEnabled
+  sm.Update(0x0027, kMode_CSP, 100);  // OperationEnabled first frame
+  sm.SetExternalPositionCommand(100, true, sm.arm_epoch());
+  sm.Update(0x0027, kMode_CSP, 100);
   ASSERT_TRUE(sm.is_operational());
 
   // 进入 Fault (statusword=0x0008)
-  // 注: 0x0008 对应 Fault (kState_Fault=0x08), 不经过 FaultReactionActive
   sm.Update(0x0008, kMode_CSP, 100);
   ASSERT_EQ(sm.state(), CiA402State::Fault);
 
-  // 首次进入 Fault: fault_phase_ = Idle -> HoldLow, phase_cycles_=0
-  // 本次 Update 里 phase_cycles 增到 1, hold_low_cycles_=1, 所以直接转到 SendEdge
-  // 下一次 Update 才执行 SendEdge
-
-  // 第一次复位尝试:
-  // 上面的 Update(0x0008) 已经走了 HoldLow 且 phase_cycles==1==hold, 转到 SendEdge
-  sm.Update(0x0008, kMode_CSP, 100);  // SendEdge: 发 FaultReset, 转 WaitRecovery
+  // 第一次复位尝试
+  sm.Update(0x0008, kMode_CSP, 100);  // SendEdge
   EXPECT_EQ(sm.controlword(), kCtrl_FaultReset);
   EXPECT_EQ(sm.fault_reset_count(), 1);
 
   // WaitRecovery: wait=2 周期
-  sm.Update(0x0008, kMode_CSP, 100);  // WaitRecovery wait_cycles_=1
-  sm.Update(0x0008, kMode_CSP, 100);  // WaitRecovery wait_cycles_=2 >= max_wait(2), 回到 HoldLow
+  sm.Update(0x0008, kMode_CSP, 100);
+  sm.Update(0x0008, kMode_CSP, 100);
 
-  // 第二次复位尝试:
-  sm.Update(0x0008, kMode_CSP, 100);  // HoldLow phase_cycles_=1 >= hold(1), 转 SendEdge
-  sm.Update(0x0008, kMode_CSP, 100);  // SendEdge: 发 FaultReset
+  // 第二次复位尝试
+  sm.Update(0x0008, kMode_CSP, 100);
+  sm.Update(0x0008, kMode_CSP, 100);
   EXPECT_EQ(sm.controlword(), kCtrl_FaultReset);
   EXPECT_EQ(sm.fault_reset_count(), 2);
 
-  // WaitRecovery 超时
-  sm.Update(0x0008, kMode_CSP, 100);  // WaitRecovery wait_cycles_=1
-  sm.Update(0x0008, kMode_CSP, 100);  // WaitRecovery wait_cycles_=2 >= max_wait(2)
+  sm.Update(0x0008, kMode_CSP, 100);
+  sm.Update(0x0008, kMode_CSP, 100);
 
-  // fault_reset_count==2 == max, 应进入 PermanentFault
   sm.Update(0x0008, kMode_CSP, 100);
   EXPECT_EQ(sm.controlword(), kCtrl_DisableVoltage);
-  EXPECT_EQ(sm.fault_reset_count(), 2);  // 不再增长
+  EXPECT_EQ(sm.fault_reset_count(), 2);
 
-  // 再多跑几个周期，确认不会再发 FaultReset
   sm.Update(0x0008, kMode_CSP, 100);
   sm.Update(0x0008, kMode_CSP, 100);
   EXPECT_EQ(sm.controlword(), kCtrl_DisableVoltage);
