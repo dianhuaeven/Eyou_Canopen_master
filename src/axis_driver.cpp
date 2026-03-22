@@ -281,14 +281,12 @@ void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
   (void)idx;
   (void)subidx;
 
-  // 从 SharedState 读取 ROS 侧命令并注入 AxisLogic。
+  // 从 SharedState 读取上层命令包并注入 AxisLogic。
   if (shared_state_) {
     AxisCommand cmd;
     if (shared_state_->GetCommand(axis_index_, &cmd)) {
-      logic_.SetRosTarget(cmd.target_position);
-      logic_.SetRosTargetVelocity(cmd.target_velocity);
-      logic_.SetRosTargetTorque(cmd.target_torque);
-      logic_.SetTargetMode(cmd.mode_of_operation);
+      logic_.SetExternalCommand(cmd);
+      logic_.SetGlobalFault(shared_state_->GetGlobalFault());
     }
   }
 

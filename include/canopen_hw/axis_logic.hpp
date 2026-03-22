@@ -37,6 +37,8 @@ class AxisLogic {
   void SetRosTargetVelocity(int32_t target_velocity);
   void SetRosTargetTorque(int16_t target_torque);
   void SetTargetMode(int8_t mode);
+  void SetExternalCommand(const AxisCommand& command);
+  void SetGlobalFault(bool global_fault);
   void RequestEnable();
   void RequestDisable();
   void RequestHalt();

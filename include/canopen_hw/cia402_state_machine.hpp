@@ -56,6 +56,14 @@ class CiA402StateMachine {
     cmd_epoch_ = arm_epoch;
   }
 
+  void SetExternalVelocityCommand(int32_t target) {
+    ros_target_velocity_ = target;
+  }
+
+  void SetExternalTorqueCommand(int16_t target) {
+    ros_target_torque_ = target;
+  }
+
   // 兼容接口：旧调用路径保持可编译。
   void set_ros_target(int32_t target) {
     ros_target_ = target;

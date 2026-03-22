@@ -20,9 +20,18 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
   int16_t safe_target_torque = 0;
   int8_t safe_mode = kMode_CSP;
   uint16_t controlword = 0;
+  bool fault_detected = false;
 
   {
     std::lock_guard<std::mutex> lk(mtx_);
+
+    if (shared_state_) {
+      const bool global_fault = shared_state_->GetGlobalFault();
+      state_machine_.set_global_fault(global_fault);
+      if (global_fault) {
+        state_machine_.set_forced_halt_by_fault(true);
+      }
+    }
 
     feedback_cache_.actual_position = actual_position;
     feedback_cache_.actual_velocity = actual_velocity;
@@ -36,6 +45,8 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
     feedback_cache_.state = state_machine_.state();
     feedback_cache_.is_operational = state_machine_.is_operational();
     feedback_cache_.is_fault = state_machine_.is_fault();
+    feedback_cache_.arm_epoch = state_machine_.arm_epoch();
+    fault_detected = feedback_cache_.is_fault;
     health_.fault_reset_attempts.store(
         static_cast<uint32_t>(state_machine_.fault_reset_count()),
         std::memory_order_relaxed);
@@ -49,6 +60,10 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
   PublishSnapshot();
 
   if (shared_state_) {
+    if (fault_detected) {
+      shared_state_->SetGlobalFault(true);
+      shared_state_->SetAllAxesHaltedByFault(true);
+    }
     shared_state_->RecomputeAllOperational();
   }
 
@@ -83,7 +98,7 @@ void AxisLogic::ProcessHeartbeat(bool lost) {
     } else {
       feedback_cache_.is_fault = state_machine_.is_fault();
       feedback_cache_.is_operational =
-          state_machine_.is_operational() && !feedback_cache_.is_fault;
+          state_machine_.is_operational() && (feedback_cache_.is_fault == false);
     }
   }
   if (lost) {
@@ -95,6 +110,10 @@ void AxisLogic::ProcessHeartbeat(bool lost) {
   }
   PublishSnapshot();
   if (shared_state_) {
+    if (lost) {
+      shared_state_->SetGlobalFault(true);
+      shared_state_->SetAllAxesHaltedByFault(true);
+    }
     shared_state_->RecomputeAllOperational();
   }
 }
@@ -126,6 +145,23 @@ void AxisLogic::SetRosTargetTorque(int16_t target_torque) {
 void AxisLogic::SetTargetMode(int8_t mode) {
   std::lock_guard<std::mutex> lk(mtx_);
   state_machine_.set_target_mode(mode);
+}
+
+void AxisLogic::SetExternalCommand(const AxisCommand& command) {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.set_target_mode(command.mode_of_operation);
+  state_machine_.SetExternalPositionCommand(
+      command.target_position, command.valid, command.arm_epoch);
+  state_machine_.SetExternalVelocityCommand(command.target_velocity);
+  state_machine_.SetExternalTorqueCommand(command.target_torque);
+}
+
+void AxisLogic::SetGlobalFault(bool global_fault) {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.set_global_fault(global_fault);
+  if (global_fault) {
+    state_machine_.set_forced_halt_by_fault(true);
+  }
 }
 
 void AxisLogic::RequestEnable() {
@@ -169,7 +205,7 @@ CiA402State AxisLogic::feedback_state() const {
 }
 
 void AxisLogic::PublishSnapshot() {
-  if (!shared_state_) return;
+  if (shared_state_ == nullptr) return;
 
   AxisFeedback feedback_snapshot;
   AxisSafeCommand safe_cmd;
