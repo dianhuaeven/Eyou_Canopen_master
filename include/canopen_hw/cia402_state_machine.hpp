@@ -49,14 +49,44 @@ class CiA402StateMachine {
 
   bool halt_requested() const { return halt_requested_; }
 
-  // 设置上层(ROS)期望位置。
-  void set_ros_target(int32_t target) { ros_target_ = target; }
+  // 新协议：写入上层位置命令及命令元数据。
+  void SetExternalPositionCommand(int32_t target, bool valid, uint32_t arm_epoch) {
+    ros_target_ = target;
+    cmd_valid_ = valid;
+    cmd_epoch_ = arm_epoch;
+  }
+
+  // 兼容接口：旧调用路径保持可编译。
+  void set_ros_target(int32_t target) {
+    ros_target_ = target;
+    cmd_valid_ = true;
+    cmd_epoch_ = arm_epoch_;
+  }
 
   // 设置上层(ROS)期望速度。
-  void set_ros_target_velocity(int32_t target) { ros_target_velocity_ = target; }
+  void set_ros_target_velocity(int32_t target) {
+    ros_target_velocity_ = target;
+    cmd_valid_ = true;
+    cmd_epoch_ = arm_epoch_;
+  }
 
   // 设置上层(ROS)期望力矩。
-  void set_ros_target_torque(int16_t target) { ros_target_torque_ = target; }
+  void set_ros_target_torque(int16_t target) {
+    ros_target_torque_ = target;
+    cmd_valid_ = true;
+    cmd_epoch_ = arm_epoch_;
+  }
+
+  // 全局故障闩锁输入（由外部协调层/AxisLogic 注入）。
+  void set_global_fault(bool fault) {
+    global_fault_ = fault;
+    if (fault == false) {
+      forced_halt_by_fault_ = false;
+    }
+  }
+
+  void set_forced_halt_by_fault(bool forced) { forced_halt_by_fault_ = forced; }
+  bool forced_halt_by_fault() const { return forced_halt_by_fault_; }
 
   // 获取经过”无扰锁定”后的安全目标。
   int32_t safe_target() const { return safe_target_; }
@@ -64,12 +94,21 @@ class CiA402StateMachine {
   int16_t safe_target_torque() const { return safe_target_torque_; }
   int8_t safe_mode_of_operation() const { return target_mode_; }
 
+  uint32_t arm_epoch() const { return arm_epoch_; }
+
   // 是否仍在位置锁定阶段。
   bool is_position_locked() const { return position_locked_; }
 
   // 配置解锁阈值(计数单位), 默认 15000。
   void set_position_lock_threshold(int32_t threshold_counts) {
     position_lock_threshold_ = threshold_counts;
+  }
+
+  // 配置每周期位置限幅（计数单位），默认不限制。
+  void set_max_delta_per_cycle(int32_t delta_counts) {
+    if (delta_counts > 0) {
+      max_delta_per_cycle_ = delta_counts;
+    }
   }
 
   // 故障复位节流参数:
@@ -100,6 +139,8 @@ class CiA402StateMachine {
   // 清理一次复位流程上下文(用于成功恢复或退出故障态)。
   void ResetFaultFlowContext();
 
+  void AdvanceArmEpoch();
+
   uint16_t controlword_ = kCtrl_DisableVoltage;
   CiA402State state_ = CiA402State::NotReadyToSwitchOn;
 
@@ -120,6 +161,12 @@ class CiA402StateMachine {
   int32_t ros_target_ = 0;
   int32_t safe_target_ = 0;
   int32_t last_actual_position_ = 0;
+  bool cmd_valid_ = false;
+  uint32_t cmd_epoch_ = 0;
+  uint32_t arm_epoch_ = 0;
+  int32_t max_delta_per_cycle_ = 2147483647;
+  bool global_fault_ = false;
+  bool forced_halt_by_fault_ = false;
 
   // 速度/力矩目标。
   int32_t ros_target_velocity_ = 0;

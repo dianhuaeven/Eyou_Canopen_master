@@ -59,6 +59,13 @@ CiA402State CiA402StateMachine::DecodeState(uint16_t statusword) {
   return CiA402State::NotReadyToSwitchOn;
 }
 
+void CiA402StateMachine::AdvanceArmEpoch() {
+  ++arm_epoch_;
+  if (arm_epoch_ == 0) {
+    ++arm_epoch_;
+  }
+}
+
 void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
                                 int32_t actual_position) {
   // mode_display 不再用于状态机内部门控逻辑（见 ReadyToSwitchOn 分支注释），
@@ -72,15 +79,19 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
   is_fault_ = (state_ == CiA402State::Fault ||
                state_ == CiA402State::FaultReactionActive);
 
+  const bool in_fault_related_state =
+      (state_ == CiA402State::Fault ||
+       state_ == CiA402State::FaultReactionActive);
+
   // 仅在离开“故障相关状态”后清理上下文:
   // - FAULT_REACTION_ACTIVE -> FAULT 的内部跃迁不应清理
   // - 否则会导致刚进入 FAULT 时复位流程重复从 Phase1 开始
-  if (state_ != CiA402State::Fault &&
-      state_ != CiA402State::FaultReactionActive) {
+  if (in_fault_related_state == false) {
     ResetFaultFlowContext();
   }
 
-  const bool halt_released = prev_halt_requested_ && !halt_requested_;
+  const bool halt_released =
+      (prev_halt_requested_ && (halt_requested_ == false));
 
   switch (state_) {
     case CiA402State::NotReadyToSwitchOn:
@@ -105,10 +116,7 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
 
     case CiA402State::ReadyToSwitchOn:
       // mode_of_operation 由主站每帧写出（tpdo_mapped[0x6060]），
-      // 不用 mode_display 来门控使能序列：
-      //   1. 驱动器在 SwitchOnDisabled/ReadyToSwitchOn 时可以接受模式写入；
-      //   2. 用 mode_display 门控会造成"模式未生效→不发使能→永远等待"的死锁；
-      //   3. 若进入 OperationEnabled 后 mode_display 仍不对，上层可检测并处理。
+      // 不用 mode_display 来门控使能序列。
       controlword_ = enable_requested_ ? kCtrl_EnableOperation : kCtrl_Shutdown;
       is_operational_ = false;
       position_locked_ = true;
@@ -128,13 +136,22 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       break;
 
     case CiA402State::OperationEnabled:
+      if (was_operation_enabled_ == false) {
+        AdvanceArmEpoch();
+        position_locked_ = true;
+        cmd_valid_ = false;
+        cmd_epoch_ = 0;
+        safe_target_ = actual_position;
+        safe_target_velocity_ = 0;
+        safe_target_torque_ = 0;
+      }
+
       controlword_ = kCtrl_EnableOperation;
       if (halt_requested_) {
         controlword_ |= kCtrl_Bit_Halt;
       }
-      if (!enable_requested_) {
-        // 收到 disable 请求后，立即退出可运行态并回收安全目标，
-        // 不再透传速度/力矩命令，等待状态字回落。
+      if (enable_requested_ == false) {
+        // 收到 disable 请求后，立即退出可运行态并回收安全目标。
         controlword_ = kCtrl_DisableOperation;
         is_operational_ = false;
         position_locked_ = true;
@@ -202,12 +219,15 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
 
   // 若状态从运行态退出, 立即锁住安全目标。
   if (prev_state == CiA402State::OperationEnabled &&
-      state_ != CiA402State::OperationEnabled) {
+      (state_ == CiA402State::OperationEnabled) == false) {
     is_operational_ = false;
     position_locked_ = true;
     safe_target_ = actual_position;
     safe_target_velocity_ = 0;
     safe_target_torque_ = 0;
+    cmd_valid_ = false;
+    cmd_epoch_ = 0;
+    forced_halt_by_fault_ = false;
   }
 
   prev_halt_requested_ = halt_requested_;
@@ -271,23 +291,40 @@ void CiA402StateMachine::StepFaultReset() {
 }
 
 void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
-  // 首次进入运行态时启动位置锁定, 避免 target/actual 不一致导致跳变。
-  if (!was_operation_enabled_) {
+  // 第零层：全局故障冻结。
+  if (global_fault_ || forced_halt_by_fault_) {
     position_locked_ = true;
     safe_target_ = actual_position;
     safe_target_velocity_ = 0;
     safe_target_torque_ = 0;
+    is_operational_ = false;
+    return;
   }
 
-  // CSV/CST 模式: 速度/力矩默认 0 本身安全，不需要位置锁定。
-  // 首帧保持归零（上面已设），次帧起直接解锁透传。
+  // 第一层：用户 halt 冻结。
+  if (halt_requested_) {
+    position_locked_ = true;
+    safe_target_ = actual_position;
+    safe_target_velocity_ = 0;
+    safe_target_torque_ = 0;
+    is_operational_ = true;
+    return;
+  }
+
+  // 第二层：命令源就绪与会话匹配门控。
+  if (cmd_valid_ == false || cmd_epoch_ == 0 || cmd_epoch_ != arm_epoch_) {
+    position_locked_ = true;
+    safe_target_ = actual_position;
+    safe_target_velocity_ = 0;
+    safe_target_torque_ = 0;
+    is_operational_ = false;
+    return;
+  }
+
+  // CSV/CST 模式: 首帧由上层 valid/epoch gate 保证，后续直接透传速度/力矩。
   if (target_mode_ == kMode_CSV || target_mode_ == kMode_CST) {
-    if (!was_operation_enabled_) {
-      is_operational_ = false;
-      return;
-    }
     position_locked_ = false;
-    safe_target_ = actual_position;  // 位置跟随实际值，防止切回 CSP 时跳变。
+    safe_target_ = actual_position;  // 切回 CSP 时避免位置跳变。
     safe_target_velocity_ = ros_target_velocity_;
     safe_target_torque_ = ros_target_torque_;
     is_operational_ = true;
@@ -300,13 +337,6 @@ void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
     safe_target_velocity_ = 0;
     safe_target_torque_ = 0;
 
-    // 启动阶段若目标与实际偏差过大，先将内部目标重基准到当前实际值，
-    // 避免长期停留在 not operational（命令链路无法收敛）。
-    if (AbsDiff(ros_target_, actual_position) >
-        static_cast<int64_t>(position_lock_threshold_)) {
-      ros_target_ = actual_position;
-    }
-
     if (AbsDiff(ros_target_, actual_position) <=
         static_cast<int64_t>(position_lock_threshold_)) {
       position_locked_ = false;
@@ -315,12 +345,25 @@ void CiA402StateMachine::StepOperationEnabled(int32_t actual_position) {
       safe_target_torque_ = ros_target_torque_;
     }
   } else {
-    safe_target_ = ros_target_;
+    const int64_t diff = static_cast<int64_t>(ros_target_) -
+                         static_cast<int64_t>(safe_target_);
+    const int64_t max_delta = static_cast<int64_t>(max_delta_per_cycle_);
+
+    if (diff > max_delta) {
+      safe_target_ = static_cast<int32_t>(
+          static_cast<int64_t>(safe_target_) + max_delta);
+    } else if (diff < -max_delta) {
+      safe_target_ = static_cast<int32_t>(
+          static_cast<int64_t>(safe_target_) - max_delta);
+    } else {
+      safe_target_ = ros_target_;
+    }
+
     safe_target_velocity_ = ros_target_velocity_;
     safe_target_torque_ = ros_target_torque_;
   }
 
-  is_operational_ = !position_locked_;
+  is_operational_ = (position_locked_ == false);
 }
 
 void CiA402StateMachine::ResetFaultFlowContext() {
