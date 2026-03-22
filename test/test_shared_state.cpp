@@ -12,20 +12,30 @@ TEST(SharedState, BasicUpdateAndSnapshot) {
   fb.actual_position = 123456;
   fb.actual_velocity = -345;
   fb.is_operational = true;
+  fb.arm_epoch = 9;
 
   canopen_hw::AxisCommand cmd;
   cmd.target_position = 223344;
+  cmd.valid = true;
+  cmd.arm_epoch = 9;
 
   shared.UpdateFeedback(0, fb);
   shared.UpdateCommand(0, cmd);
+  shared.SetGlobalFault(true);
+  shared.SetAllAxesHaltedByFault(true);
   shared.RecomputeAllOperational();
 
   const canopen_hw::SharedSnapshot snap = shared.Snapshot();
   EXPECT_EQ(snap.feedback[0].actual_position, 123456);
   EXPECT_EQ(snap.feedback[0].actual_velocity, -345);
   EXPECT_TRUE(snap.feedback[0].is_operational);
+  EXPECT_EQ(snap.feedback[0].arm_epoch, 9u);
   EXPECT_EQ(snap.commands[0].target_position, 223344);
+  EXPECT_TRUE(snap.commands[0].valid);
+  EXPECT_EQ(snap.commands[0].arm_epoch, 9u);
   EXPECT_TRUE(snap.all_operational);
+  EXPECT_TRUE(snap.global_fault);
+  EXPECT_TRUE(snap.all_axes_halted_by_fault);
 }
 
 TEST(SharedState, OutOfRangeIgnored) {
@@ -33,13 +43,19 @@ TEST(SharedState, OutOfRangeIgnored) {
 
   canopen_hw::AxisCommand cmd;
   cmd.target_position = 223344;
+  cmd.valid = true;
+  cmd.arm_epoch = 5;
   shared.UpdateCommand(0, cmd);
 
   // 越界写入应被静默忽略, 不影响已有数据。
   cmd.target_position = 999;
+  cmd.valid = false;
+  cmd.arm_epoch = 0;
   shared.UpdateCommand(99, cmd);
   const canopen_hw::SharedSnapshot snap2 = shared.Snapshot();
   EXPECT_EQ(snap2.commands[0].target_position, 223344);
+  EXPECT_TRUE(snap2.commands[0].valid);
+  EXPECT_EQ(snap2.commands[0].arm_epoch, 5u);
 }
 
 TEST(SharedState, RecomputeAllOperationalTrueWhenAllOperationalAndNoFault) {
@@ -91,6 +107,23 @@ TEST(SharedState, RecomputeUsesConfiguredAxisCount) {
   shared.RecomputeAllOperational();
   const auto snap = shared.Snapshot();
   EXPECT_TRUE(snap.all_operational);
+}
+
+TEST(SharedState, FaultLatchSetAndClear) {
+  canopen_hw::SharedState shared(2);
+
+  EXPECT_FALSE(shared.GetGlobalFault());
+  EXPECT_FALSE(shared.GetAllAxesHaltedByFault());
+
+  shared.SetGlobalFault(true);
+  shared.SetAllAxesHaltedByFault(true);
+  EXPECT_TRUE(shared.GetGlobalFault());
+  EXPECT_TRUE(shared.GetAllAxesHaltedByFault());
+
+  shared.SetGlobalFault(false);
+  shared.SetAllAxesHaltedByFault(false);
+  EXPECT_FALSE(shared.GetGlobalFault());
+  EXPECT_FALSE(shared.GetAllAxesHaltedByFault());
 }
 
 TEST(SharedState, WaitForStateChangeTimeout) {

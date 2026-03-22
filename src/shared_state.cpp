@@ -14,7 +14,7 @@ SharedState::SharedState(std::size_t axis_count)
 
 void SharedState::UpdateFeedback(std::size_t axis_index,
                                  const AxisFeedback& feedback) {
-  if (!IsValidAxis(axis_index)) {
+  if (IsValidAxis(axis_index) == false) {
     return;
   }
   {
@@ -31,7 +31,7 @@ void SharedState::RecomputeAllOperational() {
   bool all_ok = true;
   for (std::size_t i = 0; i < axis_count_; ++i) {
     const auto& axis_feedback = feedback_[i];
-    if (!axis_feedback.is_operational || axis_feedback.is_fault) {
+    if (axis_feedback.is_operational == false || axis_feedback.is_fault) {
       all_ok = false;
       break;
     }
@@ -41,7 +41,7 @@ void SharedState::RecomputeAllOperational() {
 
 void SharedState::UpdateCommand(std::size_t axis_index,
                                 const AxisCommand& command) {
-  if (!IsValidAxis(axis_index)) {
+  if (IsValidAxis(axis_index) == false) {
     return;
   }
   std::lock_guard<std::mutex> lk(mtx_);
@@ -49,7 +49,7 @@ void SharedState::UpdateCommand(std::size_t axis_index,
 }
 
 bool SharedState::GetCommand(std::size_t axis_index, AxisCommand* out) const {
-  if (!out || !IsValidAxis(axis_index)) {
+  if (out == nullptr || IsValidAxis(axis_index) == false) {
     return false;
   }
   std::lock_guard<std::mutex> lk(mtx_);
@@ -59,11 +59,31 @@ bool SharedState::GetCommand(std::size_t axis_index, AxisCommand* out) const {
 
 void SharedState::UpdateSafeCommand(std::size_t axis_index,
                                     const AxisSafeCommand& safe_command) {
-  if (!IsValidAxis(axis_index)) {
+  if (IsValidAxis(axis_index) == false) {
     return;
   }
   std::lock_guard<std::mutex> lk(mtx_);
   safe_commands_[axis_index] = safe_command;
+}
+
+void SharedState::SetGlobalFault(bool fault) {
+  std::lock_guard<std::mutex> lk(mtx_);
+  global_fault_ = fault;
+}
+
+bool SharedState::GetGlobalFault() const {
+  std::lock_guard<std::mutex> lk(mtx_);
+  return global_fault_;
+}
+
+void SharedState::SetAllAxesHaltedByFault(bool halted) {
+  std::lock_guard<std::mutex> lk(mtx_);
+  all_axes_halted_by_fault_ = halted;
+}
+
+bool SharedState::GetAllAxesHaltedByFault() const {
+  std::lock_guard<std::mutex> lk(mtx_);
+  return all_axes_halted_by_fault_;
 }
 
 SharedSnapshot SharedState::Snapshot() const {
@@ -73,6 +93,8 @@ SharedSnapshot SharedState::Snapshot() const {
   s.commands = commands_;
   s.safe_commands = safe_commands_;
   s.all_operational = all_operational_;
+  s.global_fault = global_fault_;
+  s.all_axes_halted_by_fault = all_axes_halted_by_fault_;
   return s;
 }
 
