@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,13 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
   std::vector<double> pos_cmd_;
   std::vector<double> vel_cmd_;
   std::vector<int8_t> active_mode_;  // 每轴当前模式，默认 CSP。
+  std::vector<bool> cmd_ready_;
+  std::vector<int> cmd_ready_guard_;
+  std::vector<uint32_t> arm_epoch_cache_;
+
+  bool prev_all_operational_ = false;
+  bool prev_all_axes_halted_by_fault_ = false;
+  int cmd_ready_guard_frames_ = 20;
 
   hardware_interface::JointStateInterface jnt_state_iface_;
   hardware_interface::PositionJointInterface pos_cmd_iface_;

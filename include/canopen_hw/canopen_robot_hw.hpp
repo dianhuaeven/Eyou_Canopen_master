@@ -55,6 +55,16 @@ class CanopenRobotHw {
   // 当前控制可运行标志(来自 SharedState::all_operational)。
   bool all_operational() const { return all_operational_; }
 
+  // 全轴因故障被连带停机标志(来自 SharedState::all_axes_halted_by_fault)。
+  bool all_axes_halted_by_fault() const { return all_axes_halted_by_fault_; }
+
+  // 每轴当前使能会话号（来自反馈侧 arm_epoch）。
+  uint32_t arm_epoch(std::size_t axis_index) const;
+
+  // 命令元数据（valid/epoch）写入接口，由上层适配层驱动。
+  void SetCommandReady(std::size_t axis_index, bool ready);
+  void SetCommandEpoch(std::size_t axis_index, uint32_t epoch);
+
   // 配置某轴单位换算参数，供 joints.yaml 参数加载后调用。
   void ConfigureAxisConversion(std::size_t axis_index,
                                const AxisConversion& conversion);
@@ -86,8 +96,12 @@ class CanopenRobotHw {
   std::vector<double> joint_torque_cmd_;
   std::vector<int8_t> joint_mode_;
   std::vector<AxisConversion> axis_conv_;
+  std::vector<uint32_t> axis_arm_epoch_;
+  std::vector<bool> axis_cmd_ready_;
+  std::vector<uint32_t> axis_cmd_epoch_;
 
   bool all_operational_ = false;
+  bool all_axes_halted_by_fault_ = false;
 
   // 每轴就绪状态缓存（per-axis is_operational），由 ReadFromSharedState 更新。
   // 用于 WriteToSharedState 中的逐轴目标位置保护，避免全局 all_operational_

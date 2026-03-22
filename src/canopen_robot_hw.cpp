@@ -27,6 +27,9 @@ CanopenRobotHw::CanopenRobotHw(SharedState* shared_state)
       joint_torque_cmd_(axis_count_, 0.0),
       joint_mode_(axis_count_, kMode_CSP),
       axis_conv_(axis_count_),
+      axis_arm_epoch_(axis_count_, 0),
+      axis_cmd_ready_(axis_count_, false),
+      axis_cmd_epoch_(axis_count_, 0),
       axis_operational_(axis_count_, false) {}
 
 void CanopenRobotHw::ReadFromSharedState() {
@@ -36,11 +39,13 @@ void CanopenRobotHw::ReadFromSharedState() {
 
   const SharedSnapshot snap = shared_state_->Snapshot();
   all_operational_ = snap.all_operational;
+  all_axes_halted_by_fault_ = snap.all_axes_halted_by_fault;
 
   for (std::size_t i = 0; i < axis_count_; ++i) {
     joint_pos_[i] = TicksToRad(i, snap.feedback[i].actual_position);
     joint_vel_[i] = TicksPerSecToRadPerSec(i, snap.feedback[i].actual_velocity);
     joint_eff_[i] = TorquePermilleToNm(i, snap.feedback[i].actual_torque);
+    axis_arm_epoch_[i] = snap.feedback[i].arm_epoch;
 
     const bool now_operational = snap.feedback[i].is_operational;
     if (!axis_operational_[i] && now_operational) {
@@ -84,6 +89,8 @@ void CanopenRobotHw::WriteToSharedState() {
       cmd.target_torque = 0;
     }
     cmd.mode_of_operation = joint_mode_[i];
+    cmd.valid = axis_cmd_ready_[i];
+    cmd.arm_epoch = axis_cmd_epoch_[i];
     shared_state_->UpdateCommand(i, cmd);
   }
 }
@@ -128,6 +135,24 @@ double CanopenRobotHw::joint_velocity(std::size_t axis_index) const {
 
 double CanopenRobotHw::joint_effort(std::size_t axis_index) const {
   return IsValidAxis(axis_index) ? joint_eff_[axis_index] : 0.0;
+}
+
+uint32_t CanopenRobotHw::arm_epoch(std::size_t axis_index) const {
+  return IsValidAxis(axis_index) ? axis_arm_epoch_[axis_index] : 0u;
+}
+
+void CanopenRobotHw::SetCommandReady(std::size_t axis_index, bool ready) {
+  if (!IsValidAxis(axis_index)) {
+    return;
+  }
+  axis_cmd_ready_[axis_index] = ready;
+}
+
+void CanopenRobotHw::SetCommandEpoch(std::size_t axis_index, uint32_t epoch) {
+  if (!IsValidAxis(axis_index)) {
+    return;
+  }
+  axis_cmd_epoch_[axis_index] = epoch;
 }
 
 bool CanopenRobotHw::IsValidAxis(std::size_t axis_index) const {
