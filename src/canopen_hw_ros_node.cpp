@@ -123,14 +123,13 @@ int main(int argc, char** argv) {
                                           std_srvs::Trigger::Response>(
       "recover", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
-        if (lifecycle.require_init()) {
-          res.success = false;
-          res.message = "call ~/init first";
-          return true;
+        std::string detail;
+        res.success = lifecycle.Recover(&detail);
+        if (res.success) {
+          res.message = detail.empty() ? "recovered" : detail;
+        } else {
+          res.message = detail.empty() ? "recover failed" : detail;
         }
-        res.success = lifecycle.Recover();
-        res.message = res.success ? "recovered"
-                                  : "fault reset failed, try ~/init to reinitialize";
         return true;
       });
 

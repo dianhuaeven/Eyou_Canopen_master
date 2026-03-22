@@ -233,32 +233,52 @@ bool LifecycleManager::StopCommunication(std::string* detail) {
   return graceful_ok;
 }
 
-bool LifecycleManager::Recover() {
+bool LifecycleManager::Recover(std::string* detail) {
+  if (detail) {
+    detail->clear();
+  }
+
   if (state_ != LifecycleState::Active) {
     CANOPEN_LOG_WARN("Recover called in state {}, expected Active",
                      static_cast<int>(state_));
+    if (detail) {
+      *detail = "recover requires Active state";
+    }
     return false;
   }
 
   if (require_init_) {
     CANOPEN_LOG_WARN(
         "Recover called after communication shutdown; call InitMotors first");
+    if (detail) {
+      *detail = "call ~/init first";
+    }
     return false;
   }
 
   if (!master_ || !master_->running()) {
     CANOPEN_LOG_ERROR("Recover: master not running");
+    if (detail) {
+      *detail = "master not running";
+    }
     return false;
   }
 
-  std::string detail;
-  const bool ok = master_->RecoverFaultedAxes(&detail);
+  std::string recover_detail;
+  const bool ok = master_->RecoverFaultedAxes(&recover_detail);
   if (!ok) {
-    CANOPEN_LOG_WARN("Recover failed: {}",
-                     detail.empty()
-                         ? std::string("fault reset failed, try /init to reinitialize")
-                         : detail);
+    const std::string msg = recover_detail.empty()
+                                ? std::string("fault reset failed, try ~/init to reinitialize")
+                                : recover_detail;
+    CANOPEN_LOG_WARN("Recover failed: {}", msg);
+    if (detail) {
+      *detail = msg;
+    }
     return false;
+  }
+
+  if (detail && !recover_detail.empty()) {
+    *detail = recover_detail;
   }
 
   CANOPEN_LOG_INFO("LifecycleManager: Active (fault recovered)");

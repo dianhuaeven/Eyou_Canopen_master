@@ -49,7 +49,7 @@ class LifecycleManager {
 
   // 仅处理 fault 轴的复位与重使能，不做通信层重启。
   // Active -> Active。
-  bool Recover();
+  bool Recover(std::string* detail = nullptr);
 
   // 优雅关闭主站并释放对象。
   // 任意状态 -> Unconfigured。
