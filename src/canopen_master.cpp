@@ -4,6 +4,7 @@
 #include <chrono>
 #include <thread>
 #include <ctime>
+#include <sstream>
 
 #include "canopen_hw/cia402_defs.hpp"
 #include "canopen_hw/logging.hpp"
@@ -118,10 +119,37 @@ void CanopenMaster::Stop() {
   running_.store(false);
 }
 
-bool CanopenMaster::GracefulShutdown() {
+bool CanopenMaster::GracefulShutdown(std::string* detail) {
+  if (detail) {
+    detail->clear();
+  }
   if (axis_drivers_.empty()) {
     return true;
   }
+
+  bool all_ok = true;
+  auto append_pending = [&](const char* phase, const std::vector<std::size_t>& pending) {
+    if (!detail || pending.empty()) {
+      return;
+    }
+    std::ostringstream oss;
+    oss << phase << " timeout; pending axes: ";
+    for (std::size_t i = 0; i < pending.size(); ++i) {
+      const std::size_t axis_index = pending[i];
+      if (i > 0) {
+        oss << ", ";
+      }
+      oss << axis_index;
+      if (axis_index < config_.joints.size()) {
+        oss << "(node=" << static_cast<int>(config_.joints[axis_index].node_id)
+            << ")";
+      }
+    }
+    if (!detail->empty()) {
+      *detail += "; ";
+    }
+    *detail += oss.str();
+  };
 
   // 注意: Stop() 必须在 Lely 事件循环仍在运行时调用，否则 RPDO 不再更新，
   // 下面的等待将只会超时返回。
@@ -132,48 +160,84 @@ bool CanopenMaster::GracefulShutdown() {
       axis->SendControlword(kCtrl_DisableOperation);
     }
   }
-  WaitForAllState(CiA402State::SwitchedOn,
-                  std::chrono::steady_clock::now() +
-                      std::chrono::milliseconds(2000));
+
+  std::vector<std::size_t> pending;
+  if (!WaitForAllState(CiA402State::SwitchedOn,
+                       std::chrono::steady_clock::now() +
+                           std::chrono::milliseconds(2000),
+                       &pending)) {
+    all_ok = false;
+    append_pending("disable->switched_on", pending);
+  }
 
   for (const auto& axis : axis_drivers_) {
     if (axis) {
       axis->SendControlword(kCtrl_Shutdown);
     }
   }
-  WaitForAllState(CiA402State::ReadyToSwitchOn,
-                  std::chrono::steady_clock::now() +
-                      std::chrono::milliseconds(1000));
+
+  if (!WaitForAllState(CiA402State::ReadyToSwitchOn,
+                       std::chrono::steady_clock::now() +
+                           std::chrono::milliseconds(1000),
+                       &pending)) {
+    all_ok = false;
+    append_pending("shutdown->ready_to_switch_on", pending);
+  }
 
   if (axis_drivers_.front()) {
     axis_drivers_.front()->SendNmtStopAll();
   }
-  return true;
+
+  return all_ok;
 }
 
 bool CanopenMaster::WaitForAllState(
     CiA402State target_state,
-    std::chrono::steady_clock::time_point deadline) {
+    std::chrono::steady_clock::time_point deadline,
+    std::vector<std::size_t>* pending_axes) {
+  std::vector<std::size_t> pending;
+
   while (std::chrono::steady_clock::now() < deadline) {
-    bool all_match = true;
-    for (const auto& axis : axis_drivers_) {
+    pending.clear();
+    for (std::size_t i = 0; i < axis_drivers_.size(); ++i) {
+      const auto& axis = axis_drivers_[i];
       if (!axis) {
         continue;
       }
       if (axis->feedback_state() != target_state) {
-        all_match = false;
-        break;
+        pending.emplace_back(i);
       }
     }
-    if (all_match) {
+    if (pending.empty()) {
+      if (pending_axes) {
+        pending_axes->clear();
+      }
       return true;
     }
-    // 阻塞等待反馈更新通知，而非固定 sleep 轮询。
-    // 每次 UpdateFeedback() 完成后会唤醒，避免空转消耗 CPU。
-    shared_state_->WaitForStateChange(
-        std::min(deadline,
-                 std::chrono::steady_clock::now() +
-                     std::chrono::milliseconds(10)));
+
+    if (shared_state_) {
+      // 阻塞等待反馈更新通知，而非固定 sleep 轮询。
+      // 每次 UpdateFeedback() 完成后会唤醒，避免空转消耗 CPU。
+      shared_state_->WaitForStateChange(
+          std::min(deadline,
+                   std::chrono::steady_clock::now() +
+                       std::chrono::milliseconds(10)));
+    } else {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+  }
+
+  if (pending_axes) {
+    pending_axes->clear();
+    for (std::size_t i = 0; i < axis_drivers_.size(); ++i) {
+      const auto& axis = axis_drivers_[i];
+      if (!axis) {
+        continue;
+      }
+      if (axis->feedback_state() != target_state) {
+        pending_axes->emplace_back(i);
+      }
+    }
   }
   return false;
 }

@@ -68,7 +68,7 @@ class CanopenMaster {
 
   // 优雅关机: 逐步将所有轴退出 OperationEnabled，最后 NMT STOP。
   // 必须在 Lely 事件循环仍在运行时调用。
-  bool GracefulShutdown();
+  bool GracefulShutdown(std::string* detail = nullptr);
 
   // 单轴手动控制接口。
   bool EnableAxis(std::size_t axis_index);
@@ -93,7 +93,8 @@ class CanopenMaster {
   // 约束: 该函数只能在初始化阶段调用，禁止在运行循环中调用。
   void CreateAxisDrivers(lely::canopen::BasicMaster& can_master);
   bool WaitForAllState(CiA402State target_state,
-                       std::chrono::steady_clock::time_point deadline);
+                       std::chrono::steady_clock::time_point deadline,
+                       std::vector<std::size_t>* pending_axes = nullptr);
 
   CanopenMasterConfig config_;
   SharedState* shared_state_ = nullptr;  // 非拥有指针。
