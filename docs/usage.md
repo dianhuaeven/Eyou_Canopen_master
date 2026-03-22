@@ -110,13 +110,18 @@ source devel/setup.bash
 ### 5.2 ROS 模式
 
 ```bash
-roslaunch Eyou_Canopen_Master canopen_hw.launch
+# 默认手动初始化（推荐）
+roslaunch Eyou_Canopen_Master canopen_hw.launch auto_init:=false
+
+# 首次启动必须手动初始化电机
+rosservice call /canopen_hw_node/init "{}"
 ```
 
 可选参数：
 - `dcf_path:=<path>` — DCF 文件路径
 - `joints_path:=<path>` — joints.yaml 路径
 - `loop_hz:=100.0` — 控制循环频率
+- `auto_init:=false|true` — 是否启动后自动初始化电机（默认 `false`）
 
 ---
 
@@ -126,15 +131,19 @@ roslaunch Eyou_Canopen_Master canopen_hw.launch
 
 | Service | 类型 | 说明 |
 |---------|------|------|
-| `~halt` | `std_srvs/Trigger` | 停止运动，保持总线连接 |
-| `~recover` | `std_srvs/Trigger` | 从 halt/故障状态恢复 |
+| `~init` | `std_srvs/Trigger` | 手动初始化电机（Configured -> Active） |
+| `~halt` | `std_srvs/Trigger` | 停止运动，保持总线连接（Active -> Configured） |
+| `~recover` | `std_srvs/Trigger` | 仅用于 `halt` 后恢复；首启不可用 |
 | `~shutdown` | `std_srvs/Trigger` | 关闭主站并退出节点 |
-| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 切换运动模式（CSP=8, CSV=9） |
+| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 切换运动模式（仅非 Active 状态允许） |
 
 ### 6.2 模式切换流程
 
 ```bash
-# 1. 停止运动
+# 0. 首次启动先初始化电机（若 auto_init:=false）
+rosservice call /canopen_hw_node/init "{}"
+
+# 1. 停止运动（Active -> Configured）
 rosservice call /canopen_hw_node/halt
 
 # 2. 切换到 CSV 模式（所有轴）
@@ -146,7 +155,7 @@ done
 rosrun controller_manager controller_manager stop arm_position_controller
 rosrun controller_manager controller_manager start arm_velocity_controller
 
-# 4. 恢复运动
+# 4. 恢复运动（Configured -> Active）
 rosservice call /canopen_hw_node/recover
 ```
 
