@@ -133,9 +133,15 @@ rosservice call /canopen_hw_node/init "{}"
 |---------|------|------|
 | `~init` | `std_srvs/Trigger` | 手动初始化电机（Configured -> Active） |
 | `~halt` | `std_srvs/Trigger` | 停止运动，保持总线连接（Active -> Configured） |
-| `~recover` | `std_srvs/Trigger` | 仅用于 `halt` 后恢复；首启不可用 |
-| `~shutdown` | `std_srvs/Trigger` | 关闭主站并退出节点 |
+| `~recover` | `std_srvs/Trigger` | 仅用于 `halt` 后恢复；若执行过 `~shutdown`，需先 `~init` |
+| `~shutdown` | `std_srvs/Trigger` | 执行 402 失能 + 停通信，不退出节点（随后需 `~init`） |
 | `~set_mode` | `Eyou_Canopen_Master/SetMode` | 切换运动模式（仅非 Active 状态允许） |
+
+### 6.1.1 shutdown/recover/init 关系
+
+- ~shutdown：执行 402 失能与停通信，节点进程不退出。
+- ~recover：仅对 halt 场景生效；若走过 ~shutdown，会被拒绝。
+- ~init：~shutdown 后唯一重新建立通信的入口。
 
 ### 6.2 模式切换流程
 
@@ -190,21 +196,30 @@ rosservice call /canopen_hw_node/recover
 
 ---
 
-## 7. 关机流程
+## 8. 关机与停通信流程
 
-程序退出时执行：
+### 8.1 `~shutdown`（节点不退出）
+
+`~shutdown` 被调用时按以下顺序执行：
 1. `Disable Operation` (0x6040=0x0007)
 2. 等待状态进入 `SwitchedOn`（超时 2s）
 3. `Shutdown` (0x6040=0x0006)
 4. 等待状态进入 `ReadyToSwitchOn`（超时 1s）
-5. `NMT Stop`
+5. `NMT Stop` + `master_->Stop()` 停通信
+6. 标记为“需要重新 init”，随后 `~recover` 会拒绝并提示先 `~init`
 
-验证方式：
-- Ctrl+C 后可观察到 PDO 下发顺序与状态回落。
+若第 2/4 步超时：
+- 仍继续执行第 5 步，避免 service 卡死
+- service 返回 `success=false`，`message` 给出超时轴信息
+- 仍标记为“需要重新 init”
+
+### 8.2 Ctrl+C（进程级 teardown）
+
+Ctrl+C 才会触发进程级退出，释放 ROS 节点与内部对象。
 
 ---
 
-## 8. 启动身份失配诊断
+## 9. 启动身份失配诊断
 
 当启动日志出现 `OnConfig failed (es=...)` 时，驱动会额外输出以下诊断信息：
 
@@ -219,11 +234,11 @@ rosservice call /canopen_hw_node/recover
 
 ---
 
-## 9. 现场验证清单（最终版）
+## 10. 现场验证清单（最终版）
 
 > 目标：现场按此清单一次性完成“启动可用 + 抓包可证 + 关机可控”的验收。
 
-### 9.1 前置准备
+### 10.1 前置准备
 
 1. CAN 链路已连通，`can0` 已 up，波特率与驱动器一致。
 2. `master.dcf` 与现场固件版本匹配（更新固件后必须重生成 DCF）。
@@ -234,7 +249,7 @@ rosservice call /canopen_hw_node/recover
 candump -L can0,080:7FF,185:7FF,205:7FF,285:7FF,705:7FF,000:7FF
 ```
 
-### 9.2 启动与 Boot 身份判据
+### 10.2 启动与 Boot 身份判据
 
 启动后检查日志：
 
@@ -253,24 +268,24 @@ candump -L can0,080:7FF,185:7FF,205:7FF,285:7FF,705:7FF,000:7FF
 - `1018:01`（Vendor ID）
 - `1018:02`（Product Code）
 
-### 9.3 PDO 抓包判据（C01/C02 关键）
+### 10.3 PDO 抓包判据（C01/C02 关键）
 
 1. 使能阶段（C01）：在 `0x205` 中可看到控制字低字节序列 `06 00 -> 0F 00`（little-endian，对应 0x0006 -> 0x000F）。
 2. 运行阶段：`0x185` 反馈应持续周期出现（无长时间稀疏/中断）。
 3. 退出阶段（C02）：Ctrl+C 后应看到控制字回落序列 `07 00 -> 06 00`，随后出现 NMT Stop（`0x000`）。
 
-### 9.4 运行态判据
+### 10.4 运行态判据
 
 - `all_operational` 最终为 `true`。
 - `/diagnostics` 中各轴 `is_operational=true`，且无持续 `is_fault=true`。
 - 无持续 heartbeat 丢失累计增长。
 
-### 9.5 启动负路径判据（C04）
+### 10.5 启动负路径判据（C04）
 
 - 缺失 `--dcf` 文件：进程应直接失败退出（返回码 1）。
 - 缺失 `--joints` 文件：进程应直接失败退出（返回码 1）。
 
-### 9.6 验收结论模板
+### 10.6 验收结论模板
 
 | 检查项 | 结果 | 证据 |
 |---|---|---|
@@ -282,7 +297,7 @@ candump -L can0,080:7FF,185:7FF,205:7FF,285:7FF,705:7FF,000:7FF
 
 ---
 
-## 10. 单测
+## 11. 单测
 
 ```bash
 # 独立编译模式
@@ -294,7 +309,7 @@ catkin_make run_tests_Eyou_Canopen_Master
 
 ---
 
-## 11. 常见问题
+## 12. 常见问题
 
 1. 无任何帧：优先检查终端电阻、电源、CAN_H/CAN_L 线序。
 2. 有心跳无 PDO：确认 NMT 已进入 Operational，检查 PDO COB-ID 是否被禁用(bit31)。
@@ -303,6 +318,6 @@ catkin_make run_tests_Eyou_Canopen_Master
 
 ---
 
-## 12. D1~D9 联调记录
+## 13. D1~D9 联调记录
 
 请参见 [docs/debug_notes.md](/home/dianhua/robot_test/docs/debug_notes.md) 的模板并按阶段记录。

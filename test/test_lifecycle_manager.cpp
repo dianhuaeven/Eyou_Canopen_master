@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "canopen_hw/lifecycle_manager.hpp"
 
 using canopen_hw::CanopenMasterConfig;
@@ -32,6 +34,7 @@ TEST(LifecycleManager, StartsUnconfigured) {
   EXPECT_EQ(lm.robot_hw(), nullptr);
   EXPECT_EQ(lm.shared_state(), nullptr);
   EXPECT_FALSE(lm.ever_initialized());
+  EXPECT_FALSE(lm.require_init());
 }
 
 TEST(LifecycleManager, HaltRejectsWhenUnconfigured) {
@@ -46,10 +49,20 @@ TEST(LifecycleManager, RecoverRejectsWhenUnconfigured) {
   EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
 }
 
+TEST(LifecycleManager, StopCommunicationRejectsWhenUnconfigured) {
+  LifecycleManager lm;
+  std::string detail;
+  EXPECT_FALSE(lm.StopCommunication(&detail));
+  EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
+  EXPECT_FALSE(lm.require_init());
+  EXPECT_EQ(detail, "invalid lifecycle state");
+}
+
 TEST(LifecycleManager, ShutdownFromUnconfiguredIsNoop) {
   LifecycleManager lm;
   EXPECT_TRUE(lm.Shutdown());
   EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
+  EXPECT_FALSE(lm.require_init());
 }
 
 TEST(LifecycleManager, ConfigureRejectsInvalidAxisCount) {
@@ -78,6 +91,19 @@ TEST(LifecycleManager, ConfigureValidConfigEntersConfigured) {
   EXPECT_NE(lm.robot_hw(), nullptr);
   EXPECT_NE(lm.shared_state(), nullptr);
   EXPECT_FALSE(lm.ever_initialized());
+  EXPECT_FALSE(lm.require_init());
+}
+
+TEST(LifecycleManager, StopCommunicationFromConfiguredMarksRequireInit) {
+  LifecycleManager lm;
+  auto config = MakeMinimalConfig();
+  std::string detail;
+
+  ASSERT_TRUE(lm.Configure(config));
+  EXPECT_TRUE(lm.StopCommunication(&detail));
+  EXPECT_EQ(lm.state(), LifecycleState::Configured);
+  EXPECT_TRUE(lm.require_init());
+  EXPECT_TRUE(detail.empty());
 }
 
 TEST(LifecycleManager, RecoverRejectsBeforeFirstInitMotors) {
@@ -89,6 +115,23 @@ TEST(LifecycleManager, RecoverRejectsBeforeFirstInitMotors) {
   EXPECT_EQ(lm.state(), LifecycleState::Configured);
 }
 
+TEST(LifecycleManager, RecoverRejectsAfterStopCommunicationUntilInit) {
+  LifecycleManager lm;
+  auto config = MakeMinimalConfig();
+  std::string detail;
+
+  ASSERT_TRUE(lm.Configure(config));
+  ASSERT_TRUE(lm.StopCommunication(&detail));
+  ASSERT_TRUE(lm.require_init());
+
+  EXPECT_FALSE(lm.Recover());
+  EXPECT_EQ(lm.state(), LifecycleState::Configured);
+
+  // 由于测试配置使用不存在的 DCF，InitMotors 失败，require_init 保持 true。
+  EXPECT_FALSE(lm.InitMotors());
+  EXPECT_TRUE(lm.require_init());
+}
+
 TEST(LifecycleManager, InitMotorsFailureKeepsConfigured) {
   LifecycleManager lm;
   auto config = MakeMinimalConfig();
@@ -98,6 +141,7 @@ TEST(LifecycleManager, InitMotorsFailureKeepsConfigured) {
   EXPECT_EQ(lm.state(), LifecycleState::Configured);
   EXPECT_FALSE(lm.ever_initialized());
   EXPECT_NE(lm.master(), nullptr);
+  EXPECT_FALSE(lm.require_init());
 }
 
 TEST(LifecycleManager, InitCompatibilityFailureRollsBackToUnconfigured) {
@@ -110,6 +154,21 @@ TEST(LifecycleManager, InitCompatibilityFailureRollsBackToUnconfigured) {
   EXPECT_EQ(lm.robot_hw(), nullptr);
   EXPECT_EQ(lm.shared_state(), nullptr);
   EXPECT_FALSE(lm.ever_initialized());
+  EXPECT_FALSE(lm.require_init());
+}
+
+TEST(LifecycleManager, ShutdownClearsRequireInitFlag) {
+  LifecycleManager lm;
+  auto config = MakeMinimalConfig();
+  std::string detail;
+
+  ASSERT_TRUE(lm.Configure(config));
+  ASSERT_TRUE(lm.StopCommunication(&detail));
+  ASSERT_TRUE(lm.require_init());
+
+  EXPECT_TRUE(lm.Shutdown());
+  EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
+  EXPECT_FALSE(lm.require_init());
 }
 
 TEST(LifecycleManager, InitRejectsMissingJointsFile) {
