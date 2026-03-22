@@ -232,5 +232,43 @@ TEST_F(AxisLogicTest, NullSharedStateDoesNotCrash) {
   logic_no_ss.ProcessHeartbeat(true);
 }
 
+TEST_F(AxisLogicTest, HaltRequestSetsHaltBitAndFreezesVelocityCommand) {
+  logic_->SetTargetMode(kMode_CSV);
+  logic_->SetRosTargetVelocity(500);
+  logic_->RequestEnable();
+
+  logic_->ProcessRpdo(kSW_SwitchOnDisabled, 1000, 0, 0, kMode_CSV);
+  logic_->ProcessRpdo(kSW_ReadyToSwitchOn, 1000, 0, 0, kMode_CSV);
+  logic_->ProcessRpdo(kSW_OperationEnabled, 1000, 0, 0, kMode_CSV);
+  logic_->ProcessRpdo(kSW_OperationEnabled, 1000, 0, 0, kMode_CSV);
+
+  bus_.calls.clear();
+  logic_->RequestHalt();
+  logic_->ProcessRpdo(kSW_OperationEnabled, 1010, 0, 0, kMode_CSV);
+
+  ASSERT_GE(bus_.calls.size(), 5u);
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[0].value,
+            static_cast<int64_t>(kCtrl_EnableOperation | kCtrl_Bit_Halt));
+  EXPECT_EQ(bus_.calls[2].type, BusCall::kPosition);
+  EXPECT_EQ(bus_.calls[2].value, 1010);
+  EXPECT_EQ(bus_.calls[3].type, BusCall::kVelocity);
+  EXPECT_EQ(bus_.calls[3].value, 0);
+
+  logic_->SetRosTargetVelocity(900);
+  bus_.calls.clear();
+  logic_->ProcessRpdo(kSW_OperationEnabled, 1020, 0, 0, kMode_CSV);
+  ASSERT_GE(bus_.calls.size(), 5u);
+  EXPECT_EQ(bus_.calls[2].value, 1020);
+  EXPECT_EQ(bus_.calls[3].value, 0);
+
+  logic_->RequestResume();
+  bus_.calls.clear();
+  logic_->ProcessRpdo(kSW_OperationEnabled, 1020, 0, 0, kMode_CSV);
+  ASSERT_GE(bus_.calls.size(), 5u);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_EnableOperation);
+  EXPECT_EQ(bus_.calls[3].value, 900);
+}
+
 }  // namespace
 }  // namespace canopen_hw

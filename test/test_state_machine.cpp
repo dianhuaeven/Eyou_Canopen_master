@@ -6,6 +6,7 @@ using canopen_hw::CiA402State;
 using canopen_hw::CiA402StateMachine;
 using canopen_hw::kCtrl_DisableOperation;
 using canopen_hw::kCtrl_EnableOperation;
+using canopen_hw::kCtrl_Bit_Halt;
 using canopen_hw::kCtrl_FaultReset;
 using canopen_hw::kCtrl_Shutdown;
 using canopen_hw::kMode_CSP;
@@ -125,4 +126,37 @@ TEST(CiA402SM, DisableRequestDropsOperationalInOperationEnabled) {
   EXPECT_FALSE(sm.is_operational());
   EXPECT_EQ(sm.safe_target_velocity(), 0);
   EXPECT_EQ(sm.safe_target_torque(), 0);
+}
+
+TEST(CiA402SM, HaltBitFreezesTargetsAndResumeClearsBit) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSV);
+
+  sm.request_enable();
+  sm.set_ros_target_velocity(500);
+
+  sm.Update(0x0040, kMode_CSV, 1000);
+  sm.Update(0x0021, kMode_CSV, 1000);
+  sm.Update(0x0027, kMode_CSV, 1000);  // CSV 首帧
+  sm.Update(0x0027, kMode_CSV, 1000);  // CSV 解锁
+  ASSERT_TRUE(sm.is_operational());
+  ASSERT_EQ(sm.safe_target_velocity(), 500);
+
+  sm.request_halt();
+  sm.Update(0x0027, kMode_CSV, 1012);
+  EXPECT_EQ(sm.controlword(), static_cast<uint16_t>(kCtrl_EnableOperation | kCtrl_Bit_Halt));
+  EXPECT_TRUE(sm.is_operational());
+  EXPECT_EQ(sm.safe_target(), 1012);
+  EXPECT_EQ(sm.safe_target_velocity(), 0);
+  EXPECT_EQ(sm.safe_target_torque(), 0);
+
+  sm.set_ros_target_velocity(900);
+  sm.Update(0x0027, kMode_CSV, 1020);
+  EXPECT_EQ(sm.safe_target(), 1020);
+  EXPECT_EQ(sm.safe_target_velocity(), 0);
+
+  sm.request_resume();
+  sm.Update(0x0027, kMode_CSV, 1020);
+  EXPECT_EQ(sm.controlword(), kCtrl_EnableOperation);
+  EXPECT_EQ(sm.safe_target_velocity(), 900);
 }

@@ -88,6 +88,11 @@ class CanopenRobotHw {
   std::vector<AxisConversion> axis_conv_;
 
   bool all_operational_ = false;
+
+  // 每轴就绪状态缓存（per-axis is_operational），由 ReadFromSharedState 更新。
+  // 用于 WriteToSharedState 中的逐轴目标位置保护，避免全局 all_operational_
+  // 在多轴场景下让已就绪轴受到未就绪轴的牵连。
+  std::vector<bool> axis_operational_;
 };
 
 }  // namespace canopen_hw

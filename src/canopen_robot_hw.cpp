@@ -6,6 +6,7 @@
 #include <cstdint>
 
 #include "canopen_hw/canopen_master.hpp"
+#include "canopen_hw/logging.hpp"
 
 namespace canopen_hw {
 
@@ -25,7 +26,8 @@ CanopenRobotHw::CanopenRobotHw(SharedState* shared_state)
       joint_vel_cmd_(axis_count_, 0.0),
       joint_torque_cmd_(axis_count_, 0.0),
       joint_mode_(axis_count_, kMode_CSP),
-      axis_conv_(axis_count_) {}
+      axis_conv_(axis_count_),
+      axis_operational_(axis_count_, false) {}
 
 void CanopenRobotHw::ReadFromSharedState() {
   if (!shared_state_) {
@@ -39,6 +41,20 @@ void CanopenRobotHw::ReadFromSharedState() {
     joint_pos_[i] = TicksToRad(i, snap.feedback[i].actual_position);
     joint_vel_[i] = TicksPerSecToRadPerSec(i, snap.feedback[i].actual_velocity);
     joint_eff_[i] = TorquePermilleToNm(i, snap.feedback[i].actual_torque);
+
+    const bool now_operational = snap.feedback[i].is_operational;
+    if (!axis_operational_[i] && now_operational) {
+      // 单轴 operational 上升沿：将指令同步为当前实际位置。
+      // 作用：使 ros_control 控制器在接管前持有正确的初始指令，
+      // 避免控制器以 0（初始化时反馈为 0）作为期望位置。
+      joint_cmd_[i] = joint_pos_[i];
+      if (snap.feedback[i].actual_position == 0) {
+        CANOPEN_LOG_WARN(
+            "joint {}: operational rising edge but actual_position=0, "
+            "TPDO may not have arrived yet; joint_cmd_ set to 0.", i);
+      }
+    }
+    axis_operational_[i] = now_operational;
   }
 }
 
@@ -49,10 +65,17 @@ void CanopenRobotHw::WriteToSharedState() {
 
   for (std::size_t i = 0; i < axis_count_; ++i) {
     AxisCommand cmd;
-    cmd.target_position = RadToTicks(i, joint_cmd_[i]);
-    // 允许在未 fully-operational 阶段下发位置目标，
-    // 让 CiA402 位置锁定逻辑有机会收敛到 operational；
-    // 同时保持速度/力矩为 0，避免在未就绪阶段透传动态命令。
+    if (axis_operational_[i]) {
+      // 轴已就绪：透传 ROS 控制器指令。
+      cmd.target_position = RadToTicks(i, joint_cmd_[i]);
+    } else {
+      // 轴未就绪：目标位置锁定到当前实际位置，绕过 ROS 控制器
+      // 可能持有的旧指令（如初始化时反馈为 0 导致的零位指令），
+      // 防止驱动器在就绪后立即跳向错误位置。
+      // 使用 per-axis axis_operational_ 而非全局 all_operational_，
+      // 避免单轴未就绪时影响其他已就绪轴的目标位置。
+      cmd.target_position = RadToTicks(i, joint_pos_[i]);
+    }
     if (all_operational_) {
       cmd.target_velocity = RadPerSecToTicksPerSec(i, joint_vel_cmd_[i]);
       cmd.target_torque = NmToTorquePermille(i, joint_torque_cmd_[i]);

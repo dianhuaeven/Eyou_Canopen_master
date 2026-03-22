@@ -60,6 +60,8 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   // 手动控制接口（由 CanopenMaster 从上层线程调用）。
   void RequestEnable();
   void RequestDisable();
+  void RequestHalt();
+  void RequestResume();
   void ResetFault();
 
   // SDO 异步读写（由 SdoAccessor 通过 CanopenMaster 调用）。

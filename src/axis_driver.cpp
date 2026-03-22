@@ -177,6 +177,8 @@ void AxisDriver::ConfigureStateMachine(int32_t position_lock_threshold,
 
 void AxisDriver::RequestEnable() { logic_.RequestEnable(); }
 void AxisDriver::RequestDisable() { logic_.RequestDisable(); }
+void AxisDriver::RequestHalt() { logic_.RequestHalt(); }
+void AxisDriver::RequestResume() { logic_.RequestResume(); }
 void AxisDriver::ResetFault() { logic_.ResetFault(); }
 
 // --- SDO (stays in AxisDriver, Lely-specific) ---

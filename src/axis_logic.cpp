@@ -146,6 +146,16 @@ void AxisLogic::RequestDisable() {
   }
 }
 
+void AxisLogic::RequestHalt() {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.request_halt();
+}
+
+void AxisLogic::RequestResume() {
+  std::lock_guard<std::mutex> lk(mtx_);
+  state_machine_.request_resume();
+}
+
 void AxisLogic::ResetFault() {
   std::lock_guard<std::mutex> lk(mtx_);
   state_machine_.ResetFaultCounter();

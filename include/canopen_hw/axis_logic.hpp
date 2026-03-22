@@ -39,6 +39,8 @@ class AxisLogic {
   void SetTargetMode(int8_t mode);
   void RequestEnable();
   void RequestDisable();
+  void RequestHalt();
+  void RequestResume();
   void ResetFault();
 
   // 查询。

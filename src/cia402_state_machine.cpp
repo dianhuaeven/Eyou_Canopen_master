@@ -80,6 +80,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
     ResetFaultFlowContext();
   }
 
+  const bool halt_released = prev_halt_requested_ && !halt_requested_;
+
   switch (state_) {
     case CiA402State::NotReadyToSwitchOn:
       // 自检阶段: 不下发控制命令, 避免与驱动内部流程冲突。
@@ -126,11 +128,14 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       break;
 
     case CiA402State::OperationEnabled:
-      controlword_ =
-          enable_requested_ ? kCtrl_EnableOperation : kCtrl_DisableOperation;
+      controlword_ = kCtrl_EnableOperation;
+      if (halt_requested_) {
+        controlword_ |= kCtrl_Bit_Halt;
+      }
       if (!enable_requested_) {
         // 收到 disable 请求后，立即退出可运行态并回收安全目标，
         // 不再透传速度/力矩命令，等待状态字回落。
+        controlword_ = kCtrl_DisableOperation;
         is_operational_ = false;
         position_locked_ = true;
         safe_target_ = actual_position;
@@ -138,6 +143,25 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
         safe_target_torque_ = 0;
         break;
       }
+
+      if (halt_requested_) {
+        // 轻量级 halt：保持 402 在 OperationEnabled，仅冻结安全目标。
+        is_operational_ = true;
+        position_locked_ = true;
+        safe_target_ = actual_position;
+        safe_target_velocity_ = 0;
+        safe_target_torque_ = 0;
+        break;
+      }
+
+      if (halt_released) {
+        // 从 halt 恢复后重新锁定，避免直接透传旧目标导致跳变。
+        position_locked_ = true;
+        safe_target_ = actual_position;
+        safe_target_velocity_ = 0;
+        safe_target_torque_ = 0;
+      }
+
       StepOperationEnabled(actual_position);
       break;
 
@@ -185,6 +209,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
     safe_target_velocity_ = 0;
     safe_target_torque_ = 0;
   }
+
+  prev_halt_requested_ = halt_requested_;
 }
 
 void CiA402StateMachine::StepFaultReset() {

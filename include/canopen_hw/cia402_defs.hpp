@@ -36,6 +36,7 @@ constexpr uint16_t kCtrl_DisableVoltage = 0x0000;
 constexpr uint16_t kCtrl_EnableVoltage = 0x0002;
 constexpr uint16_t kCtrl_DisableOperation = 0x0007;  // 同 kCtrl_SwitchOn
 constexpr uint16_t kCtrl_FaultReset = 0x0080;
+constexpr uint16_t kCtrl_Bit_Halt = (1u << 8);
 
 // Mode of operation.
 constexpr int8_t kMode_CSP = 8;   // Cyclic Synchronous Position

@@ -41,6 +41,14 @@ class CiA402StateMachine {
   // 请求退出使能流程。
   void request_disable() { enable_requested_ = false; }
 
+  // 请求轻量级 halt（仅置控制字 bit8，不降级 402 状态机）。
+  void request_halt() { halt_requested_ = true; }
+
+  // 清除轻量级 halt。
+  void request_resume() { halt_requested_ = false; }
+
+  bool halt_requested() const { return halt_requested_; }
+
   // 设置上层(ROS)期望位置。
   void set_ros_target(int32_t target) { ros_target_ = target; }
 
@@ -97,6 +105,8 @@ class CiA402StateMachine {
 
   // 请求与模式。
   bool enable_requested_ = true;
+  bool halt_requested_ = false;
+  bool prev_halt_requested_ = false;
   int8_t target_mode_ = kMode_CSP;
 
   // 运行状态输出。
