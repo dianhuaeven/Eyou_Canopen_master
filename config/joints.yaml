@@ -15,5 +15,6 @@ joints:
     position_lock_threshold: 15000
     max_fault_resets: 3
     fault_reset_hold_cycles: 5
+    max_velocity_for_clamp: 500000
     velocity_scale: 1.0
     torque_scale: 1.0

@@ -116,6 +116,9 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
         jcfg.fault_reset_hold_cycles =
             joint["fault_reset_hold_cycles"].as<int>();
       }
+      if (joint["max_velocity_for_clamp"]) {
+        jcfg.max_velocity_for_clamp = joint["max_velocity_for_clamp"].as<double>();
+      }
       if (joint["counts_per_rev"]) {
         jcfg.counts_per_rev = joint["counts_per_rev"].as<double>();
       }
@@ -147,6 +150,13 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
       std::ostringstream oss;
       oss << "invalid rated_torque_nm at joints[" << axis_index
           << "]: expected > 0, got " << jcfg.rated_torque_nm;
+      SetError(error, oss.str());
+      return false;
+    }
+    if (jcfg.max_velocity_for_clamp <= 0) {
+      std::ostringstream oss;
+      oss << "invalid max_velocity_for_clamp at joints[" << axis_index
+          << "]: expected > 0, got " << jcfg.max_velocity_for_clamp;
       SetError(error, oss.str());
       return false;
     }

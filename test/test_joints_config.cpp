@@ -3,8 +3,8 @@
 #include <fstream>
 #include <string>
 
-#include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/canopen_robot_hw.hpp"
+#include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 TEST(JointsConfig, LoadValidYaml) {
@@ -21,6 +21,7 @@ TEST(JointsConfig, LoadValidYaml) {
            "      verify_pdo_mapping: true\n"
            "    counts_per_rev: 1000\n"
            "    rated_torque_nm: 10\n"
+           "    max_velocity_for_clamp: 1000\n"
            "    velocity_scale: 2\n"
            "    torque_scale: 0.5\n"
            "  - name: joint_2\n"
@@ -29,6 +30,7 @@ TEST(JointsConfig, LoadValidYaml) {
            "      verify_pdo_mapping: false\n"
            "    counts_per_rev: 2000\n"
            "    rated_torque_nm: 20\n"
+           "    max_velocity_for_clamp: 2000\n"
            "    velocity_scale: 1.5\n"
            "    torque_scale: 2.0\n";
   }
@@ -41,8 +43,10 @@ TEST(JointsConfig, LoadValidYaml) {
   EXPECT_EQ(master_cfg.joints.size(), 2u);
   EXPECT_EQ(master_cfg.joints[0].node_id, 1u);
   EXPECT_TRUE(master_cfg.joints[0].verify_pdo_mapping);
+  EXPECT_DOUBLE_EQ(master_cfg.joints[0].max_velocity_for_clamp, 1000.0);
   EXPECT_EQ(master_cfg.joints[1].node_id, 2u);
   EXPECT_FALSE(master_cfg.joints[1].verify_pdo_mapping);
+  EXPECT_DOUBLE_EQ(master_cfg.joints[1].max_velocity_for_clamp, 2000.0);
 
   canopen_hw::AxisFeedback fb0;
   fb0.actual_position = 500;  // 0.5 rev -> pi
@@ -102,4 +106,24 @@ TEST(JointsConfig, InvalidFieldTypeRejected) {
   const bool ok = canopen_hw::LoadJointsYaml(invalid_path, &error, &master_cfg);
   EXPECT_FALSE(ok);
   EXPECT_NE(error.find("invalid field type at joints[0]"), std::string::npos);
+}
+
+TEST(JointsConfig, InvalidMaxVelocityForClampRejected) {
+  const std::string invalid_path = "/tmp/joints_test_invalid_max_velocity.yaml";
+  {
+    std::ofstream ofs(invalid_path);
+    ofs << "joints:\n"
+           "  - name: joint_bad\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "    counts_per_rev: 1000\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 0\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(invalid_path, &error, &master_cfg);
+  EXPECT_FALSE(ok);
+  EXPECT_NE(error.find("invalid max_velocity_for_clamp"), std::string::npos);
 }
