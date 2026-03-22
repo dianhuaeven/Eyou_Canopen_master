@@ -36,17 +36,19 @@ class LifecycleManager {
   bool Init(const std::string& dcf_path, const std::string& joints_path);
   bool Init(const CanopenMasterConfig& config);
 
-  // 停止运动（全轴 disable），保持配置与对象。
-  // Active -> Configured。
+  // 轻量级停运动（全轴置 halt bit），保持通信与 Active 状态。
   bool Halt();
+
+  // 清除全轴 halt bit，恢复指令透传。
+  bool Resume();
 
   // 关闭现场通信但不退出进程，后续必须重新 InitMotors。
   // Active/Configured -> Configured。
   // 返回 false 表示 402 降级存在超时或当前状态不允许。
   bool StopCommunication(std::string* detail = nullptr);
 
-  // 仅允许在“曾经初始化成功过”的 Configured 状态恢复。
-  // Configured -> Active。
+  // 仅处理 fault 轴的复位与重使能，不做通信层重启。
+  // Active -> Active。
   bool Recover();
 
   // 优雅关闭主站并释放对象。
@@ -56,6 +58,7 @@ class LifecycleManager {
   LifecycleState state() const { return state_; }
   bool ever_initialized() const { return ever_initialized_; }
   bool require_init() const { return require_init_; }
+  bool halted() const { return halted_; }
 
   // 访问内部组件（供上层集成使用）。
   CanopenMaster* master() { return master_.get(); }
@@ -66,6 +69,7 @@ class LifecycleManager {
   LifecycleState state_ = LifecycleState::Unconfigured;
   bool ever_initialized_ = false;
   bool require_init_ = false;
+  bool halted_ = false;
   CanopenMasterConfig config_;
   std::unique_ptr<SharedState> shared_state_;
   std::unique_ptr<CanopenMaster> master_;
