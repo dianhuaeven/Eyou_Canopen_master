@@ -66,9 +66,9 @@ int main(int argc, char** argv) {
     joint_names.push_back(jcfg.name);
   }
 
-  // 通过 LifecycleManager 启动主站。
+  // 先进入 Configured，不自动初始化电机。
   canopen_hw::LifecycleManager lifecycle;
-  if (!lifecycle.Init(master_cfg)) {
+  if (!lifecycle.Configure(master_cfg)) {
     return 1;
   }
 
@@ -76,7 +76,24 @@ int main(int argc, char** argv) {
   canopen_hw::CanopenRobotHwRos robot_hw_ros(lifecycle.robot_hw(), joint_names);
   std::mutex loop_mtx;
 
+  bool auto_init = false;
+  pnh.param("auto_init", auto_init, false);
+
   // 生命周期 services。
+  auto init_srv = pnh.advertiseService<std_srvs::Trigger::Request,
+                                       std_srvs::Trigger::Response>(
+      "init", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+        std::lock_guard<std::mutex> lk(loop_mtx);
+        if (lifecycle.state() == canopen_hw::LifecycleState::Active) {
+          res.success = true;
+          res.message = "already initialized";
+          return true;
+        }
+        res.success = lifecycle.InitMotors();
+        res.message = res.success ? "initialized" : "init failed";
+        return true;
+      });
+
   auto halt_srv = pnh.advertiseService<std_srvs::Trigger::Request,
                                        std_srvs::Trigger::Response>(
       "halt", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
@@ -90,6 +107,12 @@ int main(int argc, char** argv) {
                                           std_srvs::Trigger::Response>(
       "recover", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
+        if (lifecycle.state() == canopen_hw::LifecycleState::Configured &&
+            !lifecycle.ever_initialized()) {
+          res.success = false;
+          res.message = "recover unavailable before init; call ~/init first";
+          return true;
+        }
         res.success = lifecycle.Recover();
         res.message = res.success ? "recovered" : "recover failed";
         return true;
@@ -112,6 +135,11 @@ int main(int argc, char** argv) {
       "set_mode", [&](Eyou_Canopen_Master::SetMode::Request& req,
                       Eyou_Canopen_Master::SetMode::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
+        if (lifecycle.state() == canopen_hw::LifecycleState::Active) {
+          res.success = false;
+          res.message = "set_mode not allowed in Active state; call ~/halt first";
+          return true;
+        }
         if (req.axis_index >= robot_hw_ros.axis_count()) {
           res.success = false;
           res.message = "axis_index out of range";
@@ -157,6 +185,14 @@ int main(int argc, char** argv) {
         stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "operational");
       }
     });
+  }
+
+  if (auto_init) {
+    std::lock_guard<std::mutex> lk(loop_mtx);
+    if (!lifecycle.InitMotors()) {
+      CANOPEN_LOG_ERROR("auto_init enabled but InitMotors failed");
+      return 1;
+    }
   }
 
   double loop_hz = 100.0;
