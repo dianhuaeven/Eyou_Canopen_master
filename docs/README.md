@@ -20,6 +20,8 @@
    发布前检查项。
 8. `docs/ros_adapter_plan.md` / `docs/soak_test_plan.md` / `docs/fault_injection_checklist.md`  
    运行稳定性与压测/注入计划。
+9. `docs/2026-03-22_enable_protection_epoch_ready_bug_report_and_fix_plan.md`  
+   使能保护零位抽动问题的根因分析与分阶段修复计划（epoch-ready + fault latch）。
 
 ## 2026-03-21 已归档文档
 

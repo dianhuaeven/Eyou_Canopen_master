@@ -138,12 +138,28 @@ rosservice call /canopen_hw_node/init "{}"
 | `~shutdown` | `std_srvs/Trigger` | 执行 402 失能 + 停通信，不退出节点（随后需 `~init`） |
 | `~set_mode` | `Eyou_Canopen_Master/SetMode` | 允许在 `Configured` 或 `Active+halted` 切模式 |
 
+### 6.1.2 命令协议（epoch-ready）
+
+自 2026-03-22 起，控制链路采用 `AxisCommand.valid + AxisCommand.arm_epoch` 协议：
+
+1. `arm_epoch=0` 永远无效；
+2. 进入新的使能会话后，底层会更新 `AxisFeedback.arm_epoch`；
+3. 上层仅在命令源重同步完成后才应将 `valid=true`；
+4. `valid=true` 但 `arm_epoch` 不匹配时，状态机仍保持锁定，不会透传目标。
+
+工程建议：
+
+1. 在 `/init`、`/recover`、`/resume` 后先等待反馈 epoch 稳定；
+2. 重同步 controller setpoint 到当前位置；
+3. 再把 `valid` 置 true。
+
 ### 6.1.1 shutdown/recover/init 关系
 
 - `~shutdown`：执行 402 失能与停通信，节点进程不退出，并设置 `require_init=true`。
 - `~recover`：仅处理 Fault，不重启主站；若 `require_init=true` 会被拒绝。
 - `~init`：`~shutdown` 后唯一重新建立通信的入口。
 - `~halt` / `~resume`：仅影响控制字 Halt bit，不改变 lifecycle 到 Configured。
+- 当 `global_fault` 闩锁为 true 时，`~resume` 会被拒绝；必须先 `~recover`。
 
 ### 6.2 模式切换流程
 
@@ -195,6 +211,8 @@ rosservice call /canopen_hw_node/resume
 状态机验证：
 - 状态能够进入 `OPERATION_ENABLED`
 - 位置反馈更新后 `all_operational` 变为 true
+- 在 `valid=false` 或 `epoch` 失配时，轴保持锁定且 `safe_target` 跟随实际位置
+- `all_axes_halted_by_fault=true` 时，上层不应继续发送有效运动命令
 
 ---
 

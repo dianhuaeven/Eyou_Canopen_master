@@ -9,7 +9,7 @@
 | `Configure(config)` | 仅构造对象，进入 Configured |
 | `InitMotors()` | 启动通信与驱动流程（Configured -> Active） |
 | `Halt()` | 轻量停转：置 Halt bit，保持 Active |
-| `Resume()` | 清 Halt bit 恢复运动（有故障需先 Recover） |
+| `Resume()` | 清 Halt bit 恢复运动（global fault latch 期间会被拒绝） |
 | `Recover()` | 仅对 fault 轴执行复位与重使能（不重启通信） |
 | `StopCommunication()` | 执行 402 降级 + 停通信，置 `require_init=true` |
 | `Shutdown()` | 完全关闭，释放所有资源 |
@@ -32,13 +32,14 @@
 | `ReadFromSharedState()` | 从 SharedState 读取全轴反馈快照 |
 | `WriteToSharedState()` | 将目标命令写入 SharedState |
 | `ApplyConfig(config)` | 应用轴配置（单位换算参数等） |
-| `SetJointPositionCommand(axis, rad)` | 设置单轴目标位置（弧度） |
+| `SetJointCommand(axis, rad)` | 设置单轴目标位置（弧度） |
 | `SetJointVelocityCommand(axis, rad_s)` | 设置单轴目标速度（rad/s） |
 | `SetJointTorqueCommand(axis, nm)` | 设置单轴目标力矩（Nm） |
-| `SetModeOfOperation(axis, mode)` | 设置单轴运动模式（CSP/CSV/CST） |
-| `GetJointPosition(axis)` | 获取单轴实际位置（弧度） |
-| `GetJointVelocity(axis)` | 获取单轴实际速度（rad/s） |
-| `GetJointTorque(axis)` | 获取单轴实际力矩（Nm） |
+| `SetJointMode(axis, mode)` | 设置单轴运动模式（CSP/CSV/CST） |
+| `SetCommandReady(axis, ready)` | 写入命令有效标志（AxisCommand.valid） |
+| `SetCommandEpoch(axis, epoch)` | 写入命令会话号（AxisCommand.arm_epoch） |
+| `arm_epoch(axis)` | 读取反馈会话号（AxisFeedback.arm_epoch） |
+| `all_axes_halted_by_fault()` | 读取全轴故障连带停机标志 |
 
 ## AxisLogic
 
@@ -52,9 +53,29 @@
 | `SetRosTargetVelocity(vel)` | 设置目标速度 |
 | `SetRosTargetTorque(torque)` | 设置目标力矩 |
 | `SetTargetMode(mode)` | 设置运动模式 |
+| `SetExternalCommand(cmd)` | 写入上层命令包（target/mode/valid/epoch） |
+| `SetGlobalFault(fault)` | 注入全局故障闩锁输入 |
 | `RequestEnable()` / `RequestDisable()` | 使能/去使能 |
 | `RequestHalt()` / `RequestResume()` | 置/清 Halt bit |
 | `ResetFault()` | 复位故障 |
+
+## SharedState 协议字段
+
+`AxisCommand`：
+
+| 字段 | 说明 |
+|------|------|
+| `target_position/velocity/torque` | 上层期望目标（工程量已换算为设备单位） |
+| `mode_of_operation` | 目标模式（CSP/CSV/CST） |
+| `valid` | 上层命令源是否完成重同步并声明可用 |
+| `arm_epoch` | 目标所属使能会话号（`0` 永远无效） |
+
+`SharedSnapshot`：
+
+| 字段 | 说明 |
+|------|------|
+| `global_fault` | 任一轴故障后置位的全局闩锁 |
+| `all_axes_halted_by_fault` | 全轴因故障被连带冻结标志 |
 
 ## BusIO (接口)
 
