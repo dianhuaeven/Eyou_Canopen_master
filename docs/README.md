@@ -1,29 +1,47 @@
 # 文档索引与归档规则
 
-更新时间：2026-03-19
+更新时间：2026-03-21
 
 ## 当前有效文档（优先阅读）
 
-1. `docs/project_overview.md`：当前代码架构与运行机制总览。
-2. `docs/quality_9_score_plan.md`：从 7/10 提升到 9/10 的执行清单与验收标准。
-3. `docs/usage.md`：部署、运行与联调步骤。
-4. `docs/yaml_config_guide.md`：配置字段说明。
-5. `docs/debug_notes.md`：现场调试操作。
-6. `docs/test_plan.md`：测试策略与验收用例。
+1. `docs/2026-03-21_canopen_pdo_boot_diagnosis_report.md`  
+   CANopen 启动/PDO 故障统一修复报告与 commit 级修复计划。
+2. `docs/2026-03-21_dcf_urdf_fix.md`  
+   本次 EDS/DCF/URDF 修复摘要。
+3. `docs/project_overview.md`  
+   当前代码架构与运行机制总览。
+4. `docs/usage.md`  
+   部署、运行、联调步骤。
+5. `docs/yaml_config_guide.md`  
+   `master.yaml` 与 `joints.yaml` 配置说明。
+6. `docs/api_reference.md`  
+   核心模块与接口说明。
+7. `docs/release_readiness.md`  
+   发布前检查项。
+8. `docs/ros_adapter_plan.md` / `docs/soak_test_plan.md` / `docs/fault_injection_checklist.md`  
+   运行稳定性与压测/注入计划。
 
-## 已归档文档（历史记录）
+## 2026-03-21 已归档文档
 
-以下文档为阶段性产物，已不作为当前执行基线：
+以下阶段性报告已转入：
 
-1. `docs/archive/bug_report_2026-03-19.md`
-2. `docs/archive/bugfix_commit_plan_2026-03-19.md`
-3. `docs/archive/bugfix_report_2026-03-19.md`
-4. `docs/archive/roadmap_to_production_2026-03-18.md`
+`docs/archive/2026-03-21_deprecated/`
 
-历史设计/评审资料统一保留在 `docs/archive/`。
+- `bug_report_C06-C14.md`
+- `bugfix_report_2026-03-19_known_issues.md`
+- `gap_report_engineering_completeness.md`
+- `quality_review_2026-03-19.md`
+- `work_report_C06-C14.md`
+- `work_report_ros_adapter.md`
+
+归档原因：内容已被 2026-03-21 的统一修复报告覆盖，保留历史追溯但不再作为当前执行基线。
+
+## 历史归档目录
+
+- `docs/archive/`：历史设计、评审、阶段性计划、旧版排障记录。
 
 ## 归档规则
 
-1. 以“报告/计划/阶段总结”为主，完成后归档，不覆盖历史版本。
-2. 归档文件采用 `原名_YYYY-MM-DD.md` 命名。
-3. 当前执行文档保持短链路：只保留一份主版本，避免并行冲突。
+1. 阶段性报告（`bug_report/work_report/quality_review`）完成后归档，不覆盖历史版本。
+2. 同主题仅保留一个“当前执行基线”文档在 `docs/` 顶层。
+3. 新的现场修复与联调结论优先写入日期化文档（建议格式 `YYYY-MM-DD_*.md`）。
