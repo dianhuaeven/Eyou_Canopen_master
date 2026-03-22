@@ -40,6 +40,11 @@ class LifecycleManager {
   // Active -> Configured。
   bool Halt();
 
+  // 关闭现场通信但不退出进程，后续必须重新 InitMotors。
+  // Active/Configured -> Configured。
+  // 返回 false 表示 402 降级存在超时或当前状态不允许。
+  bool StopCommunication(std::string* detail = nullptr);
+
   // 仅允许在“曾经初始化成功过”的 Configured 状态恢复。
   // Configured -> Active。
   bool Recover();
@@ -50,6 +55,7 @@ class LifecycleManager {
 
   LifecycleState state() const { return state_; }
   bool ever_initialized() const { return ever_initialized_; }
+  bool require_init() const { return require_init_; }
 
   // 访问内部组件（供上层集成使用）。
   CanopenMaster* master() { return master_.get(); }
@@ -59,6 +65,7 @@ class LifecycleManager {
  private:
   LifecycleState state_ = LifecycleState::Unconfigured;
   bool ever_initialized_ = false;
+  bool require_init_ = false;
   CanopenMasterConfig config_;
   std::unique_ptr<SharedState> shared_state_;
   std::unique_ptr<CanopenMaster> master_;

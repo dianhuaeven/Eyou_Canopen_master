@@ -29,6 +29,7 @@ bool LifecycleManager::Configure(const CanopenMasterConfig& config) {
 
   state_ = LifecycleState::Configured;
   ever_initialized_ = false;
+  require_init_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Configured");
   return true;
 }
@@ -52,6 +53,7 @@ bool LifecycleManager::InitMotors() {
 
   state_ = LifecycleState::Active;
   ever_initialized_ = true;
+  require_init_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Active (initialized)");
   return true;
 }
@@ -108,14 +110,64 @@ bool LifecycleManager::Halt() {
   }
 
   state_ = LifecycleState::Configured;
+  require_init_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Configured (halted)");
   return true;
+}
+
+bool LifecycleManager::StopCommunication(std::string* detail) {
+  if (detail) {
+    detail->clear();
+  }
+
+  if (state_ != LifecycleState::Active &&
+      state_ != LifecycleState::Configured) {
+    CANOPEN_LOG_WARN(
+        "StopCommunication called in state {}, expected Active/Configured",
+        static_cast<int>(state_));
+    if (detail) {
+      *detail = "invalid lifecycle state";
+    }
+    return false;
+  }
+
+  if (!master_) {
+    CANOPEN_LOG_ERROR("StopCommunication: master is null");
+    if (detail) {
+      *detail = "master is null";
+    }
+    return false;
+  }
+
+  bool graceful_ok = true;
+  if (master_->running()) {
+    graceful_ok = master_->GracefulShutdown(detail);
+  }
+
+  // 即使 402 失能超时，也继续执行通信停机，避免 service 卡死。
+  master_->Stop();
+  state_ = LifecycleState::Configured;
+  require_init_ = true;
+
+  if (!graceful_ok) {
+    CANOPEN_LOG_WARN("LifecycleManager: communication stopped with detail: {}",
+                     detail ? *detail : std::string("graceful shutdown timeout"));
+  } else {
+    CANOPEN_LOG_INFO("LifecycleManager: Configured (communication stopped)");
+  }
+  return graceful_ok;
 }
 
 bool LifecycleManager::Recover() {
   if (state_ != LifecycleState::Configured) {
     CANOPEN_LOG_WARN("Recover called in state {}, expected Configured",
                      static_cast<int>(state_));
+    return false;
+  }
+
+  if (require_init_) {
+    CANOPEN_LOG_WARN(
+        "Recover called after communication shutdown; call InitMotors first");
     return false;
   }
 
@@ -142,6 +194,7 @@ bool LifecycleManager::Recover() {
 
 bool LifecycleManager::Shutdown() {
   if (state_ == LifecycleState::Unconfigured) {
+    require_init_ = false;
     return true;
   }
 
@@ -156,6 +209,7 @@ bool LifecycleManager::Shutdown() {
   shared_state_.reset();
   config_ = CanopenMasterConfig();
   ever_initialized_ = false;
+  require_init_ = false;
 
   state_ = LifecycleState::Unconfigured;
   CANOPEN_LOG_INFO("LifecycleManager: Unconfigured (shutdown)");
