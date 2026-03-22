@@ -55,6 +55,12 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
           config->master_node_id = static_cast<uint8_t>(master_node_id);
         }
       }
+      if (top_canopen["loop_hz"]) {
+        const double hz = top_canopen["loop_hz"].as<double>();
+        if (hz > 0) {
+          config->loop_hz = hz;
+        }
+      }
     } catch (const YAML::Exception& e) {
       std::ostringstream oss;
       oss << "invalid field type at canopen: " << e.what();

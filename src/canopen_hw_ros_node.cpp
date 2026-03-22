@@ -1,3 +1,4 @@
+#include <atomic>
 #include <filesystem>
 #include <mutex>
 #include <string>
@@ -75,6 +76,7 @@ int main(int argc, char** argv) {
   // ROS 适配层。
   canopen_hw::CanopenRobotHwRos robot_hw_ros(lifecycle.robot_hw(), joint_names);
   std::mutex loop_mtx;
+  std::atomic<bool> shutdown_requested{false};
 
   bool auto_init = false;
   pnh.param("auto_init", auto_init, false);
@@ -84,6 +86,11 @@ int main(int argc, char** argv) {
                                        std_srvs::Trigger::Response>(
       "init", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
+        if (shutdown_requested.load(std::memory_order_relaxed)) {
+          res.success = false;
+          res.message = "shutdown in progress";
+          return true;
+        }
         if (lifecycle.state() == canopen_hw::LifecycleState::Active) {
           res.success = true;
           res.message = "already initialized";
@@ -98,6 +105,11 @@ int main(int argc, char** argv) {
                                        std_srvs::Trigger::Response>(
       "halt", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
+        if (shutdown_requested.load(std::memory_order_relaxed)) {
+          res.success = false;
+          res.message = "shutdown in progress";
+          return true;
+        }
         res.success = lifecycle.Halt();
         res.message = res.success ? "halted" : "halt failed";
         return true;
@@ -107,6 +119,11 @@ int main(int argc, char** argv) {
                                           std_srvs::Trigger::Response>(
       "recover", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
+        if (shutdown_requested.load(std::memory_order_relaxed)) {
+          res.success = false;
+          res.message = "shutdown in progress";
+          return true;
+        }
         if (lifecycle.state() == canopen_hw::LifecycleState::Configured &&
             !lifecycle.ever_initialized()) {
           res.success = false;
@@ -121,12 +138,14 @@ int main(int argc, char** argv) {
   auto shutdown_srv = pnh.advertiseService<std_srvs::Trigger::Request,
                                            std_srvs::Trigger::Response>(
       "shutdown", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
-        {
-          std::lock_guard<std::mutex> lk(loop_mtx);
-          res.success = lifecycle.Shutdown();
+        std::lock_guard<std::mutex> lk(loop_mtx);
+        if (shutdown_requested.exchange(true, std::memory_order_relaxed)) {
+          res.success = true;
+          res.message = "shutdown already requested";
+          return true;
         }
-        res.message = res.success ? "shutdown" : "shutdown failed";
-        ros::shutdown();
+        res.success = true;
+        res.message = "shutdown requested";
         return true;
       });
 
@@ -135,6 +154,11 @@ int main(int argc, char** argv) {
       "set_mode", [&](Eyou_Canopen_Master::SetMode::Request& req,
                       Eyou_Canopen_Master::SetMode::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
+        if (shutdown_requested.load(std::memory_order_relaxed)) {
+          res.success = false;
+          res.message = "shutdown in progress";
+          return true;
+        }
         if (lifecycle.state() == canopen_hw::LifecycleState::Active) {
           res.success = false;
           res.message = "set_mode not allowed in Active state; call ~/halt first";
@@ -195,14 +219,14 @@ int main(int argc, char** argv) {
     }
   }
 
-  double loop_hz = 100.0;
-  pnh.param("loop_hz", loop_hz, 100.0);
+  double loop_hz = master_cfg.loop_hz;
+  pnh.param("loop_hz", loop_hz, loop_hz);  // launch 参数可覆盖 yaml 值。
   ros::AsyncSpinner spinner(2);
   spinner.start();
   ros::Rate rate(loop_hz);
   ros::Time last_time = ros::Time::now();
 
-  while (ros::ok()) {
+  while (ros::ok() && !shutdown_requested.load(std::memory_order_relaxed)) {
     const ros::Time now = ros::Time::now();
     const ros::Duration period = now - last_time;
     last_time = now;
@@ -222,5 +246,6 @@ int main(int argc, char** argv) {
     std::lock_guard<std::mutex> lk(loop_mtx);
     lifecycle.Shutdown();
   }
+  ros::shutdown();
   return 0;
 }

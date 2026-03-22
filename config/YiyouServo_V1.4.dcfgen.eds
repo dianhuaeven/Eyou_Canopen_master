@@ -13,10 +13,7 @@ ModifiedBy=Yiyou Technology
 
 [DeviceInfo]
 VendorName=Yiyou Technology
-VendorNumber=0x00000668
 ProductName=EuServo
-ProductNumber=0x00221701
-RevisionNumber=0x00000010
 BaudRate_10=1
 BaudRate_20=1
 BaudRate_50=1
@@ -559,7 +556,6 @@ AccessType=RO
 DataType=0x0007
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=0x00000668
 
 [1018sub2]
 ParameterName=Product code
@@ -568,7 +564,6 @@ AccessType=RO
 DataType=0x0007
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=0x00221701
 
 [1018sub3]
 ParameterName=Revision number
@@ -577,7 +572,6 @@ AccessType=RO
 DataType=0x0007
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=0x00000010
 
 [1019]
 ParameterName=Synchronous counter overflow value

@@ -3,6 +3,7 @@
 canopen:
   interface: "can0"
   master_node_id: 127
+  loop_hz: 200.0
 
 joints:
   - name: joint_1

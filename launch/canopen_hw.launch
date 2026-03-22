@@ -4,7 +4,7 @@
   <!-- 配置文件路径 -->
   <arg name="dcf_path" default="$(find Eyou_Canopen_Master)/config/master.dcf"/>
   <arg name="joints_path" default="$(find Eyou_Canopen_Master)/config/joints.yaml"/>
-  <arg name="loop_hz" default="100.0"/>
+  <arg name="loop_hz" default="200.0"/>
   <arg name="auto_init" default="false"/>
 
   <!-- 加载 controller 参数 -->

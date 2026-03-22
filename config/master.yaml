@@ -5,7 +5,7 @@ options:
 master:
   node_id: 127
   heartbeat_producer: 500
-  sync_period: 10000
+  sync_period: 5000
   sync_overflow: 0
 
 joint_1:
