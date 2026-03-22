@@ -132,16 +132,18 @@ rosservice call /canopen_hw_node/init "{}"
 | Service | 类型 | 说明 |
 |---------|------|------|
 | `~init` | `std_srvs/Trigger` | 手动初始化电机（Configured -> Active） |
-| `~halt` | `std_srvs/Trigger` | 停止运动，保持总线连接（Active -> Configured） |
-| `~recover` | `std_srvs/Trigger` | 仅用于 `halt` 后恢复；若执行过 `~shutdown`，需先 `~init` |
+| `~halt` | `std_srvs/Trigger` | 轻量停转：置 Halt bit，保持 Active 与通信 |
+| `~resume` | `std_srvs/Trigger` | 清 Halt bit 恢复运动；若有故障需先 `~recover` |
+| `~recover` | `std_srvs/Trigger` | 仅做 Fault Reset（Active 内），不重启通信 |
 | `~shutdown` | `std_srvs/Trigger` | 执行 402 失能 + 停通信，不退出节点（随后需 `~init`） |
-| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 切换运动模式（仅非 Active 状态允许） |
+| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 允许在 `Configured` 或 `Active+halted` 切模式 |
 
 ### 6.1.1 shutdown/recover/init 关系
 
-- ~shutdown：执行 402 失能与停通信，节点进程不退出。
-- ~recover：仅对 halt 场景生效；若走过 ~shutdown，会被拒绝。
-- ~init：~shutdown 后唯一重新建立通信的入口。
+- `~shutdown`：执行 402 失能与停通信，节点进程不退出，并设置 `require_init=true`。
+- `~recover`：仅处理 Fault，不重启主站；若 `require_init=true` 会被拒绝。
+- `~init`：`~shutdown` 后唯一重新建立通信的入口。
+- `~halt` / `~resume`：仅影响控制字 Halt bit，不改变 lifecycle 到 Configured。
 
 ### 6.2 模式切换流程
 
@@ -149,7 +151,7 @@ rosservice call /canopen_hw_node/init "{}"
 # 0. 首次启动先初始化电机（若 auto_init:=false）
 rosservice call /canopen_hw_node/init "{}"
 
-# 1. 停止运动（Active -> Configured）
+# 1. 轻量停转（保持 Active，不断通信）
 rosservice call /canopen_hw_node/halt
 
 # 2. 切换到 CSV 模式（所有轴）
@@ -161,8 +163,8 @@ done
 rosrun controller_manager controller_manager stop arm_position_controller
 rosrun controller_manager controller_manager start arm_velocity_controller
 
-# 4. 恢复运动（Configured -> Active）
-rosservice call /canopen_hw_node/recover
+# 4. 恢复运动
+rosservice call /canopen_hw_node/resume
 ```
 
 ### 6.3 Controllers

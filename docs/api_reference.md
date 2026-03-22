@@ -6,10 +6,24 @@
 |------|------|
 | `Init(dcf_path, joints_path)` | 加载配置并启动主站，进入 Active |
 | `Init(CanopenMasterConfig)` | 同上，直接传配置结构体 |
-| `Halt()` | 优雅停机，进入 Configured |
-| `Recover()` | 从 Configured 重启主站，回到 Active |
+| `Configure(config)` | 仅构造对象，进入 Configured |
+| `InitMotors()` | 启动通信与驱动流程（Configured -> Active） |
+| `Halt()` | 轻量停转：置 Halt bit，保持 Active |
+| `Resume()` | 清 Halt bit 恢复运动（有故障需先 Recover） |
+| `Recover()` | 仅对 fault 轴执行复位与重使能（不重启通信） |
+| `StopCommunication()` | 执行 402 降级 + 停通信，置 `require_init=true` |
 | `Shutdown()` | 完全关闭，释放所有资源 |
 | `robot_hw()` | 返回 CanopenRobotHw 指针 |
+
+## CanopenMaster
+
+| 方法 | 说明 |
+|------|------|
+| `GracefulShutdown(detail)` | 402 降级 + NMT Stop；超时返回 false 并给 detail |
+| `HaltAll()` / `ResumeAll()` | 全轴置/清 Halt bit（保持 Operation Enabled） |
+| `RecoverFaultedAxes(detail)` | 仅对 fault 轴复位，超时返回 false 并给 detail |
+| `EnableAxis/DisableAxis/ResetAxisFault` | 单轴手动控制接口 |
+| `GetAxisFeedback(i, out)` | 读取单轴反馈快照 |
 
 ## CanopenRobotHw
 
@@ -39,6 +53,7 @@
 | `SetRosTargetTorque(torque)` | 设置目标力矩 |
 | `SetTargetMode(mode)` | 设置运动模式 |
 | `RequestEnable()` / `RequestDisable()` | 使能/去使能 |
+| `RequestHalt()` / `RequestResume()` | 置/清 Halt bit |
 | `ResetFault()` | 复位故障 |
 
 ## BusIO (接口)

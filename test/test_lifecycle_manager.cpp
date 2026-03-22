@@ -35,11 +35,18 @@ TEST(LifecycleManager, StartsUnconfigured) {
   EXPECT_EQ(lm.shared_state(), nullptr);
   EXPECT_FALSE(lm.ever_initialized());
   EXPECT_FALSE(lm.require_init());
+  EXPECT_FALSE(lm.halted());
 }
 
 TEST(LifecycleManager, HaltRejectsWhenUnconfigured) {
   LifecycleManager lm;
   EXPECT_FALSE(lm.Halt());
+  EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
+}
+
+TEST(LifecycleManager, ResumeRejectsWhenUnconfigured) {
+  LifecycleManager lm;
+  EXPECT_FALSE(lm.Resume());
   EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
 }
 
@@ -63,6 +70,7 @@ TEST(LifecycleManager, ShutdownFromUnconfiguredIsNoop) {
   EXPECT_TRUE(lm.Shutdown());
   EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
   EXPECT_FALSE(lm.require_init());
+  EXPECT_FALSE(lm.halted());
 }
 
 TEST(LifecycleManager, ConfigureRejectsInvalidAxisCount) {
@@ -92,6 +100,7 @@ TEST(LifecycleManager, ConfigureValidConfigEntersConfigured) {
   EXPECT_NE(lm.shared_state(), nullptr);
   EXPECT_FALSE(lm.ever_initialized());
   EXPECT_FALSE(lm.require_init());
+  EXPECT_FALSE(lm.halted());
 }
 
 TEST(LifecycleManager, StopCommunicationFromConfiguredMarksRequireInit) {
@@ -103,6 +112,7 @@ TEST(LifecycleManager, StopCommunicationFromConfiguredMarksRequireInit) {
   EXPECT_TRUE(lm.StopCommunication(&detail));
   EXPECT_EQ(lm.state(), LifecycleState::Configured);
   EXPECT_TRUE(lm.require_init());
+  EXPECT_FALSE(lm.halted());
   EXPECT_TRUE(detail.empty());
 }
 
@@ -112,6 +122,15 @@ TEST(LifecycleManager, RecoverRejectsBeforeFirstInitMotors) {
 
   ASSERT_TRUE(lm.Configure(config));
   EXPECT_FALSE(lm.Recover());
+  EXPECT_EQ(lm.state(), LifecycleState::Configured);
+}
+
+TEST(LifecycleManager, ResumeRejectsInConfigured) {
+  LifecycleManager lm;
+  auto config = MakeMinimalConfig();
+
+  ASSERT_TRUE(lm.Configure(config));
+  EXPECT_FALSE(lm.Resume());
   EXPECT_EQ(lm.state(), LifecycleState::Configured);
 }
 
@@ -142,6 +161,7 @@ TEST(LifecycleManager, InitMotorsFailureKeepsConfigured) {
   EXPECT_FALSE(lm.ever_initialized());
   EXPECT_NE(lm.master(), nullptr);
   EXPECT_FALSE(lm.require_init());
+  EXPECT_FALSE(lm.halted());
 }
 
 TEST(LifecycleManager, InitCompatibilityFailureRollsBackToUnconfigured) {
@@ -155,6 +175,7 @@ TEST(LifecycleManager, InitCompatibilityFailureRollsBackToUnconfigured) {
   EXPECT_EQ(lm.shared_state(), nullptr);
   EXPECT_FALSE(lm.ever_initialized());
   EXPECT_FALSE(lm.require_init());
+  EXPECT_FALSE(lm.halted());
 }
 
 TEST(LifecycleManager, ShutdownClearsRequireInitFlag) {
@@ -169,6 +190,7 @@ TEST(LifecycleManager, ShutdownClearsRequireInitFlag) {
   EXPECT_TRUE(lm.Shutdown());
   EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
   EXPECT_FALSE(lm.require_init());
+  EXPECT_FALSE(lm.halted());
 }
 
 TEST(LifecycleManager, InitRejectsMissingJointsFile) {
