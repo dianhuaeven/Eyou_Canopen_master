@@ -1,6 +1,8 @@
+#include <chrono>
 #include <filesystem>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <ros/ros.h>
@@ -103,19 +105,32 @@ int main(int argc, char** argv) {
         return true;
       });
 
+  auto resume_srv = pnh.advertiseService<std_srvs::Trigger::Request,
+                                         std_srvs::Trigger::Response>(
+      "resume", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+        std::lock_guard<std::mutex> lk(loop_mtx);
+        if (lifecycle.require_init()) {
+          res.success = false;
+          res.message = "call ~/init first";
+          return true;
+        }
+        res.success = lifecycle.Resume();
+        res.message = res.success ? "resumed" : "resume failed; call ~/recover first";
+        return true;
+      });
+
   auto recover_srv = pnh.advertiseService<std_srvs::Trigger::Request,
                                           std_srvs::Trigger::Response>(
       "recover", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
         std::lock_guard<std::mutex> lk(loop_mtx);
-        if (lifecycle.require_init() ||
-            (lifecycle.state() == canopen_hw::LifecycleState::Configured &&
-             !lifecycle.ever_initialized())) {
+        if (lifecycle.require_init()) {
           res.success = false;
           res.message = "call ~/init first";
           return true;
         }
         res.success = lifecycle.Recover();
-        res.message = res.success ? "recovered" : "recover failed";
+        res.message = res.success ? "recovered"
+                                  : "fault reset failed, try ~/init to reinitialize";
         return true;
       });
 
@@ -143,20 +158,49 @@ int main(int argc, char** argv) {
                                            Eyou_Canopen_Master::SetMode::Response>(
       "set_mode", [&](Eyou_Canopen_Master::SetMode::Request& req,
                       Eyou_Canopen_Master::SetMode::Response& res) {
-        std::lock_guard<std::mutex> lk(loop_mtx);
-        if (lifecycle.state() == canopen_hw::LifecycleState::Active) {
-          res.success = false;
-          res.message = "set_mode not allowed in Active state; call ~/halt first";
+        bool need_confirm = false;
+        canopen_hw::CanopenMaster* master = nullptr;
+
+        {
+          std::lock_guard<std::mutex> lk(loop_mtx);
+          if (lifecycle.state() == canopen_hw::LifecycleState::Active && !lifecycle.halted()) {
+            res.success = false;
+            res.message = "set_mode not allowed in Active state; call ~/halt first";
+            return true;
+          }
+          if (req.axis_index >= robot_hw_ros.axis_count()) {
+            res.success = false;
+            res.message = "axis_index out of range";
+            return true;
+          }
+
+          robot_hw_ros.SetMode(req.axis_index, req.mode);
+          need_confirm = (lifecycle.state() == canopen_hw::LifecycleState::Active &&
+                          lifecycle.halted());
+          master = lifecycle.master();
+        }
+
+        if (!need_confirm) {
+          res.success = true;
+          res.message = "mode set";
           return true;
         }
-        if (req.axis_index >= robot_hw_ros.axis_count()) {
-          res.success = false;
-          res.message = "axis_index out of range";
-          return true;
+
+        const auto deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds(500);
+        canopen_hw::AxisFeedback fb;
+        while (std::chrono::steady_clock::now() < deadline) {
+          if (master && master->GetAxisFeedback(req.axis_index, &fb) &&
+              fb.mode_display == req.mode) {
+            res.success = true;
+            res.message = "mode set";
+            return true;
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        robot_hw_ros.SetMode(req.axis_index, req.mode);
-        res.success = true;
-        res.message = "mode set";
+
+        res.success = false;
+        res.message = "mode switch not confirmed in halted state; try ~/shutdown then ~/init";
         return true;
       });
 
