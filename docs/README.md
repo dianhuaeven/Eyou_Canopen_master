@@ -26,6 +26,8 @@
     电机掉线复电后自动使能问题的 commit 级修复路线图与代码量评估。
 11. `docs/2026-03-23_ip_mode_support_commit_plan.md`  
     IP（mode=7）支持改造的 commit 路线表（含 0x60C1/0x60C2 策略与回退路径）。
+12. `docs/command_cheatsheet.md`  
+    CAN 启动、赋权、启动节点、service/topic 调用命令速查。
 
 ## 2026-03-21 已归档文档
 
