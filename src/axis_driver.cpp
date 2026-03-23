@@ -503,8 +503,9 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
   // 修复：在 OnBoot 成功路径中立即预写正确的初始值。
   {
     std::error_code ec;
-    // 写入目标模式（CSP=8），防止节点收到 mode=0 后清除模式设置。
-    tpdo_mapped[0x6060][0].Write(kMode_CSP, ec);
+    const int8_t target_mode = logic_.target_mode();
+    // 写入当前目标模式，防止节点收到 mode=0 后清除模式设置。
+    tpdo_mapped[0x6060][0].Write(target_mode, ec);
     if (!ec) {
       tpdo_mapped[0x6060][0].WriteEvent(ec);
     }
@@ -523,8 +524,9 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
       CANOPEN_LOG_WARN("axis={} node={}: OnBoot pre-init controlword write failed",
                        axis_index_, static_cast<int>(id()));
     }
-    CANOPEN_LOG_INFO("axis={} node={}: OnBoot tpdo pre-initialized (mode=CSP, cw=Shutdown)",
-                     axis_index_, static_cast<int>(id()));
+    CANOPEN_LOG_INFO(
+        "axis={} node={}: OnBoot tpdo pre-initialized (mode={}, cw=Shutdown)",
+        axis_index_, static_cast<int>(id()), static_cast<int>(target_mode));
   }
 
   if (!verify_pdo_mapping_) {

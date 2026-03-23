@@ -206,6 +206,11 @@ CiA402State AxisLogic::feedback_state() const {
   return feedback_cache_.state;
 }
 
+int8_t AxisLogic::target_mode() const {
+  std::lock_guard<std::mutex> lk(mtx_);
+  return state_machine_.safe_mode_of_operation();
+}
+
 void AxisLogic::PublishSnapshot() {
   if (shared_state_ == nullptr) return;
 

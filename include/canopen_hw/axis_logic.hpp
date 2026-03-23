@@ -47,6 +47,7 @@ class AxisLogic {
 
   // 查询。
   CiA402State feedback_state() const;
+  int8_t target_mode() const;
   const HealthCounters& health() const { return health_; }
   HealthCounters& mutable_health() { return health_; }
 
