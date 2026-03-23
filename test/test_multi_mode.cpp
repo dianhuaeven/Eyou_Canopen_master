@@ -114,6 +114,8 @@ TEST_F(StateMachineMultiMode, TorqueZeroedOnDisable) {
 }
 
 TEST_F(StateMachineMultiMode, SafeModeReflectsTargetMode) {
+  sm.set_target_mode(kMode_IP);
+  EXPECT_EQ(sm.safe_mode_of_operation(), kMode_IP);
   sm.set_target_mode(kMode_CSV);
   EXPECT_EQ(sm.safe_mode_of_operation(), kMode_CSV);
   sm.set_target_mode(kMode_CST);

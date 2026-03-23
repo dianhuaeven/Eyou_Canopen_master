@@ -102,6 +102,7 @@ void CanopenRobotHwRos::write(const ros::Time& /*time*/,
       case kMode_CSV:
         hw_->SetJointVelocityCommand(i, vel_cmd_[i]);
         break;
+      case kMode_IP:
       case kMode_CSP:
       default:
         hw_->SetJointCommand(i, pos_cmd_[i]);

@@ -27,7 +27,7 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
   void read(const ros::Time& time, const ros::Duration& period) override;
   void write(const ros::Time& time, const ros::Duration& period) override;
 
-  // 设置某轴运动模式（kMode_CSP=8, kMode_CSV=9）。
+  // 设置某轴运动模式（kMode_IP=7, kMode_CSP=8, kMode_CSV=9）。
   void SetMode(std::size_t axis_index, int8_t mode);
 
   bool all_operational() const { return hw_->all_operational(); }

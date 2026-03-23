@@ -149,6 +149,10 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
       }
 
       controlword_ = kCtrl_EnableOperation;
+      if (target_mode_ == kMode_IP) {
+        // IP 模式要求插补使能位（bit4）与 EnableOperation 同时置位。
+        controlword_ |= kCtrl_Bit_InterpolationEnable;
+      }
       if (halt_requested_) {
         controlword_ |= kCtrl_Bit_Halt;
       }

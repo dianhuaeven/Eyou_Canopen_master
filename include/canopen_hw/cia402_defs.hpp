@@ -37,8 +37,10 @@ constexpr uint16_t kCtrl_EnableVoltage = 0x0002;
 constexpr uint16_t kCtrl_DisableOperation = 0x0007;  // 同 kCtrl_SwitchOn
 constexpr uint16_t kCtrl_FaultReset = 0x0080;
 constexpr uint16_t kCtrl_Bit_Halt = (1u << 8);
+constexpr uint16_t kCtrl_Bit_InterpolationEnable = (1u << 4);
 
 // Mode of operation.
+constexpr int8_t kMode_IP = 7;    // Interpolated Position
 constexpr int8_t kMode_CSP = 8;   // Cyclic Synchronous Position
 constexpr int8_t kMode_CSV = 9;   // Cyclic Synchronous Velocity
 constexpr int8_t kMode_CST = 10;  // Cyclic Synchronous Torque

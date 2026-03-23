@@ -7,8 +7,10 @@ using canopen_hw::CiA402StateMachine;
 using canopen_hw::kCtrl_DisableOperation;
 using canopen_hw::kCtrl_EnableOperation;
 using canopen_hw::kCtrl_Bit_Halt;
+using canopen_hw::kCtrl_Bit_InterpolationEnable;
 using canopen_hw::kCtrl_FaultReset;
 using canopen_hw::kCtrl_Shutdown;
+using canopen_hw::kMode_IP;
 using canopen_hw::kMode_CSP;
 using canopen_hw::kMode_CSV;
 
@@ -214,4 +216,18 @@ TEST(CiA402SM, HaltBitFreezesTargetsAndResumeClearsBit) {
   sm.Update(0x0027, kMode_CSV, 1020);
   EXPECT_EQ(sm.controlword(), kCtrl_EnableOperation);
   EXPECT_EQ(sm.safe_target_velocity(), 900);
+}
+
+TEST(CiA402SM, IpModeSetsInterpolationEnableBitInOperationEnabled) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_IP);
+  sm.request_enable();
+
+  sm.Update(0x0040, kMode_IP, 1000);
+  sm.Update(0x0021, kMode_IP, 1000);
+  sm.Update(0x0027, kMode_IP, 1000);
+
+  const auto expected =
+      static_cast<uint16_t>(kCtrl_EnableOperation | kCtrl_Bit_InterpolationEnable);
+  EXPECT_EQ(sm.controlword(), expected);
 }
