@@ -28,7 +28,8 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
  public:
   AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
              std::size_t axis_index, SharedState* shared_state,
-             bool verify_pdo_mapping, const std::string& dcf_path);
+             bool verify_pdo_mapping, const std::string& dcf_path,
+             uint8_t ip_interpolation_period_ms);
 
   // 显式反馈注入（无硬件场景下的逻辑验证入口）。
   void InjectFeedback(int32_t actual_position, int32_t actual_velocity,
@@ -92,6 +93,7 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   std::atomic<bool> pdo_verified_{true};
   std::atomic<bool> pdo_verification_done_{false};
   std::string dcf_path_;
+  uint8_t ip_interpolation_period_ms_ = 1;
   std::shared_ptr<PdoMapping> expected_pdo_;
   bool expected_pdo_loaded_ = false;
   std::shared_ptr<PdoMappingReader> pdo_reader_;

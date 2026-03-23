@@ -1,5 +1,7 @@
 #include "canopen_hw/joints_config.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <sstream>
 
 #include <yaml-cpp/yaml.h>
@@ -70,6 +72,9 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
   }
   config->joints.clear();
   config->joints.reserve(joints.size());
+  const int inferred_ip_period_ms = std::clamp(
+      static_cast<int>(std::lround(1000.0 / std::max(1.0, config->loop_hz))),
+      1, 255);
 
   std::size_t loaded = 0;
   std::size_t axis_index = 0;
@@ -79,6 +84,8 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
     }
     const YAML::Node canopen = joint["canopen"];
     CanopenMasterConfig::JointConfig jcfg;
+    jcfg.ip_interpolation_period_ms =
+        static_cast<uint8_t>(inferred_ip_period_ms);
     if (joint["name"]) {
       jcfg.name = joint["name"].as<std::string>();
     } else {
@@ -118,6 +125,17 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
       }
       if (joint["max_velocity_for_clamp"]) {
         jcfg.max_velocity_for_clamp = joint["max_velocity_for_clamp"].as<double>();
+      }
+      if (joint["ip_interpolation_period_ms"]) {
+        const int ip_period_ms = joint["ip_interpolation_period_ms"].as<int>();
+        if (ip_period_ms < 1 || ip_period_ms > 255) {
+          std::ostringstream oss;
+          oss << "invalid ip_interpolation_period_ms at joints[" << axis_index
+              << "]: expected 1..255, got " << ip_period_ms;
+          SetError(error, oss.str());
+          return false;
+        }
+        jcfg.ip_interpolation_period_ms = static_cast<uint8_t>(ip_period_ms);
       }
       if (joint["counts_per_rev"]) {
         jcfg.counts_per_rev = joint["counts_per_rev"].as<double>();

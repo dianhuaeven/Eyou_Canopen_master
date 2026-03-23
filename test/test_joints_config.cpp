@@ -127,3 +127,36 @@ TEST(JointsConfig, InvalidMaxVelocityForClampRejected) {
   EXPECT_FALSE(ok);
   EXPECT_NE(error.find("invalid max_velocity_for_clamp"), std::string::npos);
 }
+
+TEST(JointsConfig, InterpolationPeriodDefaultsFromLoopHzAndAllowsOverride) {
+  const std::string path = "/tmp/joints_test_ip_period.yaml";
+  {
+    std::ofstream ofs(path);
+    ofs << "canopen:\n"
+           "  loop_hz: 250\n"
+           "joints:\n"
+           "  - name: joint_1\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "    counts_per_rev: 1000\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 1000\n"
+           "  - name: joint_2\n"
+           "    canopen:\n"
+           "      node_id: 2\n"
+           "    ip_interpolation_period_ms: 8\n"
+           "    counts_per_rev: 1000\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 1000\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(path, &error, &master_cfg);
+  ASSERT_TRUE(ok) << error;
+  ASSERT_EQ(master_cfg.joints.size(), 2u);
+
+  // loop_hz=250 -> 1000/250 = 4ms inferred default.
+  EXPECT_EQ(master_cfg.joints[0].ip_interpolation_period_ms, 4u);
+  EXPECT_EQ(master_cfg.joints[1].ip_interpolation_period_ms, 8u);
+}

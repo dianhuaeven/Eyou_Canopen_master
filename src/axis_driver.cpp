@@ -76,13 +76,15 @@ std::vector<uint8_t> PackLe(uint32_t value, std::size_t size) {
 
 AxisDriver::AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
                        std::size_t axis_index, SharedState* shared_state,
-                       bool verify_pdo_mapping, const std::string& dcf_path)
+                       bool verify_pdo_mapping, const std::string& dcf_path,
+                       uint8_t ip_interpolation_period_ms)
     : lely::canopen::BasicDriver(can_master, node_id),
       axis_index_(axis_index),
       shared_state_(shared_state),
       logic_(axis_index, this, shared_state),
       verify_pdo_mapping_(verify_pdo_mapping),
-      dcf_path_(dcf_path) {
+      dcf_path_(dcf_path),
+      ip_interpolation_period_ms_(ip_interpolation_period_ms) {
   pdo_verified_.store(!verify_pdo_mapping_);
   pdo_verification_done_.store(!verify_pdo_mapping_);
   if (verify_pdo_mapping_) {
@@ -535,6 +537,20 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
         "axis={} node={}: OnBoot tpdo pre-initialized (mode={}, cw=Shutdown)",
         axis_index_, static_cast<int>(id()), static_cast<int>(target_mode));
   }
+
+  AsyncSdoWrite(0x60C2, 1, {ip_interpolation_period_ms_},
+                [this](bool ok, const std::string& error) {
+                  if (!ok) {
+                    CANOPEN_LOG_WARN(
+                        "axis={} node={}: write 0x60C2:01 failed: {}",
+                        axis_index_, static_cast<int>(id()), error);
+                    return;
+                  }
+                  CANOPEN_LOG_INFO(
+                      "axis={} node={}: 0x60C2:01 set to {} ms",
+                      axis_index_, static_cast<int>(id()),
+                      static_cast<int>(ip_interpolation_period_ms_));
+                });
 
   if (!verify_pdo_mapping_) {
     pdo_verified_.store(true);
