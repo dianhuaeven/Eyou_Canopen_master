@@ -81,7 +81,7 @@ OperationalCoordinator::Result OperationalCoordinator::DoTransition(
 
 OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
   return DoTransition(
-      {SystemOpMode::Configured}, SystemOpMode::Standby,
+      {SystemOpMode::Configured}, SystemOpMode::Running,
       [this](std::string* detail) {
         if (!master_) {
           if (detail) {
@@ -98,13 +98,6 @@ OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
         if (!master_->EnableAll()) {
           if (detail) {
             *detail = "EnableAll failed";
-          }
-          return false;
-        }
-        // 首次 init 保持冻结，后续需显式 Release 才进入 Running。
-        if (!master_->HaltAll()) {
-          if (detail) {
-            *detail = "HaltAll failed";
           }
           return false;
         }
@@ -221,8 +214,8 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
 
 OperationalCoordinator::Result OperationalCoordinator::RequestShutdown() {
   return DoTransition(
-      {SystemOpMode::Standby, SystemOpMode::Armed, SystemOpMode::Running,
-       SystemOpMode::Faulted},
+      {SystemOpMode::Configured, SystemOpMode::Standby, SystemOpMode::Armed,
+       SystemOpMode::Running, SystemOpMode::Faulted},
       SystemOpMode::Configured,
       [this](std::string* detail) {
         if (!master_) {
@@ -243,6 +236,8 @@ OperationalCoordinator::Result OperationalCoordinator::RequestShutdown() {
             *detail = graceful_detail.empty() ? "graceful shutdown timeout"
                                               : graceful_detail;
           }
+          // 保持与现有 stop-communication 语义一致：即使超时，通信也已停止。
+          mode_.store(SystemOpMode::Configured, std::memory_order_release);
           return false;
         }
 

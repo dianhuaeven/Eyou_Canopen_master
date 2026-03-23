@@ -17,6 +17,7 @@
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
+#include "canopen_hw/service_gateway.hpp"
 
 namespace {
 
@@ -86,81 +87,13 @@ int main(int argc, char** argv) {
     robot_hw_ros.SetMode(i, master_cfg.joints[i].default_mode);
   }
   std::mutex loop_mtx;
+  canopen_hw::OperationalCoordinator coordinator(
+      lifecycle.master(), lifecycle.shared_state(), master_cfg.joints.size());
+  coordinator.SetConfigured();
+  canopen_hw::ServiceGateway service_gateway(&pnh, &coordinator, &loop_mtx);
 
   bool auto_init = false;
   pnh.param("auto_init", auto_init, false);
-
-  // 生命周期 services。
-  auto init_srv = pnh.advertiseService<std_srvs::Trigger::Request,
-                                       std_srvs::Trigger::Response>(
-      "init", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
-        std::lock_guard<std::mutex> lk(loop_mtx);
-        if (lifecycle.state() == canopen_hw::LifecycleState::Active) {
-          res.success = true;
-          res.message = "already initialized";
-          return true;
-        }
-        res.success = lifecycle.InitMotors();
-        res.message = res.success ? "initialized" : "init failed";
-        return true;
-      });
-
-  auto halt_srv = pnh.advertiseService<std_srvs::Trigger::Request,
-                                       std_srvs::Trigger::Response>(
-      "halt", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
-        std::lock_guard<std::mutex> lk(loop_mtx);
-        res.success = lifecycle.Halt();
-        res.message = res.success ? "halted" : "halt failed";
-        return true;
-      });
-
-  auto resume_srv = pnh.advertiseService<std_srvs::Trigger::Request,
-                                         std_srvs::Trigger::Response>(
-      "resume", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
-        std::lock_guard<std::mutex> lk(loop_mtx);
-        if (lifecycle.require_init()) {
-          res.success = false;
-          res.message = "call ~/init first";
-          return true;
-        }
-        res.success = lifecycle.Resume();
-        res.message = res.success ? "resumed" : "resume failed; call ~/recover first";
-        return true;
-      });
-
-  auto recover_srv = pnh.advertiseService<std_srvs::Trigger::Request,
-                                          std_srvs::Trigger::Response>(
-      "recover", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
-        std::lock_guard<std::mutex> lk(loop_mtx);
-        std::string detail;
-        res.success = lifecycle.Recover(&detail);
-        if (res.success) {
-          res.message = detail.empty() ? "recovered" : detail;
-        } else {
-          res.message = detail.empty() ? "recover failed" : detail;
-        }
-        return true;
-      });
-
-  auto shutdown_srv = pnh.advertiseService<std_srvs::Trigger::Request,
-                                           std_srvs::Trigger::Response>(
-      "shutdown", [&](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
-        std::lock_guard<std::mutex> lk(loop_mtx);
-        std::string detail;
-        res.success = lifecycle.StopCommunication(&detail);
-        if (res.success) {
-          res.message = "communication stopped; call ~/init first";
-          return true;
-        }
-
-        if (lifecycle.require_init()) {
-          res.message = detail.empty() ? "communication stopped with timeout; call ~/init first"
-                                       : detail;
-        } else {
-          res.message = detail.empty() ? "shutdown failed" : detail;
-        }
-        return true;
-      });
 
   auto set_mode_srv = pnh.advertiseService<Eyou_Canopen_Master::SetMode::Request,
                                            Eyou_Canopen_Master::SetMode::Response>(
@@ -171,7 +104,8 @@ int main(int argc, char** argv) {
 
         {
           std::lock_guard<std::mutex> lk(loop_mtx);
-          if (lifecycle.state() == canopen_hw::LifecycleState::Active && !lifecycle.halted()) {
+          const auto mode = coordinator.mode();
+          if (mode == canopen_hw::SystemOpMode::Running) {
             res.success = false;
             res.message = "set_mode not allowed in Active state; call ~/halt first";
             return true;
@@ -190,8 +124,7 @@ int main(int argc, char** argv) {
           }
 
           robot_hw_ros.SetMode(req.axis_index, req.mode);
-          need_confirm = (lifecycle.state() == canopen_hw::LifecycleState::Active &&
-                          lifecycle.halted());
+          need_confirm = (mode == canopen_hw::SystemOpMode::Armed);
           master = lifecycle.master();
         }
 
@@ -257,8 +190,9 @@ int main(int argc, char** argv) {
 
   if (auto_init) {
     std::lock_guard<std::mutex> lk(loop_mtx);
-    if (!lifecycle.InitMotors()) {
-      CANOPEN_LOG_ERROR("auto_init enabled but InitMotors failed");
+    const auto r = coordinator.RequestInit();
+    if (!r.ok) {
+      CANOPEN_LOG_ERROR("auto_init enabled but init failed: {}", r.message);
       return 1;
     }
   }
@@ -277,6 +211,7 @@ int main(int argc, char** argv) {
 
     {
       std::lock_guard<std::mutex> lk(loop_mtx);
+      coordinator.UpdateFromFeedback();
       robot_hw_ros.read(now, period);
       cm.update(now, period);
       robot_hw_ros.write(now, period);

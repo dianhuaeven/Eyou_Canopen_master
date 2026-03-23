@@ -107,6 +107,7 @@ target_link_libraries(canopen_hw_node
 # ── ROS1 适配层 ───────────────────────────────────────
 add_library(canopen_ros_adapter
   src/canopen_robot_hw_ros.cpp
+  src/service_gateway.cpp
 )
 target_include_directories(canopen_ros_adapter
   PUBLIC
