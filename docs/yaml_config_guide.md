@@ -138,6 +138,7 @@ joints:
 - `counts_per_rev`：每圈计数，用于位置换算。
 - `rated_torque_nm`：额定扭矩，Nm。
 - `position_lock_threshold`：CSP 解锁阈值（ticks）。
+- `ip_interpolation_period_ms`：IP 模式插补周期（ms，对应 SDO `0x60C2:01`，范围 1..255）。
 - `max_velocity_for_clamp`：位置目标每周期限幅依据的最大速度（ticks/s，必须 > 0）。
 - `velocity_scale`：速度缩放（来自设备定义）。
 - `torque_scale`：力矩缩放（来自设备定义）。
@@ -151,6 +152,8 @@ joints:
 - `joints` 为数组，顺序对应轴索引（默认 0~5）。
 - 若 `canopen.node_id` 未设置，则按顺序分配 node_id = index + 1。
 - `verify_pdo_mapping` 仅影响启动校验，不写入设备。
+- `ip_interpolation_period_ms` 未配置时，默认由 `loop_hz` 推导：
+  `period_ms = round(1000 / loop_hz)`，并限制到 `1..255`。
 - `max_velocity_for_clamp` 缺省时使用默认值 `500000.0`（ticks/s），
   显式配置值必须大于 0。
 

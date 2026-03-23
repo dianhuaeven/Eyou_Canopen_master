@@ -183,6 +183,26 @@ rosrun controller_manager controller_manager start arm_velocity_controller
 rosservice call /canopen_hw_node/resume
 ```
 
+切换到 IP 模式（mode=7）：
+
+```bash
+# 1) 停转
+rosservice call /canopen_hw_node/halt "{}"
+
+# 2) 切到 IP
+for i in 0 1 2 3 4 5; do
+  rosservice call /canopen_hw_node/set_mode "{axis_index: $i, mode: 7}"
+done
+
+# 3) 恢复
+rosservice call /canopen_hw_node/resume "{}"
+```
+
+说明：
+- IP 模式位置目标优先走 `0x60C1:01`（RPDO2 映射）。  
+- 若驱动器拒绝 `0x60C1:01` PDO 写入，运行时会回退到 `0x607A`，并打印一次告警日志。  
+- `0x60C2:01`（插补周期，ms）在 boot 时通过 SDO 下发，取自 `joints.yaml` 的 `ip_interpolation_period_ms`（未配置时按 `loop_hz` 推导）。
+
 ### 6.3 Controllers
 
 | Controller | 类型 | 模式 | 默认状态 |

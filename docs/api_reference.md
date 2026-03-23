@@ -112,6 +112,7 @@
 
 | 常量 | 值 | 说明 |
 |------|----|------|
+| `kMode_IP` | 7 | Interpolated Position |
 | `kMode_CSP` | 8 | Cyclic Synchronous Position |
 | `kMode_CSV` | 9 | Cyclic Synchronous Velocity |
 | `kMode_CST` | 10 | Cyclic Synchronous Torque |
