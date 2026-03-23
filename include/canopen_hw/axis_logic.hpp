@@ -5,7 +5,7 @@
 #include <mutex>
 
 #include "canopen_hw/bus_io.hpp"
-#include "canopen_hw/cia402_state_machine.hpp"
+#include "canopen_hw/cia402_protocol.hpp"
 #include "canopen_hw/health_counters.hpp"
 #include "canopen_hw/shared_state.hpp"
 
@@ -60,7 +60,7 @@ class AxisLogic {
   uint64_t last_intent_sequence_ = 0;
 
   mutable std::mutex mtx_;
-  CiA402StateMachine state_machine_;
+  CiA402Protocol state_machine_;
   AxisFeedback feedback_cache_{};
   HealthCounters health_;
 };

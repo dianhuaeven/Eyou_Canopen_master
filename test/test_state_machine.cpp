@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 
+#include "canopen_hw/cia402_protocol.hpp"
 #include "canopen_hw/cia402_state_machine.hpp"
 
 using canopen_hw::CiA402State;
+using canopen_hw::CiA402Protocol;
 using canopen_hw::CiA402StateMachine;
 using canopen_hw::kCtrl_DisableOperation;
 using canopen_hw::kCtrl_EnableOperation;
@@ -251,4 +253,16 @@ TEST(CiA402SM, IpModeSetsInterpolationEnableBitInOperationEnabled) {
   const auto expected =
       static_cast<uint16_t>(kCtrl_EnableOperation | kCtrl_Bit_InterpolationEnable);
   EXPECT_EQ(sm.controlword(), expected);
+}
+
+TEST(CiA402Protocol, AdapterMatchesEnableChainBehavior) {
+  CiA402Protocol protocol;
+  protocol.set_target_mode(kMode_CSP);
+  protocol.request_enable();
+
+  protocol.Update(0x0040, kMode_CSP, 100);
+  EXPECT_EQ(protocol.controlword(), kCtrl_Shutdown);
+
+  protocol.Update(0x0021, kMode_CSP, 100);
+  EXPECT_EQ(protocol.controlword(), kCtrl_EnableOperation);
 }

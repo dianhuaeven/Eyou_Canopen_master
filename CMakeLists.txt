@@ -57,6 +57,7 @@ endif()
 
 # ── canopen_core 库（不依赖 ROS） ──────────────────────
 add_library(canopen_core
+  src/cia402_protocol.cpp
   src/cia402_state_machine.cpp
   src/shared_state.cpp
   src/axis_driver.cpp
