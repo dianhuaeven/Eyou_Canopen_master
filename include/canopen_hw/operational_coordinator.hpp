@@ -48,6 +48,9 @@ class OperationalCoordinator {
   Result RequestRecover();
   Result RequestShutdown();
 
+  // 根据当前模式计算并下发每轴 AxisIntent。
+  void ComputeIntents();
+
   // 由主循环周期调用，自动将 Armed/Running 下的故障降级到 Faulted。
   void UpdateFromFeedback();
 

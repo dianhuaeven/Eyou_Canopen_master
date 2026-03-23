@@ -10,7 +10,8 @@ SharedState::SharedState(std::size_t axis_count)
                              kMaxAxisCount)),
       feedback_(axis_count_),
       commands_(axis_count_),
-      safe_commands_(axis_count_) {}
+      safe_commands_(axis_count_),
+      intents_(axis_count_, AxisIntent::Disable) {}
 
 void SharedState::UpdateFeedback(std::size_t axis_index,
                                  const AxisFeedback& feedback) {
@@ -66,6 +67,32 @@ void SharedState::UpdateSafeCommand(std::size_t axis_index,
   safe_commands_[axis_index] = safe_command;
 }
 
+void SharedState::SetAxisIntent(std::size_t axis_index, AxisIntent intent) {
+  if (IsValidAxis(axis_index) == false) {
+    return;
+  }
+  std::lock_guard<std::mutex> lk(mtx_);
+  intents_[axis_index] = intent;
+}
+
+AxisIntent SharedState::GetAxisIntent(std::size_t axis_index) const {
+  if (IsValidAxis(axis_index) == false) {
+    return AxisIntent::Disable;
+  }
+  std::lock_guard<std::mutex> lk(mtx_);
+  return intents_[axis_index];
+}
+
+void SharedState::AdvanceIntentSequence() {
+  std::lock_guard<std::mutex> lk(mtx_);
+  ++intent_sequence_;
+}
+
+uint64_t SharedState::intent_sequence() const {
+  std::lock_guard<std::mutex> lk(mtx_);
+  return intent_sequence_;
+}
+
 void SharedState::SetGlobalFault(bool fault) {
   std::lock_guard<std::mutex> lk(mtx_);
   global_fault_ = fault;
@@ -92,6 +119,8 @@ SharedSnapshot SharedState::Snapshot() const {
   s.feedback = feedback_;
   s.commands = commands_;
   s.safe_commands = safe_commands_;
+  s.intents = intents_;
+  s.intent_sequence = intent_sequence_;
   s.all_operational = all_operational_;
   s.global_fault = global_fault_;
   s.all_axes_halted_by_fault = all_axes_halted_by_fault_;

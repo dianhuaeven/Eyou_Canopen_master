@@ -212,6 +212,7 @@ int main(int argc, char** argv) {
     {
       std::lock_guard<std::mutex> lk(loop_mtx);
       coordinator.UpdateFromFeedback();
+      coordinator.ComputeIntents();
       robot_hw_ros.read(now, period);
       cm.update(now, period);
       robot_hw_ros.write(now, period);

@@ -44,6 +44,14 @@ struct AxisSafeCommand {
   int8_t safe_mode_of_operation = kMode_CSP;
 };
 
+// 协调层下发到每轴状态机的运行意图（电平语义）。
+enum class AxisIntent : uint8_t {
+  Disable,
+  Enable,
+  Halt,
+  Run,
+};
+
 // 给调用者返回的快照结构:
 // - read() 一次锁内拷贝即可拿到全轴一致视图
 // - 调用方后续使用不需要持锁
@@ -51,6 +59,8 @@ struct SharedSnapshot {
   std::vector<AxisFeedback> feedback;
   std::vector<AxisCommand> commands;
   std::vector<AxisSafeCommand> safe_commands;
+  std::vector<AxisIntent> intents;
+  uint64_t intent_sequence = 0;
   bool all_operational = false;
   bool global_fault = false;
   bool all_axes_halted_by_fault = false;
@@ -81,6 +91,12 @@ class SharedState {
   void UpdateSafeCommand(std::size_t axis_index,
                          const AxisSafeCommand& safe_command);
 
+  // 协调层: 下发每轴 intent（电平语义）。
+  void SetAxisIntent(std::size_t axis_index, AxisIntent intent);
+  AxisIntent GetAxisIntent(std::size_t axis_index) const;
+  void AdvanceIntentSequence();
+  uint64_t intent_sequence() const;
+
   // 由 Lely 线程在每个 SYNC/RPDO 更新后调用，汇总全轴状态。
   void RecomputeAllOperational();
 
@@ -109,9 +125,11 @@ class SharedState {
   std::vector<AxisFeedback> feedback_;
   std::vector<AxisCommand> commands_;
   std::vector<AxisSafeCommand> safe_commands_;
+  std::vector<AxisIntent> intents_;
   bool all_operational_ = false;
   bool global_fault_ = false;
   bool all_axes_halted_by_fault_ = false;
+  uint64_t intent_sequence_ = 0;
   uint64_t state_change_seq_ = 0;
 };
 

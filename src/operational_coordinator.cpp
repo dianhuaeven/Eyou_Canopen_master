@@ -253,6 +253,37 @@ OperationalCoordinator::Result OperationalCoordinator::RequestShutdown() {
       });
 }
 
+void OperationalCoordinator::ComputeIntents() {
+  if (!shared_state_) {
+    return;
+  }
+
+  const SystemOpMode current = mode_.load(std::memory_order_acquire);
+  AxisIntent intent = AxisIntent::Disable;
+
+  switch (current) {
+    case SystemOpMode::Running:
+      intent = AxisIntent::Run;
+      break;
+    case SystemOpMode::Armed:
+    case SystemOpMode::Recovering:
+    case SystemOpMode::Faulted:
+      intent = AxisIntent::Halt;
+      break;
+    case SystemOpMode::Inactive:
+    case SystemOpMode::Configured:
+    case SystemOpMode::Standby:
+    case SystemOpMode::ShuttingDown:
+      intent = AxisIntent::Disable;
+      break;
+  }
+
+  for (std::size_t i = 0; i < axis_count_; ++i) {
+    shared_state_->SetAxisIntent(i, intent);
+  }
+  shared_state_->AdvanceIntentSequence();
+}
+
 void OperationalCoordinator::UpdateFromFeedback() {
   const SystemOpMode current = mode_.load(std::memory_order_acquire);
   if (current != SystemOpMode::Armed && current != SystemOpMode::Running) {

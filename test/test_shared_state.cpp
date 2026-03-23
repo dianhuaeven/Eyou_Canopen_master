@@ -147,3 +147,26 @@ TEST(SharedState, WaitForStateChangeNotifiedByFeedbackUpdate) {
   EXPECT_TRUE(shared.WaitForStateChange(deadline));
   notifier.join();
 }
+
+TEST(SharedState, IntentChannelSetGetAndSnapshot) {
+  canopen_hw::SharedState shared(2);
+  EXPECT_EQ(shared.GetAxisIntent(0), canopen_hw::AxisIntent::Disable);
+  EXPECT_EQ(shared.GetAxisIntent(1), canopen_hw::AxisIntent::Disable);
+  EXPECT_EQ(shared.intent_sequence(), 0u);
+
+  shared.SetAxisIntent(0, canopen_hw::AxisIntent::Run);
+  shared.SetAxisIntent(1, canopen_hw::AxisIntent::Halt);
+  shared.AdvanceIntentSequence();
+
+  const auto snap = shared.Snapshot();
+  ASSERT_EQ(snap.intents.size(), 2u);
+  EXPECT_EQ(snap.intents[0], canopen_hw::AxisIntent::Run);
+  EXPECT_EQ(snap.intents[1], canopen_hw::AxisIntent::Halt);
+  EXPECT_EQ(snap.intent_sequence, 1u);
+}
+
+TEST(SharedState, IntentOutOfRangeFallsBackToDisable) {
+  canopen_hw::SharedState shared(1);
+  shared.SetAxisIntent(99, canopen_hw::AxisIntent::Run);
+  EXPECT_EQ(shared.GetAxisIntent(99), canopen_hw::AxisIntent::Disable);
+}
