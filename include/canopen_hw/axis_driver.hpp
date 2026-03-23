@@ -98,6 +98,7 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   bool expected_pdo_loaded_ = false;
   std::shared_ptr<PdoMappingReader> pdo_reader_;
   std::atomic<int> boot_retry_count_{0};
+  std::atomic<bool> ip_target_fallback_warned_{false};
   int max_boot_retries_ = 3;
 };
 
