@@ -93,6 +93,8 @@ void AxisLogic::ProcessHeartbeat(bool lost) {
     std::lock_guard<std::mutex> lk(mtx_);
     feedback_cache_.heartbeat_lost = lost;
     if (lost) {
+      // 心跳丢失后撤销使能请求，避免复电重连后沿用旧请求自动再使能。
+      state_machine_.request_disable();
       feedback_cache_.is_fault = true;
       feedback_cache_.is_operational = false;
     } else {

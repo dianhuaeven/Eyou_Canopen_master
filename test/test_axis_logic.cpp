@@ -182,6 +182,25 @@ TEST_F(AxisLogicTest, HeartbeatRecoveredClearsFault) {
   EXPECT_EQ(logic_->health().heartbeat_recovered.load(), 1u);
 }
 
+TEST_F(AxisLogicTest, HeartbeatLossKeepsAxisDisarmedUntilExplicitEnable) {
+  DriveToOperational();
+  logic_->SetRosTarget(0);
+  logic_->ProcessRpdo(kSW_OperationEnabled, 0, 0, 0, kMode_CSP);
+
+  logic_->ProcessHeartbeat(true);
+  // 模拟上层完成 fault latch 清理（如 recover 成功）。
+  shared_->SetGlobalFault(false);
+  shared_->SetAllAxesHaltedByFault(false);
+  logic_->ProcessHeartbeat(false);
+
+  bus_.calls.clear();
+  logic_->ProcessRpdo(kSW_SwitchOnDisabled, 0, 0, 0, kMode_CSP);
+
+  ASSERT_FALSE(bus_.calls.empty());
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
+}
+
 // --- 命令接口 ---
 
 TEST_F(AxisLogicTest, ConfigureDelegatesToStateMachine) {
