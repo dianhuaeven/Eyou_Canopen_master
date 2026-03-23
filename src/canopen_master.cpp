@@ -370,7 +370,6 @@ bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
     }
 
     axis->ResetFault();
-    axis->RequestEnable();
     fault_axes.emplace_back(i);
   }
 
