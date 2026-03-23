@@ -30,7 +30,6 @@ bool LifecycleManager::Configure(const CanopenMasterConfig& config) {
   state_ = LifecycleState::Configured;
   ever_initialized_ = false;
   require_init_ = false;
-  halted_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Configured");
   return true;
 }
@@ -61,7 +60,6 @@ bool LifecycleManager::InitMotors() {
   state_ = LifecycleState::Active;
   ever_initialized_ = true;
   require_init_ = false;
-  halted_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Active (initialized)");
   return true;
 }
@@ -118,16 +116,11 @@ bool LifecycleManager::Halt() {
     return false;
   }
 
-  if (halted_) {
-    return true;
-  }
-
   if (!master_->HaltAll()) {
     CANOPEN_LOG_ERROR("Halt: HaltAll failed");
     return false;
   }
 
-  halted_ = true;
   CANOPEN_LOG_INFO("LifecycleManager: Active (halted)");
   return true;
 }
@@ -159,10 +152,6 @@ bool LifecycleManager::Resume() {
     return false;
   }
 
-  if (!halted_) {
-    return true;
-  }
-
   if (shared_state_) {
     const SharedSnapshot snap = shared_state_->Snapshot();
     for (const auto& fb : snap.feedback) {
@@ -178,7 +167,6 @@ bool LifecycleManager::Resume() {
     return false;
   }
 
-  halted_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Active (resumed)");
   return true;
 }
@@ -219,14 +207,6 @@ bool LifecycleManager::StopCommunication(std::string* detail) {
   };
 
   if (master_->running()) {
-    if (halted_) {
-      if (!master_->ResumeAll()) {
-        graceful_ok = false;
-        append_detail("failed to clear halt bit before shutdown");
-      }
-      halted_ = false;
-    }
-
     std::string graceful_detail;
     if (!master_->GracefulShutdown(&graceful_detail)) {
       graceful_ok = false;
@@ -242,7 +222,6 @@ bool LifecycleManager::StopCommunication(std::string* detail) {
   }
   state_ = LifecycleState::Configured;
   require_init_ = true;
-  halted_ = false;
 
   if (!graceful_ok) {
     CANOPEN_LOG_WARN("LifecycleManager: communication stopped with detail: {}",
@@ -282,17 +261,6 @@ bool LifecycleManager::Recover(std::string* detail) {
       *detail = "master not running";
     }
     return false;
-  }
-
-  bool had_fault_axis = false;
-  if (shared_state_) {
-    const SharedSnapshot before = shared_state_->Snapshot();
-    for (const auto& fb : before.feedback) {
-      if (fb.is_fault) {
-        had_fault_axis = true;
-        break;
-      }
-    }
   }
 
   std::string recover_detail;
@@ -338,15 +306,11 @@ bool LifecycleManager::Recover(std::string* detail) {
     shared_state_->SetAllAxesHaltedByFault(false);
   }
 
-  if (had_fault_axis) {
-    // Recover 仅清故障，不自动重新使能；后续需显式调用 Resume().
-    halted_ = true;
-    if (detail) {
-      if (!detail->empty()) {
-        *detail += "; ";
-      }
-      *detail += "fault cleared; call ~/resume to re-enable";
+  if (detail) {
+    if (!detail->empty()) {
+      *detail += "; ";
     }
+    *detail += "fault cleared; call ~/resume to re-enable";
   }
 
   CANOPEN_LOG_INFO("LifecycleManager: Active (fault recovered)");
@@ -356,7 +320,6 @@ bool LifecycleManager::Recover(std::string* detail) {
 bool LifecycleManager::Shutdown() {
   if (state_ == LifecycleState::Unconfigured) {
     require_init_ = false;
-    halted_ = false;
     return true;
   }
 
@@ -372,7 +335,6 @@ bool LifecycleManager::Shutdown() {
   config_ = CanopenMasterConfig();
   ever_initialized_ = false;
   require_init_ = false;
-  halted_ = false;
 
   state_ = LifecycleState::Unconfigured;
   CANOPEN_LOG_INFO("LifecycleManager: Unconfigured (shutdown)");

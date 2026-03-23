@@ -58,7 +58,7 @@ class LifecycleManager {
   LifecycleState state() const { return state_; }
   bool ever_initialized() const { return ever_initialized_; }
   bool require_init() const { return require_init_; }
-  bool halted() const { return halted_; }
+  bool halted() const { return false; }
 
   // 访问内部组件（供上层集成使用）。
   CanopenMaster* master() { return master_.get(); }
@@ -69,7 +69,6 @@ class LifecycleManager {
   LifecycleState state_ = LifecycleState::Unconfigured;
   bool ever_initialized_ = false;
   bool require_init_ = false;
-  bool halted_ = false;
   CanopenMasterConfig config_;
   std::unique_ptr<SharedState> shared_state_;
   std::unique_ptr<CanopenMaster> master_;

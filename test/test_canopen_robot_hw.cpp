@@ -59,7 +59,8 @@ TEST(RobotHw, WritePositionWhileNotOperationalZerosVelocityAndTorque) {
   hw.WriteToSharedState();
 
   const canopen_hw::SharedSnapshot snap = shared.Snapshot();
-  EXPECT_NE(snap.commands[0].target_position, 0);
+  // 未就绪阶段位置指令应锁定到反馈位置（默认 0）。
+  EXPECT_EQ(snap.commands[0].target_position, 0);
   EXPECT_EQ(snap.commands[0].target_velocity, 0);
   EXPECT_EQ(snap.commands[0].target_torque, 0);
 }
