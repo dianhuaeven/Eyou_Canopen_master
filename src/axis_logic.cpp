@@ -31,6 +31,26 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
       if (global_fault) {
         state_machine_.set_forced_halt_by_fault(true);
       }
+
+      const uint64_t seq = shared_state_->intent_sequence();
+      if (seq != last_intent_sequence_) {
+        last_intent_sequence_ = seq;
+        const AxisIntent intent = shared_state_->GetAxisIntent(axis_index_);
+        const bool intent_enable =
+            (intent == AxisIntent::Enable || intent == AxisIntent::Halt ||
+             intent == AxisIntent::Run);
+        const bool intent_halt = (intent == AxisIntent::Halt);
+
+        const bool latch_enable = state_machine_.enable_requested();
+        const bool latch_halt = state_machine_.halt_requested();
+        if (intent_enable != latch_enable || intent_halt != latch_halt) {
+          CANOPEN_LOG_WARN(
+              "axis={}: intent shadow mismatch intent(enable={},halt={}) "
+              "vs latch(enable={},halt={})",
+              axis_index_, intent_enable, intent_halt, latch_enable,
+              latch_halt);
+        }
+      }
     }
 
     feedback_cache_.actual_position = actual_position;

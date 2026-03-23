@@ -218,6 +218,31 @@ TEST_F(AxisLogicTest, HeartbeatLossKeepsAxisDisarmedUntilExplicitEnable) {
   EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
 }
 
+TEST_F(AxisLogicTest, IntentRunShadowDoesNotBypassEnableLatch) {
+  shared_->SetAxisIntent(0, AxisIntent::Run);
+  shared_->AdvanceIntentSequence();
+  bus_.calls.clear();
+
+  logic_->ProcessRpdo(kSW_SwitchOnDisabled, 0, 0, 0, kMode_CSP);
+
+  ASSERT_FALSE(bus_.calls.empty());
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
+}
+
+TEST_F(AxisLogicTest, IntentDisableShadowDoesNotCancelExistingEnableLatch) {
+  logic_->RequestEnable();
+  shared_->SetAxisIntent(0, AxisIntent::Disable);
+  shared_->AdvanceIntentSequence();
+  bus_.calls.clear();
+
+  logic_->ProcessRpdo(kSW_ReadyToSwitchOn, 0, 0, 0, kMode_CSP);
+
+  ASSERT_FALSE(bus_.calls.empty());
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_EnableOperation);
+}
+
 // --- 命令接口 ---
 
 TEST_F(AxisLogicTest, ConfigureDelegatesToStateMachine) {

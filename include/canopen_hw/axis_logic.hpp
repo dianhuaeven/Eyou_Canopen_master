@@ -57,6 +57,7 @@ class AxisLogic {
   std::size_t axis_index_;
   BusIO* bus_io_;
   SharedState* shared_state_;
+  uint64_t last_intent_sequence_ = 0;
 
   mutable std::mutex mtx_;
   CiA402StateMachine state_machine_;

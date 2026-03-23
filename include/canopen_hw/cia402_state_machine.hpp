@@ -40,6 +40,7 @@ class CiA402StateMachine {
 
   // 请求退出使能流程。
   void request_disable() { enable_requested_ = false; }
+  bool enable_requested() const { return enable_requested_; }
 
   // 请求轻量级 halt（仅置控制字 bit8，不降级 402 状态机）。
   void request_halt() { halt_requested_ = true; }
