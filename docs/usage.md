@@ -131,12 +131,12 @@ rosservice call /canopen_hw_node/init "{}"
 
 | Service | 类型 | 说明 |
 |---------|------|------|
-| `~init` | `std_srvs/Trigger` | 手动初始化电机（Configured -> Active） |
-| `~halt` | `std_srvs/Trigger` | 轻量停转：置 Halt bit，保持 Active 与通信 |
-| `~resume` | `std_srvs/Trigger` | 清 Halt bit 恢复运动；若有故障需先 `~recover` |
-| `~recover` | `std_srvs/Trigger` | 仅做 Fault Reset（Active 内），不重启通信、不自动使能（需后续 `~resume`） |
-| `~shutdown` | `std_srvs/Trigger` | 执行 402 失能 + 停通信，不退出节点（随后需 `~init`） |
-| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 允许在 `Configured` 或 `Active+halted` 切模式 |
+| `~init` | `std_srvs/Trigger` | `Configured -> Running`（通过 Coordinator 显式使能） |
+| `~halt` | `std_srvs/Trigger` | `Running -> Armed`（置 Halt bit，冻结输出） |
+| `~resume` | `std_srvs/Trigger` | `Armed -> Running`；若 fault latch 存在需先 `~recover` |
+| `~recover` | `std_srvs/Trigger` | `Faulted -> Armed`（仅清故障，不自动回 Running） |
+| `~shutdown` | `std_srvs/Trigger` | 停通信并回 `Configured`，节点不退出（随后需 `~init`） |
+| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 仅在非 `Running` 态允许（典型：`~halt` 后） |
 
 ### 6.1.2 命令协议（epoch-ready）
 
@@ -153,12 +153,12 @@ rosservice call /canopen_hw_node/init "{}"
 2. 重同步 controller setpoint 到当前位置；
 3. 再把 `valid` 置 true。
 
-### 6.1.1 shutdown/recover/init 关系
+### 6.1.1 shutdown/recover/init 关系（Coordinator 语义）
 
-- `~shutdown`：执行 402 失能与停通信，节点进程不退出，并设置 `require_init=true`。
-- `~recover`：仅处理 Fault，不重启主站；若 `require_init=true` 会被拒绝。
-- `~init`：`~shutdown` 后唯一重新建立通信的入口。
-- `~halt` / `~resume`：仅影响控制字 Halt bit，不改变 lifecycle 到 Configured。
+- `~shutdown`：停通信并回到 `Configured`，节点进程不退出。
+- `~recover`：仅处理 fault 并回到 `Armed`，不自动放行运动。
+- `~init`：`~shutdown` 后重新建立通信并进入 `Running`。
+- `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。
 - 当 `global_fault` 闩锁为 true 时，`~resume` 会被拒绝；必须先 `~recover`。
 
 ### 6.2 模式切换流程

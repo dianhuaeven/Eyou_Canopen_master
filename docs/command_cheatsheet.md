@@ -1,6 +1,6 @@
 # CANopen 联调命令速查
 
-更新时间：2026-03-23  
+更新时间：2026-03-24  
 适用包：`Eyou_Canopen_Master`
 
 ## 1. CAN 启动与检查
@@ -108,6 +108,13 @@ rosservice call /canopen_hw_node/resume "{}"
 rosservice call /canopen_hw_node/recover "{}"
 rosservice call /canopen_hw_node/shutdown "{}"
 ```
+
+状态语义（当前）：
+- `init`: `Configured -> Running`
+- `halt`: `Running -> Armed`
+- `resume`: `Armed -> Running`
+- `recover`: `Faulted -> Armed`（不自动 Running）
+- `shutdown`: `* -> Configured`
 
 模式切换（白名单：`7/8/9/10`）：
 

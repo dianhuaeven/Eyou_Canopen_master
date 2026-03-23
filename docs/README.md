@@ -1,6 +1,6 @@
 # 文档索引与归档规则
 
-更新时间：2026-03-23
+更新时间：2026-03-24
 
 ## 当前有效文档（优先阅读）
 
@@ -28,6 +28,8 @@
     IP（mode=7）支持改造的 commit 路线表（含 0x60C1/0x60C2 策略与回退路径）。
 12. `docs/command_cheatsheet.md`  
     CAN 启动、赋权、启动节点、service/topic 调用命令速查。
+13. `docs/2026-03-24_state_management_refactor_commit_plan.md`  
+    基于 `0324import.md` 的“现状调研 + 精确到 commit 的状态管理重构计划图”。
 
 ## 2026-03-21 已归档文档
 

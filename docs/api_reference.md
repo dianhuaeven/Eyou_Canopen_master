@@ -1,6 +1,42 @@
 # API Quick Reference
 
+## OperationalCoordinator
+
+`SystemOpMode`（当前实现）：
+
+- `Inactive`
+- `Configured`
+- `Running`
+- `Armed`
+- `Faulted`
+- `Recovering`
+- `ShuttingDown`
+
+| 方法 | 说明 |
+|------|------|
+| `SetConfigured()` | Configure 成功后设置起始模式 |
+| `RequestInit()` | `Configured -> Running`（启动主站并显式使能） |
+| `RequestHalt()` | `Running -> Armed` |
+| `RequestRelease()` | `Armed -> Running`（对应 `~/resume`） |
+| `RequestRecover()` | `Faulted -> Armed`（不自动回到 Running） |
+| `RequestShutdown()` | 通信停机并回到 `Configured` |
+| `UpdateFromFeedback()` | 在 `Armed/Running` 下自动检测 fault/heartbeat 丢失并降级到 `Faulted` |
+| `ComputeIntents()` | 按模式下发每轴 `AxisIntent`（当前为 shadow 通道） |
+
+## ServiceGateway
+
+| Service | 内部转发 |
+|------|------|
+| `~/init` | `OperationalCoordinator::RequestInit()` |
+| `~/halt` | `OperationalCoordinator::RequestHalt()` |
+| `~/resume` | `OperationalCoordinator::RequestRelease()` |
+| `~/recover` | `OperationalCoordinator::RequestRecover()` |
+| `~/shutdown` | `OperationalCoordinator::RequestShutdown()` |
+
 ## LifecycleManager
+
+当前定位：资源拥有者（`SharedState/CanopenMaster/CanopenRobotHw` 生命周期管理），
+运行策略逐步迁移到 `OperationalCoordinator`。
 
 | 方法 | 说明 |
 |------|------|
@@ -22,6 +58,7 @@
 | `GracefulShutdown(detail)` | 402 降级 + NMT Stop；超时返回 false 并给 detail |
 | `HaltAll()` / `ResumeAll()` | 全轴置/清 Halt bit（保持 Operation Enabled） |
 | `RecoverFaultedAxes(detail)` | 仅对 fault 轴复位，超时返回 false 并给 detail |
+| `ResetAllFaults(detail)` | `RecoverFaultedAxes` 的协调层入口别名 |
 | `EnableAxis/DisableAxis/ResetAxisFault` | 单轴手动控制接口 |
 | `GetAxisFeedback(i, out)` | 读取单轴反馈快照 |
 
@@ -76,6 +113,8 @@
 |------|------|
 | `global_fault` | 任一轴故障后置位的全局闩锁 |
 | `all_axes_halted_by_fault` | 全轴因故障被连带冻结标志 |
+| `intents` | 每轴 `AxisIntent`（当前 shadow 使用） |
+| `intent_sequence` | intent 更新序列号 |
 
 ## BusIO (接口)
 
