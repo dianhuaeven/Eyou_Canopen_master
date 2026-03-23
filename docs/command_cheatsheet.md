@@ -13,8 +13,7 @@ sudo modprobe can_dev
 
 # 2) 配置并拉起 can0（1Mbps）
 sudo ip link set can0 down 2>/dev/null || true
-sudo ip link set can0 type can bitrate 1000000 restart-ms 100
-sudo ip link set can0 txqueuelen 1024
+sudo ip link set can0 type can bitrate 1000000
 sudo ip link set can0 up
 
 # 3) 查看状态
@@ -35,12 +34,15 @@ candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 
 推荐直接用 `sudo` 配置 CAN。  
 如需减少 sudo 频率，可给工具加 capability（按需使用）：
-
 ```bash
-sudo setcap cap_net_admin,cap_net_raw+eip /usr/sbin/ip
-sudo setcap cap_net_raw+eip /usr/bin/candump
-sudo setcap cap_net_raw+eip /usr/bin/cansend
-getcap /usr/sbin/ip /usr/bin/candump /usr/bin/cansend
+# 先找到节点二进制
+realpath ~/Robot24_catkin_ws/devel/lib/Eyou_Canopen_Master/canopen_hw_ros_node
+
+# 给节点提权（打开 RAW CAN 一般需要 NET_RAW；加 NET_ADMIN 更保险）
+sudo setcap cap_net_raw,cap_net_admin+eip ~/Robot24_catkin_ws/devel/lib/Eyou_Canopen_Master/canopen_hw_ros_node
+
+# 检查
+getcap ~/Robot24_catkin_ws/devel/lib/Eyou_Canopen_Master/canopen_hw_ros_node
 ```
 
 若 USB-CAN 走串口设备（`/dev/ttyUSB*`）：

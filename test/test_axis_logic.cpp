@@ -208,9 +208,16 @@ TEST_F(AxisLogicTest, ConfigureDelegatesToStateMachine) {
   logic_->Configure(100, 5, 3);
 }
 
-TEST_F(AxisLogicTest, ResetFaultReenables) {
+TEST_F(AxisLogicTest, ResetFaultDoesNotAutoEnable) {
+  logic_->RequestDisable();
   logic_->ResetFault();
-  // 验证不崩溃，状态机内部会重置计数器并请求使能
+  bus_.calls.clear();
+
+  logic_->ProcessRpdo(kSW_SwitchOnDisabled, 0, 0, 0, kMode_CSP);
+
+  ASSERT_FALSE(bus_.calls.empty());
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
 }
 
 TEST_F(AxisLogicTest, RequestDisableImmediatelyClearsOperationalFlag) {

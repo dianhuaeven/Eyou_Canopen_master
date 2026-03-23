@@ -298,6 +298,8 @@ bool CanopenMaster::ResetAxisFault(std::size_t axis_index) {
     return false;
   }
   axis_drivers_[axis_index]->ResetFault();
+  // 保持历史语义：手动单轴复位后立即请求使能。
+  axis_drivers_[axis_index]->RequestEnable();
   return true;
 }
 

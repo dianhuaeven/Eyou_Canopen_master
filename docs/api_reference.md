@@ -10,7 +10,7 @@
 | `InitMotors()` | 启动通信与驱动流程（Configured -> Active） |
 | `Halt()` | 轻量停转：置 Halt bit，保持 Active |
 | `Resume()` | 清 Halt bit 恢复运动（global fault latch 期间会被拒绝） |
-| `Recover()` | 仅对 fault 轴执行复位与重使能（不重启通信） |
+| `Recover()` | 仅对 fault 轴执行复位（不重启通信、不自动使能；需后续 `Resume()`） |
 | `StopCommunication()` | 执行 402 降级 + 停通信，置 `require_init=true` |
 | `Shutdown()` | 完全关闭，释放所有资源 |
 | `robot_hw()` | 返回 CanopenRobotHw 指针 |

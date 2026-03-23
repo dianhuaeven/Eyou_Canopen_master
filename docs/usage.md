@@ -134,7 +134,7 @@ rosservice call /canopen_hw_node/init "{}"
 | `~init` | `std_srvs/Trigger` | 手动初始化电机（Configured -> Active） |
 | `~halt` | `std_srvs/Trigger` | 轻量停转：置 Halt bit，保持 Active 与通信 |
 | `~resume` | `std_srvs/Trigger` | 清 Halt bit 恢复运动；若有故障需先 `~recover` |
-| `~recover` | `std_srvs/Trigger` | 仅做 Fault Reset（Active 内），不重启通信 |
+| `~recover` | `std_srvs/Trigger` | 仅做 Fault Reset（Active 内），不重启通信、不自动使能（需后续 `~resume`） |
 | `~shutdown` | `std_srvs/Trigger` | 执行 402 失能 + 停通信，不退出节点（随后需 `~init`） |
 | `~set_mode` | `Eyou_Canopen_Master/SetMode` | 允许在 `Configured` 或 `Active+halted` 切模式 |
 

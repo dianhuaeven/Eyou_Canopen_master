@@ -198,7 +198,6 @@ void AxisLogic::ResetFault() {
   std::lock_guard<std::mutex> lk(mtx_);
   state_machine_.ResetFaultCounter();
   health_.fault_reset_attempts.store(0, std::memory_order_relaxed);
-  state_machine_.request_enable();
 }
 
 CiA402State AxisLogic::feedback_state() const {

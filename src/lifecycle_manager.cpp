@@ -284,6 +284,17 @@ bool LifecycleManager::Recover(std::string* detail) {
     return false;
   }
 
+  bool had_fault_axis = false;
+  if (shared_state_) {
+    const SharedSnapshot before = shared_state_->Snapshot();
+    for (const auto& fb : before.feedback) {
+      if (fb.is_fault) {
+        had_fault_axis = true;
+        break;
+      }
+    }
+  }
+
   std::string recover_detail;
   const bool ok = master_->RecoverFaultedAxes(&recover_detail);
   if (!ok) {
@@ -325,6 +336,17 @@ bool LifecycleManager::Recover(std::string* detail) {
     }
     shared_state_->SetGlobalFault(false);
     shared_state_->SetAllAxesHaltedByFault(false);
+  }
+
+  if (had_fault_axis) {
+    // Recover 仅清故障，不自动重新使能；后续需显式调用 Resume().
+    halted_ = true;
+    if (detail) {
+      if (!detail->empty()) {
+        *detail += "; ";
+      }
+      *detail += "fault cleared; call ~/resume to re-enable";
+    }
   }
 
   CANOPEN_LOG_INFO("LifecycleManager: Active (fault recovered)");
