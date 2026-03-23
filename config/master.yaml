@@ -21,9 +21,10 @@ joint_1:
         - {index: 0x607A, sub_index: 0, bits: 32}
         - {index: 0x6060, sub_index: 0, bits: 8}
     2:
-      cob_id: 0x80000305
+      cob_id: 0x305
       transmission: 1
-      mapping: []
+      mapping:
+        - {index: 0x60C1, sub_index: 1, bits: 32}
     3:
       cob_id: 0x80000405
       transmission: 1
@@ -56,4 +57,3 @@ joint_1:
       mapping: []
   sdo:
     - {index: 0x6060, sub_index: 0, value: 8}
-

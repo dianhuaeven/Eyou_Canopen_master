@@ -127,6 +127,13 @@ bool AxisDriver::WriteControlword(uint16_t cw) {
 
 bool AxisDriver::WriteTargetPosition(int32_t pos) {
   std::error_code ec;
+  const int8_t target_mode = logic_.target_mode();
+  if (target_mode == kMode_IP) {
+    tpdo_mapped[0x60C1][1].Write(pos, ec);
+    if (ec) return false;
+    tpdo_mapped[0x60C1][1].WriteEvent(ec);
+    return !ec;
+  }
   tpdo_mapped[0x607A][0].Write(pos, ec);
   if (ec) return false;
   tpdo_mapped[0x607A][0].WriteEvent(ec);
