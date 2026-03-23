@@ -443,6 +443,10 @@ bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
   return false;
 }
 
+bool CanopenMaster::ResetAllFaults(std::string* detail) {
+  return RecoverFaultedAxes(detail);
+}
+
 void CanopenMaster::EmergencyStop() {
   for (const auto& axis : axis_drivers_) {
     if (axis) {

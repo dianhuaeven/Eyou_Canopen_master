@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "canopen_hw/canopen_master.hpp"
 
 TEST(MasterConfig, ZeroAxisNormalized) {
@@ -34,4 +36,19 @@ TEST(MasterConfig, NotRunningAfterConstruction) {
 
   EXPECT_FALSE(master.running());
   EXPECT_EQ(master.axis_count(), 0u);
+}
+
+TEST(MasterConfig, ResetAllFaultsRejectsWhenNotRunning) {
+  canopen_hw::SharedState shared(2);
+  canopen_hw::CanopenMasterConfig cfg;
+  cfg.axis_count = 2;
+  cfg.master_node_id = 127;
+  cfg.can_interface = "can0";
+  cfg.joints.clear();
+
+  canopen_hw::CanopenMaster master(cfg, &shared);
+
+  std::string detail;
+  EXPECT_FALSE(master.ResetAllFaults(&detail));
+  EXPECT_EQ(detail, "master not running");
 }

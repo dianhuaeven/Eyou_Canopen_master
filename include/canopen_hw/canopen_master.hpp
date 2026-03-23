@@ -87,6 +87,8 @@ class CanopenMaster {
 
   // 仅对 fault 轴执行复位+重使能；失败时 detail 带提示。
   bool RecoverFaultedAxes(std::string* detail = nullptr);
+  // 新恢复入口：语义与 RecoverFaultedAxes 一致，供 Coordinator 调用。
+  bool ResetAllFaults(std::string* detail = nullptr);
 
   // 全轴紧急停止: 对所有轴发送 DisableVoltage。
   void EmergencyStop();

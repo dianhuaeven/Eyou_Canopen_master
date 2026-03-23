@@ -184,7 +184,7 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
         mode_.store(SystemOpMode::Recovering, std::memory_order_release);
 
         std::string recover_detail;
-        if (!master_->RecoverFaultedAxes(&recover_detail)) {
+        if (!master_->ResetAllFaults(&recover_detail)) {
           mode_.store(SystemOpMode::Faulted, std::memory_order_release);
           if (detail) {
             *detail = recover_detail.empty() ? "recover failed" : recover_detail;
@@ -310,6 +310,8 @@ void OperationalCoordinator::UpdateFromFeedback() {
   SystemOpMode expected = current;
   if (mode_.compare_exchange_strong(expected, SystemOpMode::Faulted,
                                     std::memory_order_acq_rel)) {
+    shared_state_->SetGlobalFault(true);
+    shared_state_->SetAllAxesHaltedByFault(true);
     CANOPEN_LOG_WARN("OperationalCoordinator: {} -> Faulted (auto)",
                      SystemOpModeName(current));
   }

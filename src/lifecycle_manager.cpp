@@ -296,7 +296,7 @@ bool LifecycleManager::Recover(std::string* detail) {
   }
 
   std::string recover_detail;
-  const bool ok = master_->RecoverFaultedAxes(&recover_detail);
+  const bool ok = master_->ResetAllFaults(&recover_detail);
   if (!ok) {
     const std::string msg = recover_detail.empty()
                                 ? std::string("fault reset failed, try ~/init to reinitialize")
