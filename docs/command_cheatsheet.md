@@ -147,8 +147,16 @@ rosrun controller_manager controller_manager start arm_position_controller
 ```bash
 rostopic list | grep -E "joint_states|diagnostics|controller"
 rostopic echo /joint_states
+rostopic echo /joint_states/position
+rostopic echo /joint_states/velocity
 rostopic echo /diagnostics
 rostopic hz /joint_states
+```
+
+只看单关节（`joint_1`）位置/速度反馈：
+
+```bash
+rostopic echo /joint_states | grep -E "name|position|velocity"
 ```
 
 发布位置轨迹（单关节示例）：
