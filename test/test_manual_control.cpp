@@ -52,9 +52,9 @@ TEST(ManualControl, DisableRequestPreventsEnable) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
 
-  // 默认 enable_requested_ = true，SwitchOnDisabled 发 Shutdown。
+  // 默认 enable_requested_ = false，SwitchOnDisabled 发 DisableVoltage。
   sm.Update(0x0040, kMode_CSP, 0);
-  EXPECT_EQ(sm.controlword(), kCtrl_Shutdown);
+  EXPECT_EQ(sm.controlword(), kCtrl_DisableVoltage);
 
   // 请求 disable 后，SwitchOnDisabled 应发 DisableVoltage。
   sm.request_disable();

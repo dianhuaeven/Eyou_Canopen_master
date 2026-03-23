@@ -92,6 +92,8 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
 
   const bool halt_released =
       (prev_halt_requested_ && (halt_requested_ == false));
+  const bool enable_chain_allowed =
+      enable_requested_ && !global_fault_ && !forced_halt_by_fault_;
 
   switch (state_) {
     case CiA402State::NotReadyToSwitchOn:
@@ -106,7 +108,7 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
 
     case CiA402State::SwitchOnDisabled:
       // 进入可使能起点, 默认发 Shutdown 推进到 ReadyToSwitchOn。
-      controlword_ = enable_requested_ ? kCtrl_Shutdown : kCtrl_DisableVoltage;
+      controlword_ = enable_chain_allowed ? kCtrl_Shutdown : kCtrl_DisableVoltage;
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
@@ -117,7 +119,7 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
     case CiA402State::ReadyToSwitchOn:
       // mode_of_operation 由主站每帧写出（tpdo_mapped[0x6060]），
       // 不用 mode_display 来门控使能序列。
-      controlword_ = enable_requested_ ? kCtrl_EnableOperation : kCtrl_Shutdown;
+      controlword_ = enable_chain_allowed ? kCtrl_EnableOperation : kCtrl_Shutdown;
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;
@@ -127,7 +129,7 @@ void CiA402StateMachine::Update(uint16_t statusword, int8_t mode_display,
 
     case CiA402State::SwitchedOn:
       // 防御分支: 若未跳级, 在此继续推到 OPERATION_ENABLED。
-      controlword_ = enable_requested_ ? kCtrl_EnableOperation : kCtrl_Shutdown;
+      controlword_ = enable_chain_allowed ? kCtrl_EnableOperation : kCtrl_Shutdown;
       is_operational_ = false;
       position_locked_ = true;
       safe_target_ = actual_position;

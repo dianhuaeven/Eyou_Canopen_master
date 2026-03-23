@@ -18,6 +18,7 @@ void EnterOperationEnabledAndUnlockCsp(CiA402StateMachine* sm,
                                        int32_t actual,
                                        int32_t target) {
   sm->set_target_mode(kMode_CSP);
+  sm->request_enable();
   sm->Update(0x0040, kMode_CSP, actual);
   sm->Update(0x0021, kMode_CSP, actual);
   // 首帧进入 OP：epoch 递增，默认不解锁。
@@ -32,15 +33,26 @@ void EnterOperationEnabledAndUnlockCsp(CiA402StateMachine* sm,
 TEST(CiA402SM, SwitchOnDisabledSendsShutdown) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
 
   sm.Update(0x0040, kMode_CSP, 100);
   EXPECT_EQ(sm.state(), CiA402State::SwitchOnDisabled);
   EXPECT_EQ(sm.controlword(), kCtrl_Shutdown);
 }
 
+TEST(CiA402SM, SwitchOnDisabledKeepsDisableVoltageUntilEnabled) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  EXPECT_EQ(sm.state(), CiA402State::SwitchOnDisabled);
+  EXPECT_EQ(sm.controlword(), canopen_hw::kCtrl_DisableVoltage);
+}
+
 TEST(CiA402SM, ReadyToSwitchOnJumpEnable) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
 
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
@@ -53,6 +65,7 @@ TEST(CiA402SM, ReadyToSwitchOnJumpEnable) {
 TEST(CiA402SM, ReadyToSwitchOnEnablesEvenIfModeDisplayIsZero) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
 
   sm.Update(0x0040, kMode_CSP, 100);
   // mode_display=0（驱动器因收到 mode=0 而清除了模式）
@@ -64,6 +77,7 @@ TEST(CiA402SM, ReadyToSwitchOnEnablesEvenIfModeDisplayIsZero) {
 TEST(CiA402SM, FirstOperationEnabledStaysLockedUntilValidEpochCommand) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
 
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
@@ -78,6 +92,7 @@ TEST(CiA402SM, FirstOperationEnabledStaysLockedUntilValidEpochCommand) {
 TEST(CiA402SM, EpochMismatchKeepsLocked) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
 
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
@@ -94,6 +109,7 @@ TEST(CiA402SM, EpochMismatchKeepsLocked) {
 TEST(CiA402SM, RosTargetCloseUnlocksWithValidEpoch) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
 
   sm.Update(0x0040, kMode_CSP, 100);
   sm.Update(0x0021, kMode_CSP, 100);
@@ -105,6 +121,22 @@ TEST(CiA402SM, RosTargetCloseUnlocksWithValidEpoch) {
   EXPECT_FALSE(sm.is_position_locked());
   EXPECT_TRUE(sm.is_operational());
   EXPECT_EQ(sm.safe_target(), 12350);
+}
+
+TEST(CiA402SM, GlobalFaultBlocksPreEnableChain) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
+  sm.set_global_fault(true);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  EXPECT_EQ(sm.controlword(), canopen_hw::kCtrl_DisableVoltage);
+
+  sm.Update(0x0021, kMode_CSP, 100);
+  EXPECT_EQ(sm.controlword(), kCtrl_Shutdown);
+
+  sm.Update(0x0023, kMode_CSP, 100);
+  EXPECT_EQ(sm.controlword(), kCtrl_Shutdown);
 }
 
 TEST(CiA402SM, FaultResetThreePhaseFlow) {

@@ -153,7 +153,8 @@ class CiA402StateMachine {
   CiA402State state_ = CiA402State::NotReadyToSwitchOn;
 
   // 请求与模式。
-  bool enable_requested_ = true;
+  // 安全默认值：上层需显式 request_enable() 才推进使能链路。
+  bool enable_requested_ = false;
   bool halt_requested_ = false;
   bool prev_halt_requested_ = false;
   int8_t target_mode_ = kMode_CSP;

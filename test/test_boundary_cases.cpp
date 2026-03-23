@@ -107,6 +107,7 @@ TEST(Boundary, NodeIdOutOfRange) {
 TEST(Boundary, Int32ExtremePositionSameValueUnlocksWithValidEpoch) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
 
   sm.Update(0x0040, kMode_CSP, INT32_MAX);
   sm.Update(0x0021, kMode_CSP, INT32_MAX);
@@ -122,6 +123,7 @@ TEST(Boundary, Int32ExtremePositionSameValueUnlocksWithValidEpoch) {
 TEST(Boundary, Int32ExtremeAbsDiffStaysLockedWithoutReasonableTarget) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
   sm.Update(0x0040, kMode_CSP, INT32_MIN);
   sm.Update(0x0021, kMode_CSP, INT32_MIN);
   sm.Update(0x0027, kMode_CSP, INT32_MIN);  // 首帧，epoch 产生
@@ -138,6 +140,7 @@ TEST(Boundary, Int32ExtremeAbsDiffStaysLockedWithoutReasonableTarget) {
 TEST(Boundary, FaultResetMaxAttemptsReached) {
   CiA402StateMachine sm;
   sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
   sm.set_fault_reset_policy(1, 2, 2);  // hold=1, wait=2, max=2
 
   // 推进到 OperationEnabled 并解锁

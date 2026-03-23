@@ -81,7 +81,7 @@ TEST_F(AxisLogicTest, ProcessRpdoWritesBusIO) {
   // 应该写了 controlword + mode + position + velocity + torque
   ASSERT_GE(bus_.calls.size(), 5u);
   EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
-  EXPECT_EQ(bus_.calls[0].value, kCtrl_Shutdown);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
   EXPECT_EQ(bus_.calls[1].type, BusCall::kMode);
   EXPECT_EQ(bus_.calls[2].type, BusCall::kPosition);
   EXPECT_EQ(bus_.calls[3].type, BusCall::kVelocity);
@@ -196,6 +196,7 @@ TEST_F(AxisLogicTest, ResetFaultReenables) {
 
 TEST_F(AxisLogicTest, RequestDisableImmediatelyClearsOperationalFlag) {
   DriveToOperational();
+  logic_->SetRosTarget(0);
   logic_->ProcessRpdo(kSW_OperationEnabled, 0, 0, 0, kMode_CSP);
 
   auto before = shared_->Snapshot();
