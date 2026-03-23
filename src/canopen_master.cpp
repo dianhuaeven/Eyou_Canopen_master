@@ -267,6 +267,22 @@ bool CanopenMaster::EnableAxis(std::size_t axis_index) {
   return true;
 }
 
+bool CanopenMaster::EnableAll() {
+  if (!running_.load() || axis_drivers_.empty()) {
+    return false;
+  }
+
+  bool ok = true;
+  for (const auto& axis : axis_drivers_) {
+    if (!axis) {
+      ok = false;
+      continue;
+    }
+    axis->RequestEnable();
+  }
+  return ok;
+}
+
 bool CanopenMaster::DisableAxis(std::size_t axis_index) {
   if (axis_index >= axis_drivers_.size() || !axis_drivers_[axis_index]) {
     return false;

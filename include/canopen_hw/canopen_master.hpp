@@ -73,6 +73,7 @@ class CanopenMaster {
 
   // 单轴手动控制接口。
   bool EnableAxis(std::size_t axis_index);
+  bool EnableAll();
   bool DisableAxis(std::size_t axis_index);
   bool ResetAxisFault(std::size_t axis_index);
 

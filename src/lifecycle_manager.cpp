@@ -52,6 +52,12 @@ bool LifecycleManager::InitMotors() {
     return false;
   }
 
+  if (!master_->EnableAll()) {
+    CANOPEN_LOG_ERROR("InitMotors: EnableAll failed");
+    master_->Stop();
+    return false;
+  }
+
   state_ = LifecycleState::Active;
   ever_initialized_ = true;
   require_init_ = false;
