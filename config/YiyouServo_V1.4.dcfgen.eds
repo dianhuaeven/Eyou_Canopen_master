@@ -2587,7 +2587,7 @@ ParameterName=interpolation data record
 ObjectType=7
 AccessType=RW
 DataType=0x0004
-PDOMapping=0
+PDOMapping=1
 ObjFlags=0x00000000
 
 [60C2]

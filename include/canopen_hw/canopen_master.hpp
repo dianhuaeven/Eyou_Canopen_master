@@ -18,6 +18,7 @@
 #include <lely/io2/sys/timer.hpp>
 
 #include "canopen_hw/axis_driver.hpp"
+#include "canopen_hw/cia402_defs.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 namespace canopen_hw {
@@ -40,6 +41,7 @@ struct CanopenMasterConfig {
     int32_t position_lock_threshold = 15000;
     int max_fault_resets = 3;
     int fault_reset_hold_cycles = 5;
+    int8_t default_mode = kMode_CSP;
     // 0x60C2:01 interpolation time period value (ms).
     uint8_t ip_interpolation_period_ms = 5;
     double max_velocity_for_clamp = 500000.0;

@@ -13,6 +13,7 @@
 
 #include "Eyou_Canopen_Master/SetMode.h"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
+#include "canopen_hw/cia402_defs.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
@@ -27,6 +28,11 @@ std::string MakeAbsolutePath(const std::string& path) {
 
 bool FileExists(const std::string& path) {
   return !path.empty() && std::filesystem::exists(path);
+}
+
+bool IsAllowedMode(int8_t mode) {
+  return mode == canopen_hw::kMode_IP || mode == canopen_hw::kMode_CSP ||
+         mode == canopen_hw::kMode_CSV || mode == canopen_hw::kMode_CST;
 }
 
 }  // namespace
@@ -76,6 +82,9 @@ int main(int argc, char** argv) {
 
   // ROS 适配层。
   canopen_hw::CanopenRobotHwRos robot_hw_ros(lifecycle.robot_hw(), joint_names);
+  for (std::size_t i = 0; i < master_cfg.joints.size(); ++i) {
+    robot_hw_ros.SetMode(i, master_cfg.joints[i].default_mode);
+  }
   std::mutex loop_mtx;
 
   bool auto_init = false;
@@ -170,6 +179,13 @@ int main(int argc, char** argv) {
           if (req.axis_index >= robot_hw_ros.axis_count()) {
             res.success = false;
             res.message = "axis_index out of range";
+            return true;
+          }
+          if (!IsAllowedMode(req.mode)) {
+            res.success = false;
+            res.message =
+                "unsupported mode: " + std::to_string(req.mode) +
+                ", allowed: 7(IP),8(CSP),9(CSV),10(CST)";
             return true;
           }
 

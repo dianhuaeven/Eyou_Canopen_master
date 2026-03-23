@@ -77,7 +77,7 @@ std::vector<uint8_t> PackLe(uint32_t value, std::size_t size) {
 AxisDriver::AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
                        std::size_t axis_index, SharedState* shared_state,
                        bool verify_pdo_mapping, const std::string& dcf_path,
-                       uint8_t ip_interpolation_period_ms)
+                       uint8_t ip_interpolation_period_ms, int8_t default_mode)
     : lely::canopen::BasicDriver(can_master, node_id),
       axis_index_(axis_index),
       shared_state_(shared_state),
@@ -85,6 +85,8 @@ AxisDriver::AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
       verify_pdo_mapping_(verify_pdo_mapping),
       dcf_path_(dcf_path),
       ip_interpolation_period_ms_(ip_interpolation_period_ms) {
+  logic_.SetTargetMode(default_mode);
+
   pdo_verified_.store(!verify_pdo_mapping_);
   pdo_verification_done_.store(!verify_pdo_mapping_);
   if (verify_pdo_mapping_) {

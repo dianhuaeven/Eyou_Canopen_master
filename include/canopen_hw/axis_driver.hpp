@@ -29,7 +29,7 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   AxisDriver(lely::canopen::BasicMaster& can_master, uint8_t node_id,
              std::size_t axis_index, SharedState* shared_state,
              bool verify_pdo_mapping, const std::string& dcf_path,
-             uint8_t ip_interpolation_period_ms);
+             uint8_t ip_interpolation_period_ms, int8_t default_mode);
 
   // 显式反馈注入（无硬件场景下的逻辑验证入口）。
   void InjectFeedback(int32_t actual_position, int32_t actual_velocity,

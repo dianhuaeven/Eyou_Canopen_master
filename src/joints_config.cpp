@@ -20,6 +20,11 @@ bool IsValidCanopenNodeId(int node_id) {
   return node_id >= 1 && node_id <= 127;
 }
 
+bool IsAllowedMode(int mode) {
+  return mode == kMode_IP || mode == kMode_CSP || mode == kMode_CSV ||
+         mode == kMode_CST;
+}
+
 }  // namespace
 
 bool LoadJointsYaml(const std::string& path, std::string* error,
@@ -112,6 +117,27 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
                                   : static_cast<uint8_t>(axis_index + 1);
       if (canopen && canopen.IsMap() && canopen["verify_pdo_mapping"]) {
         jcfg.verify_pdo_mapping = canopen["verify_pdo_mapping"].as<bool>();
+      }
+      if (canopen && canopen.IsMap() && canopen["default_mode"]) {
+        const int default_mode = canopen["default_mode"].as<int>();
+        if (!IsAllowedMode(default_mode)) {
+          std::ostringstream oss;
+          oss << "invalid default_mode at joints[" << axis_index
+              << "]: expected one of {7,8,9,10}, got " << default_mode;
+          SetError(error, oss.str());
+          return false;
+        }
+        jcfg.default_mode = static_cast<int8_t>(default_mode);
+      } else if (joint["default_mode"]) {
+        const int default_mode = joint["default_mode"].as<int>();
+        if (!IsAllowedMode(default_mode)) {
+          std::ostringstream oss;
+          oss << "invalid default_mode at joints[" << axis_index
+              << "]: expected one of {7,8,9,10}, got " << default_mode;
+          SetError(error, oss.str());
+          return false;
+        }
+        jcfg.default_mode = static_cast<int8_t>(default_mode);
       }
       if (joint["position_lock_threshold"]) {
         jcfg.position_lock_threshold = joint["position_lock_threshold"].as<int>();

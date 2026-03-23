@@ -170,12 +170,21 @@ void CanopenRobotHw::ConfigureAxisConversion(
 void CanopenRobotHw::ApplyConfig(const CanopenMasterConfig& config) {
   const std::size_t n = std::min(axis_count_, config.joints.size());
   for (std::size_t i = 0; i < n; ++i) {
+    joint_mode_[i] = config.joints[i].default_mode;
+
     AxisConversion conv;
     conv.counts_per_rev = config.joints[i].counts_per_rev;
     conv.rated_torque_nm = config.joints[i].rated_torque_nm;
     conv.velocity_scale = config.joints[i].velocity_scale;
     conv.torque_scale = config.joints[i].torque_scale;
     ConfigureAxisConversion(i, conv);
+
+    if (shared_state_) {
+      AxisCommand cmd{};
+      shared_state_->GetCommand(i, &cmd);
+      cmd.mode_of_operation = config.joints[i].default_mode;
+      shared_state_->UpdateCommand(i, cmd);
+    }
   }
 }
 

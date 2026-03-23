@@ -10,6 +10,7 @@ joints:
     canopen:
       node_id: 5
       verify_pdo_mapping: false
+      default_mode: 7
     counts_per_rev: 5308416
     rated_torque_nm: 1.0
     position_lock_threshold: 15000

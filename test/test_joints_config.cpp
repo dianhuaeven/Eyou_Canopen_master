@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 
+#include "canopen_hw/cia402_defs.hpp"
 #include "canopen_hw/canopen_robot_hw.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/shared_state.hpp"
@@ -19,6 +20,7 @@ TEST(JointsConfig, LoadValidYaml) {
            "    canopen:\n"
            "      node_id: 1\n"
            "      verify_pdo_mapping: true\n"
+           "      default_mode: 7\n"
            "    counts_per_rev: 1000\n"
            "    rated_torque_nm: 10\n"
            "    max_velocity_for_clamp: 1000\n"
@@ -28,6 +30,7 @@ TEST(JointsConfig, LoadValidYaml) {
            "    canopen:\n"
            "      node_id: 2\n"
            "      verify_pdo_mapping: false\n"
+           "      default_mode: 9\n"
            "    counts_per_rev: 2000\n"
            "    rated_torque_nm: 20\n"
            "    max_velocity_for_clamp: 2000\n"
@@ -43,9 +46,11 @@ TEST(JointsConfig, LoadValidYaml) {
   EXPECT_EQ(master_cfg.joints.size(), 2u);
   EXPECT_EQ(master_cfg.joints[0].node_id, 1u);
   EXPECT_TRUE(master_cfg.joints[0].verify_pdo_mapping);
+  EXPECT_EQ(master_cfg.joints[0].default_mode, canopen_hw::kMode_IP);
   EXPECT_DOUBLE_EQ(master_cfg.joints[0].max_velocity_for_clamp, 1000.0);
   EXPECT_EQ(master_cfg.joints[1].node_id, 2u);
   EXPECT_FALSE(master_cfg.joints[1].verify_pdo_mapping);
+  EXPECT_EQ(master_cfg.joints[1].default_mode, canopen_hw::kMode_CSV);
   EXPECT_DOUBLE_EQ(master_cfg.joints[1].max_velocity_for_clamp, 2000.0);
 
   canopen_hw::AxisFeedback fb0;
@@ -126,6 +131,27 @@ TEST(JointsConfig, InvalidMaxVelocityForClampRejected) {
   const bool ok = canopen_hw::LoadJointsYaml(invalid_path, &error, &master_cfg);
   EXPECT_FALSE(ok);
   EXPECT_NE(error.find("invalid max_velocity_for_clamp"), std::string::npos);
+}
+
+TEST(JointsConfig, InvalidDefaultModeRejected) {
+  const std::string invalid_path = "/tmp/joints_test_invalid_default_mode.yaml";
+  {
+    std::ofstream ofs(invalid_path);
+    ofs << "joints:\n"
+           "  - name: joint_bad\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "      default_mode: 11\n"
+           "    counts_per_rev: 1000\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 1000\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(invalid_path, &error, &master_cfg);
+  EXPECT_FALSE(ok);
+  EXPECT_NE(error.find("invalid default_mode"), std::string::npos);
 }
 
 TEST(JointsConfig, InterpolationPeriodDefaultsFromLoopHzAndAllowsOverride) {

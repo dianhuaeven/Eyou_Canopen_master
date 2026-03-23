@@ -252,7 +252,8 @@ void CanopenMaster::CreateAxisDrivers(lely::canopen::BasicMaster& can_master) {
     auto axis = std::make_unique<AxisDriver>(can_master, node_id, i, shared_state_,
                                              joint_cfg.verify_pdo_mapping,
                                              config_.master_dcf_path,
-                                             joint_cfg.ip_interpolation_period_ms);
+                                             joint_cfg.ip_interpolation_period_ms,
+                                             joint_cfg.default_mode);
     axis->ConfigureStateMachine(joint_cfg.position_lock_threshold,
                                 joint_cfg.max_fault_resets,
                                 joint_cfg.fault_reset_hold_cycles);
