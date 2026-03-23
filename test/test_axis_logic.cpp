@@ -182,6 +182,23 @@ TEST_F(AxisLogicTest, HeartbeatRecoveredClearsFault) {
   EXPECT_EQ(logic_->health().heartbeat_recovered.load(), 1u);
 }
 
+TEST_F(AxisLogicTest, HeartbeatLossSetsGlobalFaultLatches) {
+  DriveToOperational();
+  logic_->ProcessHeartbeat(true);
+
+  EXPECT_TRUE(shared_->GetGlobalFault());
+  EXPECT_TRUE(shared_->GetAllAxesHaltedByFault());
+}
+
+TEST_F(AxisLogicTest, HeartbeatRecoverDoesNotAutoClearGlobalFaultLatches) {
+  DriveToOperational();
+  logic_->ProcessHeartbeat(true);
+  logic_->ProcessHeartbeat(false);
+
+  EXPECT_TRUE(shared_->GetGlobalFault());
+  EXPECT_TRUE(shared_->GetAllAxesHaltedByFault());
+}
+
 TEST_F(AxisLogicTest, HeartbeatLossKeepsAxisDisarmedUntilExplicitEnable) {
   DriveToOperational();
   logic_->SetRosTarget(0);

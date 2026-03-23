@@ -141,6 +141,27 @@ TEST(CiA402SM, GlobalFaultBlocksPreEnableChain) {
   EXPECT_EQ(sm.controlword(), kCtrl_Shutdown);
 }
 
+TEST(CiA402SM, FaultLatchClearStillRequiresExplicitEnableRequest) {
+  CiA402StateMachine sm;
+  sm.set_target_mode(kMode_CSP);
+  sm.request_enable();
+  sm.set_global_fault(true);
+
+  sm.Update(0x0040, kMode_CSP, 100);
+  EXPECT_EQ(sm.controlword(), canopen_hw::kCtrl_DisableVoltage);
+
+  // 清除故障闩锁前先撤销 enable 请求，验证不会隐式恢复。
+  sm.request_disable();
+  sm.set_global_fault(false);
+  sm.Update(0x0040, kMode_CSP, 100);
+  EXPECT_EQ(sm.controlword(), canopen_hw::kCtrl_DisableVoltage);
+
+  // 只有再次显式 enable 才会推进使能链。
+  sm.request_enable();
+  sm.Update(0x0040, kMode_CSP, 100);
+  EXPECT_EQ(sm.controlword(), kCtrl_Shutdown);
+}
+
 TEST(CiA402SM, FaultResetThreePhaseFlow) {
   CiA402StateMachine sm;
   EnterOperationEnabledAndUnlockCsp(&sm, 12348, 12350);

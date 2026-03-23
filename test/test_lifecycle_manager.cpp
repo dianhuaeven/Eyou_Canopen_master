@@ -198,3 +198,38 @@ TEST(LifecycleManager, InitRejectsMissingJointsFile) {
   EXPECT_FALSE(lm.Init("/nonexistent/master.dcf", "/nonexistent/joints.yaml"));
   EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
 }
+
+TEST(LifecycleManager, TransitionMatrixGuardsWithoutMotorInit) {
+  LifecycleManager lm;
+  auto config = MakeMinimalConfig();
+  std::string detail;
+
+  // Unconfigured: 全部运行态相关操作应拒绝。
+  EXPECT_FALSE(lm.InitMotors());
+  EXPECT_FALSE(lm.Halt());
+  EXPECT_FALSE(lm.Resume());
+  EXPECT_FALSE(lm.Recover(&detail));
+  EXPECT_EQ(detail, "recover requires Active state");
+
+  detail.clear();
+  EXPECT_FALSE(lm.StopCommunication(&detail));
+  EXPECT_EQ(detail, "invalid lifecycle state");
+  EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
+
+  // Configured: 仍未进入 Active，运行态操作应继续拒绝。
+  ASSERT_TRUE(lm.Configure(config));
+  EXPECT_EQ(lm.state(), LifecycleState::Configured);
+  EXPECT_FALSE(lm.Halt());
+  EXPECT_FALSE(lm.Resume());
+
+  detail.clear();
+  EXPECT_FALSE(lm.Recover(&detail));
+  EXPECT_EQ(detail, "recover requires Active state");
+
+  // Configured 下允许 stop communication，并置 require_init 标记。
+  detail.clear();
+  EXPECT_TRUE(lm.StopCommunication(&detail));
+  EXPECT_TRUE(detail.empty());
+  EXPECT_EQ(lm.state(), LifecycleState::Configured);
+  EXPECT_TRUE(lm.require_init());
+}
