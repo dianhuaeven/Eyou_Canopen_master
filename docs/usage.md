@@ -133,39 +133,42 @@ rosservice call /canopen_hw_node/init "{}"
 
 | Service | 类型 | 说明 |
 |---------|------|------|
-| `~init` | `std_srvs/Trigger` | `Configured -> Armed`（启动主站并自动上电到冻结态） |
-| `~enable` | `std_srvs/Trigger` | `Standby -> Armed`（使能并冻结输出） |
+| `~init` | `std_srvs/Trigger` | `Configured -> Armed`（启动主站并自动上电到冻结态；成功后触发一次命令重同步） |
+| `~enable` | `std_srvs/Trigger` | `Standby -> Armed`（使能并冻结输出；若存在 fault / heartbeat_lost / global fault 则拒绝） |
 | `~disable` | `std_srvs/Trigger` | `Running/Armed/Standby -> Standby`（去使能但不断开通信） |
 | `~halt` | `std_srvs/Trigger` | `Running -> Armed`（置 Halt bit，冻结输出） |
-| `~resume` | `std_srvs/Trigger` | `Armed -> Running`；若 fault latch 存在需先 `~recover` |
-| `~recover` | `std_srvs/Trigger` | `Faulted -> Standby`（仅清故障，不自动上电） |
-| `~shutdown` | `std_srvs/Trigger` | 停通信并回 `Configured`，节点不退出（随后需 `~init`） |
+| `~resume` | `std_srvs/Trigger` | `Armed -> Running`；若存在 fault / heartbeat_lost / global fault 则拒绝 |
+| `~recover` | `std_srvs/Trigger` | `Faulted -> Standby`（等待 fault 与 heartbeat 全清后才成功，不自动上电） |
+| `~shutdown` | `std_srvs/Trigger` | 停通信并回 `Configured`，节点不退出（随后需 `~init`；成功后触发一次命令重同步） |
 | `~set_mode` | `Eyou_Canopen_Master/SetMode` | 仅在 `Standby` 允许（典型：`~disable` 后） |
 
-### 6.1.2 命令协议（epoch-ready）
+### 6.1.2 命令协议（epoch-ready + command_sync_sequence）
 
-自 2026-03-22 起，控制链路采用 `AxisCommand.valid + AxisCommand.arm_epoch` 协议：
+当前控制链路采用 `AxisCommand.valid + AxisCommand.arm_epoch + SharedSnapshot.command_sync_sequence` 协议：
 
 1. `arm_epoch=0` 永远无效；
 2. 进入新的使能会话后，底层会更新 `AxisFeedback.arm_epoch`；
-3. 上层仅在命令源重同步完成后才应将 `valid=true`；
-4. `valid=true` 但 `arm_epoch` 不匹配时，状态机仍保持锁定，不会透传目标。
+3. `~init`、`~recover`、`~shutdown` 成功后，协调层会递增 `command_sync_sequence`，显式声明“旧命令源作废，需要重新对齐”；
+4. ROS 适配层在 `read()` 观察到 `command_sync_sequence` 变化、`arm_epoch` 变化沿或 fault-halt 上升沿时，会强制把位置命令对齐到当前位置，并把 `valid` 拉低进入 guard 窗口；
+5. guard 结束且系统不处于 fault-halt 时，`write()` 才会重新把 `valid=true` 写回下层；
+6. `valid=true` 但 `arm_epoch` 不匹配时，状态机仍保持锁定，不会透传目标。
 
 工程建议：
 
-1. 在 `/init`、`/recover`、`/resume` 后先等待反馈 epoch 稳定；
-2. 重同步 controller setpoint 到当前位置；
-3. 再把 `valid` 置 true。
+1. `~recover` 返回成功，只表示 fault/heartbeat 已经恢复到健康快照；后续动作仍应是 `~enable -> ~resume`。
+2. `~init` / `~recover` 成功后，不要复用旧控制器缓存的目标；ROS 适配层会先把位置命令拉回当前位置，再经过 guard 窗口重新放开 `valid`。
+3. 若上层绕过 `CanopenRobotHwRos` 直接写 `SharedState`，则必须自行监听 `command_sync_sequence`，并在序列变化后显式重同步 setpoint。
 
-### 6.1.1 shutdown/recover/init 关系（Coordinator 语义）
+### 6.1.3 shutdown/recover/init 关系（Coordinator 语义）
 
 - `~shutdown`：停通信并回到 `Configured`，节点进程不退出。
-- `~recover`：仅处理 fault 并回到 `Standby`，不自动上电。
-- `~init`：`~shutdown` 后重新建立通信并进入 `Armed`。
-- `~enable`：将 `Standby` 推到 `Armed`。
+- `~recover`：仅在全部轴 `fault=false` 且 `heartbeat_lost=false` 后才返回成功；成功后回到 `Standby`，不自动上电。
+- `~init`：`~shutdown` 后重新建立通信并进入 `Armed`；成功后会触发一次命令重同步。
+- `~enable`：将 `Standby` 推到 `Armed`；若快照仍有 fault / heartbeat_lost / global fault，则拒绝。
 - `~disable`：将 `Running/Armed` 回到 `Standby`，但保持通信在线。
 - `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。
-- 当 `global_fault` 闩锁为 true 时，`~resume` 会被拒绝；必须先 `~recover`，再 `~enable`。
+- `~resume`：仅在健康快照下允许进入 `Running`；若存在 fault、heartbeat 丢失或 `global_fault` 闩锁，则会被拒绝。
+- 故障恢复标准顺序为：`~recover -> ~enable -> ~resume`。
 
 ### 6.2 模式切换流程
 

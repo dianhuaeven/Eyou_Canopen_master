@@ -16,13 +16,13 @@
 | 方法 | 说明 |
 |------|------|
 | `SetConfigured()` | Configure 成功后设置起始模式 |
-| `RequestInit()` | `Configured -> Armed`（启动主站并自动上电到冻结态） |
-| `RequestEnable()` | `Standby -> Armed`（进入使能冻结态） |
+| `RequestInit()` | `Configured -> Armed`（启动主站并自动上电到冻结态；成功时推进一次 `command_sync_sequence`） |
+| `RequestEnable()` | `Standby -> Armed`（进入使能冻结态；若存在 fault / heartbeat_lost / global fault 则拒绝） |
 | `RequestDisable()` | `Running/Armed/Standby -> Standby`（去使能但保持通信在线） |
 | `RequestHalt()` | `Running -> Armed` |
-| `RequestRelease()` | `Armed -> Running`（对应 `~/resume`） |
-| `RequestRecover()` | `Faulted -> Standby`（清故障后保持去使能） |
-| `RequestShutdown()` | 通信停机并回到 `Configured` |
+| `RequestRelease()` | `Armed -> Running`（对应 `~/resume`；健康门控同 `RequestEnable()`） |
+| `RequestRecover()` | `Faulted -> Standby`（等待全部轴 `fault`/`heartbeat_lost` 清除后才成功；超时保持 `Faulted`） |
+| `RequestShutdown()` | 通信停机并回到 `Configured`（成功时推进一次 `command_sync_sequence`） |
 | `UpdateFromFeedback()` | 在 `Armed/Running` 下自动检测 fault/heartbeat 丢失并降级到 `Faulted` |
 | `ComputeIntents()` | 按模式下发每轴 `AxisIntent`（控制主通道） |
 
@@ -81,7 +81,15 @@
 | `SetCommandReady(axis, ready)` | 写入命令有效标志（AxisCommand.valid） |
 | `SetCommandEpoch(axis, epoch)` | 写入命令会话号（AxisCommand.arm_epoch） |
 | `arm_epoch(axis)` | 读取反馈会话号（AxisFeedback.arm_epoch） |
+| `command_sync_sequence()` | 读取命令重同步序列；用于显式判定“旧命令源必须失效并重对齐” |
 | `all_axes_halted_by_fault()` | 读取全轴故障连带停机标志 |
+
+## CanopenRobotHwRos
+
+| 方法 | 说明 |
+|------|------|
+| `read()` | 观测 `command_sync_sequence`、`arm_epoch` 变化沿或 fault-halt 上升沿；触发时强制 `pos_cmd = pos`、`cmd_ready = false` 并重置 guard |
+| `write()` | 将 `valid/arm_epoch` 写回 SharedState；guard 未结束或 fault-halt 期间保持 `valid = false` |
 
 ## AxisLogic
 
@@ -109,8 +117,8 @@
 |------|------|
 | `target_position/velocity/torque` | 上层期望目标（工程量已换算为设备单位） |
 | `mode_of_operation` | 目标模式（CSP/CSV/CST） |
-| `valid` | 上层命令源是否完成重同步并声明可用 |
-| `arm_epoch` | 目标所属使能会话号（`0` 永远无效） |
+| `valid` | 上层命令源是否完成重同步并声明可用；ROS 适配层在重同步窗口内会主动拉低 |
+| `arm_epoch` | 目标所属使能会话号（`0` 永远无效；与反馈侧会话号不一致时不会透传） |
 
 `SharedSnapshot`：
 
@@ -120,6 +128,7 @@
 | `all_axes_halted_by_fault` | 全轴因故障被连带冻结标志 |
 | `intents` | 每轴 `AxisIntent`（当前 shadow 使用） |
 | `intent_sequence` | intent 更新序列号 |
+| `command_sync_sequence` | 命令重同步序列；成功的 `RequestInit()` / `RequestRecover()` / `RequestShutdown()` 会递增 |
 
 ## BusIO (接口)
 
