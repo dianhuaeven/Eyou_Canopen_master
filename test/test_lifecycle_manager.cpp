@@ -111,7 +111,7 @@ TEST(LifecycleManager, StopCommunicationFromConfiguredMarksRequireInit) {
   ASSERT_TRUE(lm.Configure(config));
   EXPECT_TRUE(lm.StopCommunication(&detail));
   EXPECT_EQ(lm.state(), LifecycleState::Configured);
-  EXPECT_TRUE(lm.require_init());
+  EXPECT_FALSE(lm.require_init());
   EXPECT_FALSE(lm.halted());
   EXPECT_TRUE(detail.empty());
 }
@@ -141,14 +141,14 @@ TEST(LifecycleManager, RecoverRejectsAfterStopCommunicationUntilInit) {
 
   ASSERT_TRUE(lm.Configure(config));
   ASSERT_TRUE(lm.StopCommunication(&detail));
-  ASSERT_TRUE(lm.require_init());
+  ASSERT_FALSE(lm.require_init());
 
   EXPECT_FALSE(lm.Recover());
   EXPECT_EQ(lm.state(), LifecycleState::Configured);
 
-  // 由于测试配置使用不存在的 DCF，InitMotors 失败，require_init 保持 true。
+  // 由于测试配置使用不存在的 DCF，InitMotors 失败且状态保持 Configured。
   EXPECT_FALSE(lm.InitMotors());
-  EXPECT_TRUE(lm.require_init());
+  EXPECT_FALSE(lm.require_init());
 }
 
 TEST(LifecycleManager, InitMotorsFailureKeepsConfigured) {
@@ -185,7 +185,7 @@ TEST(LifecycleManager, ShutdownClearsRequireInitFlag) {
 
   ASSERT_TRUE(lm.Configure(config));
   ASSERT_TRUE(lm.StopCommunication(&detail));
-  ASSERT_TRUE(lm.require_init());
+  ASSERT_FALSE(lm.require_init());
 
   EXPECT_TRUE(lm.Shutdown());
   EXPECT_EQ(lm.state(), LifecycleState::Unconfigured);
@@ -226,10 +226,10 @@ TEST(LifecycleManager, TransitionMatrixGuardsWithoutMotorInit) {
   EXPECT_FALSE(lm.Recover(&detail));
   EXPECT_EQ(detail, "recover requires Active state");
 
-  // Configured 下允许 stop communication，并置 require_init 标记。
+  // Configured 下允许 stop communication，状态仍保持 Configured。
   detail.clear();
   EXPECT_TRUE(lm.StopCommunication(&detail));
   EXPECT_TRUE(detail.empty());
   EXPECT_EQ(lm.state(), LifecycleState::Configured);
-  EXPECT_TRUE(lm.require_init());
+  EXPECT_FALSE(lm.require_init());
 }

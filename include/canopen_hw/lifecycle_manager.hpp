@@ -57,7 +57,8 @@ class LifecycleManager {
 
   LifecycleState state() const { return state_; }
   bool ever_initialized() const { return ever_initialized_; }
-  bool require_init() const { return require_init_; }
+  // 已退化为资源 owner 后，不再维护 require_init 影子语义。
+  bool require_init() const { return false; }
   bool halted() const { return false; }
 
   // 访问内部组件（供上层集成使用）。
@@ -68,7 +69,6 @@ class LifecycleManager {
  private:
   LifecycleState state_ = LifecycleState::Unconfigured;
   bool ever_initialized_ = false;
-  bool require_init_ = false;
   CanopenMasterConfig config_;
   std::unique_ptr<SharedState> shared_state_;
   std::unique_ptr<CanopenMaster> master_;

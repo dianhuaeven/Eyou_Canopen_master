@@ -29,7 +29,6 @@ bool LifecycleManager::Configure(const CanopenMasterConfig& config) {
 
   state_ = LifecycleState::Configured;
   ever_initialized_ = false;
-  require_init_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Configured");
   return true;
 }
@@ -59,7 +58,6 @@ bool LifecycleManager::InitMotors() {
 
   state_ = LifecycleState::Active;
   ever_initialized_ = true;
-  require_init_ = false;
   CANOPEN_LOG_INFO("LifecycleManager: Active (initialized)");
   return true;
 }
@@ -129,11 +127,6 @@ bool LifecycleManager::Resume() {
   if (state_ != LifecycleState::Active) {
     CANOPEN_LOG_WARN("Resume called in state {}, expected Active",
                      static_cast<int>(state_));
-    return false;
-  }
-
-  if (require_init_) {
-    CANOPEN_LOG_WARN("Resume rejected: call InitMotors first");
     return false;
   }
 
@@ -221,8 +214,6 @@ bool LifecycleManager::StopCommunication(std::string* detail) {
     shared_state_->SetAllAxesHaltedByFault(false);
   }
   state_ = LifecycleState::Configured;
-  require_init_ = true;
-
   if (!graceful_ok) {
     CANOPEN_LOG_WARN("LifecycleManager: communication stopped with detail: {}",
                      detail ? *detail : std::string("graceful shutdown timeout"));
@@ -242,15 +233,6 @@ bool LifecycleManager::Recover(std::string* detail) {
                      static_cast<int>(state_));
     if (detail) {
       *detail = "recover requires Active state";
-    }
-    return false;
-  }
-
-  if (require_init_) {
-    CANOPEN_LOG_WARN(
-        "Recover called after communication shutdown; call InitMotors first");
-    if (detail) {
-      *detail = "call ~/init first";
     }
     return false;
   }
@@ -319,7 +301,6 @@ bool LifecycleManager::Recover(std::string* detail) {
 
 bool LifecycleManager::Shutdown() {
   if (state_ == LifecycleState::Unconfigured) {
-    require_init_ = false;
     return true;
   }
 
@@ -334,7 +315,6 @@ bool LifecycleManager::Shutdown() {
   shared_state_.reset();
   config_ = CanopenMasterConfig();
   ever_initialized_ = false;
-  require_init_ = false;
 
   state_ = LifecycleState::Unconfigured;
   CANOPEN_LOG_INFO("LifecycleManager: Unconfigured (shutdown)");
