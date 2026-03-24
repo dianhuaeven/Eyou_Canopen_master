@@ -218,7 +218,7 @@ TEST_F(AxisLogicTest, HeartbeatLossKeepsAxisDisarmedUntilExplicitEnable) {
   EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
 }
 
-TEST_F(AxisLogicTest, IntentRunShadowDoesNotBypassEnableLatch) {
+TEST_F(AxisLogicTest, IntentRunDrivesEnableChainAsPrimarySource) {
   shared_->SetAxisIntent(0, AxisIntent::Run);
   shared_->AdvanceIntentSequence();
   bus_.calls.clear();
@@ -227,10 +227,10 @@ TEST_F(AxisLogicTest, IntentRunShadowDoesNotBypassEnableLatch) {
 
   ASSERT_FALSE(bus_.calls.empty());
   EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
-  EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_Shutdown);
 }
 
-TEST_F(AxisLogicTest, IntentDisableShadowDoesNotCancelExistingEnableLatch) {
+TEST_F(AxisLogicTest, IntentDisableOverridesLegacyRequestEnable) {
   logic_->RequestEnable();
   shared_->SetAxisIntent(0, AxisIntent::Disable);
   shared_->AdvanceIntentSequence();
@@ -240,7 +240,7 @@ TEST_F(AxisLogicTest, IntentDisableShadowDoesNotCancelExistingEnableLatch) {
 
   ASSERT_FALSE(bus_.calls.empty());
   EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
-  EXPECT_EQ(bus_.calls[0].value, kCtrl_EnableOperation);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_Shutdown);
 }
 
 // --- 命令接口 ---
@@ -277,11 +277,11 @@ TEST_F(AxisLogicTest, RequestDisableImmediatelyClearsOperationalFlag) {
 }
 
 TEST_F(AxisLogicTest, FaultResetAttemptsMirroredToHealthCounters) {
-  // 默认 hold_low_cycles=5，第 6 个 FAULT 周期会发送一次 reset edge。
+  // 纯协议层不再执行 fault reset；计数器保持 0。
   for (int i = 0; i < 6; ++i) {
     logic_->ProcessRpdo(kSW_Fault, 0, 0, 0, kMode_CSP);
   }
-  EXPECT_EQ(logic_->health().fault_reset_attempts.load(), 1u);
+  EXPECT_EQ(logic_->health().fault_reset_attempts.load(), 0u);
 
   logic_->ResetFault();
   EXPECT_EQ(logic_->health().fault_reset_attempts.load(), 0u);
@@ -332,6 +332,19 @@ TEST_F(AxisLogicTest, HaltRequestSetsHaltBitAndFreezesVelocityCommand) {
   EXPECT_EQ(bus_.calls[3].value, 0);
 
   logic_->RequestResume();
+  bus_.calls.clear();
+  logic_->ProcessRpdo(kSW_OperationEnabled, 1020, 0, 0, kMode_CSV);
+  ASSERT_GE(bus_.calls.size(), 5u);
+  EXPECT_EQ(bus_.calls[0].value, kCtrl_EnableOperation);
+  EXPECT_EQ(bus_.calls[3].value, 0);
+
+  AxisCommand resume_cmd{};
+  resume_cmd.mode_of_operation = kMode_CSV;
+  resume_cmd.target_velocity = 900;
+  resume_cmd.valid = true;
+  resume_cmd.arm_epoch = shared_->Snapshot().feedback[0].arm_epoch;
+  logic_->SetExternalCommand(resume_cmd);
+
   bus_.calls.clear();
   logic_->ProcessRpdo(kSW_OperationEnabled, 1020, 0, 0, kMode_CSV);
   ASSERT_GE(bus_.calls.size(), 5u);

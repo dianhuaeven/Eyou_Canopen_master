@@ -5,7 +5,7 @@
 #include <mutex>
 
 #include "canopen_hw/bus_io.hpp"
-#include "canopen_hw/cia402_state_machine.hpp"
+#include "canopen_hw/cia402_protocol.hpp"
 #include "canopen_hw/health_counters.hpp"
 #include "canopen_hw/shared_state.hpp"
 
@@ -52,16 +52,27 @@ class AxisLogic {
   HealthCounters& mutable_health() { return health_; }
 
  private:
+  void SetIntent(AxisIntent intent);
   void PublishSnapshot();
 
   std::size_t axis_index_;
   BusIO* bus_io_;
   SharedState* shared_state_;
   uint64_t last_intent_sequence_ = 0;
+  AxisIntent current_intent_ = AxisIntent::Disable;
+  bool global_fault_ = false;
+  int8_t target_mode_ = kMode_CSP;
+  int32_t ros_target_position_ = 0;
+  int32_t ros_target_velocity_ = 0;
+  int16_t ros_target_torque_ = 0;
+  bool cmd_valid_ = false;
+  uint32_t cmd_arm_epoch_ = 0;
+  uint32_t arm_epoch_cache_ = 0;
 
   mutable std::mutex mtx_;
-  CiA402StateMachine state_machine_;
+  CiA402Protocol protocol_;
   AxisFeedback feedback_cache_{};
+  AxisSafeCommand safe_command_cache_{};
   HealthCounters health_;
 };
 
