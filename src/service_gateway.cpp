@@ -28,6 +28,8 @@ ServiceGateway::ServiceGateway(ros::NodeHandle* pnh,
   }
 
   init_srv_ = pnh->advertiseService("init", &ServiceGateway::OnInit, this);
+  enable_srv_ =
+      pnh->advertiseService("enable", &ServiceGateway::OnEnable, this);
   halt_srv_ = pnh->advertiseService("halt", &ServiceGateway::OnHalt, this);
   resume_srv_ =
       pnh->advertiseService("resume", &ServiceGateway::OnResume, this);
@@ -47,10 +49,29 @@ bool ServiceGateway::OnInit(std_srvs::Trigger::Request&,
   const auto r = coordinator_->RequestInit();
   res.success = r.ok;
   if (r.ok) {
-    res.message = (r.message.rfind("already ", 0) == 0) ? "already initialized"
-                                                         : "initialized";
+    res.message = (r.message.rfind("already ", 0) == 0)
+                      ? "already initialized"
+                      : "initialized (standby)";
   } else {
     res.message = r.message.empty() ? "init failed" : r.message;
+  }
+  return true;
+}
+
+bool ServiceGateway::OnEnable(std_srvs::Trigger::Request&,
+                              std_srvs::Trigger::Response& res) {
+  if (!EnsureGatewayReady(coordinator_, loop_mtx_, &res)) {
+    return true;
+  }
+
+  std::lock_guard<std::mutex> lk(*loop_mtx_);
+  const auto r = coordinator_->RequestEnable();
+  res.success = r.ok;
+  if (r.ok) {
+    res.message = (r.message.rfind("already ", 0) == 0) ? "already enabled"
+                                                         : "enabled (armed)";
+  } else {
+    res.message = r.message.empty() ? "enable failed" : r.message;
   }
   return true;
 }
@@ -83,7 +104,8 @@ bool ServiceGateway::OnResume(std_srvs::Trigger::Request&,
   const auto r = coordinator_->RequestRelease();
   res.success = r.ok;
   if (r.ok) {
-    res.message = "resumed";
+    res.message = (r.message.rfind("already ", 0) == 0) ? "already running"
+                                                         : "resumed";
   } else {
     res.message = r.message.empty() ? "resume failed; call ~/recover first"
                                     : r.message;

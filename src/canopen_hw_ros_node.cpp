@@ -93,7 +93,21 @@ int main(int argc, char** argv) {
   canopen_hw::ServiceGateway service_gateway(&pnh, &coordinator, &loop_mtx);
 
   bool auto_init = false;
+  bool auto_enable = false;
+  bool auto_release = false;
   pnh.param("auto_init", auto_init, false);
+  pnh.param("auto_enable", auto_enable, false);
+  pnh.param("auto_release", auto_release, false);
+
+  if ((auto_enable || auto_release) && !auto_init) {
+    CANOPEN_LOG_ERROR(
+        "auto_enable/auto_release require auto_init=true for strict transition path");
+    return 1;
+  }
+  if (auto_release && !auto_enable) {
+    CANOPEN_LOG_ERROR("auto_release requires auto_enable=true");
+    return 1;
+  }
 
   auto set_mode_srv = pnh.advertiseService<Eyou_Canopen_Master::SetMode::Request,
                                            Eyou_Canopen_Master::SetMode::Response>(
@@ -107,7 +121,7 @@ int main(int argc, char** argv) {
           const auto mode = coordinator.mode();
           if (mode == canopen_hw::SystemOpMode::Running) {
             res.success = false;
-            res.message = "set_mode not allowed in Active state; call ~/halt first";
+            res.message = "set_mode not allowed in Running state; call ~/halt first";
             return true;
           }
           if (req.axis_index >= robot_hw_ros.axis_count()) {
@@ -190,10 +204,27 @@ int main(int argc, char** argv) {
 
   if (auto_init) {
     std::lock_guard<std::mutex> lk(loop_mtx);
-    const auto r = coordinator.RequestInit();
-    if (!r.ok) {
-      CANOPEN_LOG_ERROR("auto_init enabled but init failed: {}", r.message);
+    const auto init_result = coordinator.RequestInit();
+    if (!init_result.ok) {
+      CANOPEN_LOG_ERROR("auto_init enabled but init failed: {}",
+                        init_result.message);
       return 1;
+    }
+    if (auto_enable) {
+      const auto enable_result = coordinator.RequestEnable();
+      if (!enable_result.ok) {
+        CANOPEN_LOG_ERROR("auto_enable enabled but enable failed: {}",
+                          enable_result.message);
+        return 1;
+      }
+    }
+    if (auto_release) {
+      const auto release_result = coordinator.RequestRelease();
+      if (!release_result.ok) {
+        CANOPEN_LOG_ERROR("auto_release enabled but release failed: {}",
+                          release_result.message);
+        return 1;
+      }
     }
   }
 
