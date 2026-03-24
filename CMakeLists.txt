@@ -169,6 +169,12 @@ add_executable(test_canopen_robot_hw
 target_link_libraries(test_canopen_robot_hw PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_canopen_robot_hw)
 
+add_executable(test_canopen_robot_hw_ros
+  test/test_canopen_robot_hw_ros.cpp
+)
+target_link_libraries(test_canopen_robot_hw_ros PRIVATE canopen_ros_adapter GTest::gtest_main)
+gtest_discover_tests(test_canopen_robot_hw_ros)
+
 add_executable(test_unit_conversion
   test/test_unit_conversion.cpp
 )

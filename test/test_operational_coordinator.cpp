@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "canopen_hw/operational_coordinator.hpp"
 #include "canopen_hw/shared_state.hpp"
@@ -250,6 +252,41 @@ TEST(OperationalCoordinator, EnableRejectedWhenGlobalFaultLatched) {
   EXPECT_FALSE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
   EXPECT_NE(r.message.find("global fault"), std::string::npos);
+}
+
+TEST(OperationalCoordinator, RecoverThenEnableReleaseSucceedsAfterFeedbackHealthy) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+  ASSERT_TRUE(coordinator.RequestInit().ok);
+  ASSERT_TRUE(coordinator.RequestRelease().ok);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Running);
+
+  AxisFeedback fb;
+  fb.is_fault = true;
+  shared.UpdateFeedback(0, fb);
+  coordinator.UpdateFromFeedback();
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+
+  std::thread clear_fault([&shared]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    AxisFeedback healthy;
+    healthy.is_fault = false;
+    healthy.heartbeat_lost = false;
+    shared.UpdateFeedback(0, healthy);
+  });
+
+  const auto recover = coordinator.RequestRecover();
+  clear_fault.join();
+  ASSERT_TRUE(recover.ok) << recover.message;
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Standby);
+
+  auto enable = coordinator.RequestEnable();
+  EXPECT_TRUE(enable.ok) << enable.message;
+  auto release = coordinator.RequestRelease();
+  EXPECT_TRUE(release.ok) << release.message;
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
 }
 
 TEST(OperationalCoordinator, InitSafetyCheckFaultFallbackToFaulted) {
