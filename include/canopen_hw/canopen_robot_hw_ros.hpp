@@ -49,6 +49,7 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
   std::vector<uint32_t> arm_epoch_cache_;
 
   std::vector<uint32_t> prev_arm_epoch_;  // 上帧各轴 arm_epoch，用于检测变化沿。
+  uint64_t prev_command_sync_sequence_ = 0;
   bool prev_all_axes_halted_by_fault_ = false;
   int cmd_ready_guard_frames_ = 20;
 

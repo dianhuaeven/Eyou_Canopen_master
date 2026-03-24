@@ -53,6 +53,9 @@ void CanopenRobotHwRos::read(const ros::Time& /*time*/,
                               const ros::Duration& /*period*/) {
   hw_->ReadFromSharedState();
 
+  const uint64_t command_sync_sequence = hw_->command_sync_sequence();
+  const bool command_sync_changed =
+      (command_sync_sequence != prev_command_sync_sequence_);
   const bool now_all_axes_halted_by_fault = hw_->all_axes_halted_by_fault();
   const bool fault_halt_rising =
       (!prev_all_axes_halted_by_fault_ && now_all_axes_halted_by_fault);
@@ -67,10 +70,14 @@ void CanopenRobotHwRos::read(const ros::Time& /*time*/,
     // 用它替代 all_operational_rising 触发重同步，打破循环依赖：
     //   旧：need_resync ← all_operational ← is_operational ← cmd_valid ← need_resync（死锁）
     //   新：need_resync ← arm_epoch 变化（状态机 AdvanceArmEpoch，不依赖 is_operational）
+    if (command_sync_changed) {
+      // 新的命令重同步序列出现时，强制重新观察 arm_epoch 上升沿。
+      prev_arm_epoch_[i] = 0u;
+    }
     const bool epoch_changed =
         (arm_epoch_cache_[i] != 0u) && (arm_epoch_cache_[i] != prev_arm_epoch_[i]);
 
-    if (epoch_changed || fault_halt_rising) {
+    if (command_sync_changed || epoch_changed || fault_halt_rising) {
       // 对齐命令缓冲到当前反馈，进入 guard 倒数。
       pos_cmd_[i] = pos_[i];
       cmd_ready_[i] = false;
@@ -92,6 +99,7 @@ void CanopenRobotHwRos::read(const ros::Time& /*time*/,
   }
 
   prev_all_axes_halted_by_fault_ = now_all_axes_halted_by_fault;
+  prev_command_sync_sequence_ = command_sync_sequence;
 }
 
 void CanopenRobotHwRos::write(const ros::Time& /*time*/,
