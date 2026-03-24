@@ -311,6 +311,44 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
         }
 
         if (shared_state_) {
+          const auto deadline =
+              std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+          while (true) {
+            const SharedSnapshot snap = shared_state_->Snapshot();
+            const std::size_t n = std::min(axis_count_, snap.feedback.size());
+            bool any_unhealthy = false;
+            std::size_t first_bad_axis = 0;
+            bool first_bad_is_heartbeat = false;
+            for (std::size_t i = 0; i < n; ++i) {
+              if (snap.feedback[i].is_fault || snap.feedback[i].heartbeat_lost) {
+                any_unhealthy = true;
+                first_bad_axis = i;
+                first_bad_is_heartbeat = snap.feedback[i].heartbeat_lost;
+                break;
+              }
+            }
+            if (!any_unhealthy) {
+              break;
+            }
+            if (std::chrono::steady_clock::now() >= deadline) {
+              mode_.store(SystemOpMode::Faulted, std::memory_order_release);
+              if (detail) {
+                std::ostringstream oss;
+                oss << "recover timeout: axis " << first_bad_axis << ' '
+                    << (first_bad_is_heartbeat ? "heartbeat_lost"
+                                               : "fault_active");
+                *detail = oss.str();
+              }
+              return false;
+            }
+            shared_state_->WaitForStateChange(std::min(
+                deadline, std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds(20)));
+          }
+        }
+
+        if (shared_state_) {
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
         }

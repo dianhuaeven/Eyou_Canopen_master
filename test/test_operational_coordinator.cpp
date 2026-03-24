@@ -160,6 +160,10 @@ TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToStandby) {
   EXPECT_TRUE(shared.GetGlobalFault());
   EXPECT_TRUE(shared.GetAllAxesHaltedByFault());
 
+  // 模拟底层 fault 已清除，再发 recover。
+  fb.is_fault = false;
+  shared.UpdateFeedback(0, fb);
+
   auto r = coordinator.RequestRecover();
   EXPECT_TRUE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
@@ -186,6 +190,26 @@ TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
   EXPECT_FALSE(r.ok);
   EXPECT_EQ(r.message, "reset failed");
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+}
+
+TEST(OperationalCoordinator, RecoverFailsWhenFeedbackStaysFaulted) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+  ASSERT_TRUE(coordinator.RequestInit().ok);
+  ASSERT_TRUE(coordinator.RequestRelease().ok);
+
+  AxisFeedback fb;
+  fb.is_fault = true;
+  shared.UpdateFeedback(0, fb);
+  coordinator.UpdateFromFeedback();
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+
+  const auto r = coordinator.RequestRecover();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  EXPECT_NE(r.message.find("recover timeout"), std::string::npos);
 }
 
 TEST(OperationalCoordinator, ReleaseRejectedWhenAxisUnhealthy) {
