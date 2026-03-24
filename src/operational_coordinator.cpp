@@ -254,6 +254,7 @@ OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
           }
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
+          shared_state_->AdvanceCommandSyncSequence();
         }
         return true;
       });
@@ -351,6 +352,7 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
         if (shared_state_) {
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
+          shared_state_->AdvanceCommandSyncSequence();
         }
 
         if (detail && !recover_detail.empty()) {
@@ -388,6 +390,7 @@ OperationalCoordinator::Result OperationalCoordinator::RequestShutdown() {
         if (shared_state_) {
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
+          shared_state_->AdvanceCommandSyncSequence();
         }
 
         if (detail && !graceful_detail.empty()) {
@@ -416,9 +419,11 @@ void OperationalCoordinator::ComputeIntents() {
     case SystemOpMode::Inactive:
     case SystemOpMode::Configured:
     case SystemOpMode::Standby:
-    case SystemOpMode::Recovering:
     case SystemOpMode::ShuttingDown:
       intent = AxisIntent::Disable;
+      break;
+    case SystemOpMode::Recovering:
+      intent = AxisIntent::Halt;
       break;
   }
 

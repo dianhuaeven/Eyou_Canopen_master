@@ -67,6 +67,7 @@ TEST(OperationalCoordinator, TransitionMatrixFollows0324ImportPath) {
   auto r = coordinator.RequestInit();
   EXPECT_TRUE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+  EXPECT_EQ(shared.Snapshot().command_sync_sequence, 1u);
 
   coordinator.ComputeIntents();
   EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Halt);
@@ -97,6 +98,7 @@ TEST(OperationalCoordinator, TransitionMatrixFollows0324ImportPath) {
   r = coordinator.RequestShutdown();
   EXPECT_TRUE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Configured);
+  EXPECT_EQ(shared.Snapshot().command_sync_sequence, 2u);
   EXPECT_EQ(fake.stop_calls, 1);
 }
 
@@ -169,6 +171,7 @@ TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToStandby) {
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
   EXPECT_FALSE(shared.GetGlobalFault());
   EXPECT_FALSE(shared.GetAllAxesHaltedByFault());
+  EXPECT_EQ(shared.Snapshot().command_sync_sequence, 2u);
 }
 
 TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
