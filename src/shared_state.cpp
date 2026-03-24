@@ -93,6 +93,16 @@ uint64_t SharedState::intent_sequence() const {
   return intent_sequence_;
 }
 
+void SharedState::AdvanceCommandSyncSequence() {
+  std::lock_guard<std::mutex> lk(mtx_);
+  ++command_sync_sequence_;
+}
+
+uint64_t SharedState::command_sync_sequence() const {
+  std::lock_guard<std::mutex> lk(mtx_);
+  return command_sync_sequence_;
+}
+
 void SharedState::SetGlobalFault(bool fault) {
   std::lock_guard<std::mutex> lk(mtx_);
   global_fault_ = fault;
@@ -121,6 +131,7 @@ SharedSnapshot SharedState::Snapshot() const {
   s.safe_commands = safe_commands_;
   s.intents = intents_;
   s.intent_sequence = intent_sequence_;
+  s.command_sync_sequence = command_sync_sequence_;
   s.all_operational = all_operational_;
   s.global_fault = global_fault_;
   s.all_axes_halted_by_fault = all_axes_halted_by_fault_;

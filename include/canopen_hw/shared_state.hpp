@@ -61,6 +61,7 @@ struct SharedSnapshot {
   std::vector<AxisSafeCommand> safe_commands;
   std::vector<AxisIntent> intents;
   uint64_t intent_sequence = 0;
+  uint64_t command_sync_sequence = 0;
   bool all_operational = false;
   bool global_fault = false;
   bool all_axes_halted_by_fault = false;
@@ -96,6 +97,9 @@ class SharedState {
   AxisIntent GetAxisIntent(std::size_t axis_index) const;
   void AdvanceIntentSequence();
   uint64_t intent_sequence() const;
+  // 命令重同步序列：用于显式通知上层“必须重新对齐命令源”。
+  void AdvanceCommandSyncSequence();
+  uint64_t command_sync_sequence() const;
 
   // 由 Lely 线程在每个 SYNC/RPDO 更新后调用，汇总全轴状态。
   void RecomputeAllOperational();
@@ -130,6 +134,7 @@ class SharedState {
   bool global_fault_ = false;
   bool all_axes_halted_by_fault_ = false;
   uint64_t intent_sequence_ = 0;
+  uint64_t command_sync_sequence_ = 0;
   uint64_t state_change_seq_ = 0;
 };
 

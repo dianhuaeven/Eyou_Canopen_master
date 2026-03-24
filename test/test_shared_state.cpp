@@ -153,6 +153,7 @@ TEST(SharedState, IntentChannelSetGetAndSnapshot) {
   EXPECT_EQ(shared.GetAxisIntent(0), canopen_hw::AxisIntent::Disable);
   EXPECT_EQ(shared.GetAxisIntent(1), canopen_hw::AxisIntent::Disable);
   EXPECT_EQ(shared.intent_sequence(), 0u);
+  EXPECT_EQ(shared.command_sync_sequence(), 0u);
 
   shared.SetAxisIntent(0, canopen_hw::AxisIntent::Run);
   shared.SetAxisIntent(1, canopen_hw::AxisIntent::Halt);
@@ -163,10 +164,23 @@ TEST(SharedState, IntentChannelSetGetAndSnapshot) {
   EXPECT_EQ(snap.intents[0], canopen_hw::AxisIntent::Run);
   EXPECT_EQ(snap.intents[1], canopen_hw::AxisIntent::Halt);
   EXPECT_EQ(snap.intent_sequence, 1u);
+  EXPECT_EQ(snap.command_sync_sequence, 0u);
 }
 
 TEST(SharedState, IntentOutOfRangeFallsBackToDisable) {
   canopen_hw::SharedState shared(1);
   shared.SetAxisIntent(99, canopen_hw::AxisIntent::Run);
   EXPECT_EQ(shared.GetAxisIntent(99), canopen_hw::AxisIntent::Disable);
+}
+
+TEST(SharedState, CommandSyncSequenceAdvanceAndSnapshot) {
+  canopen_hw::SharedState shared(1);
+  EXPECT_EQ(shared.command_sync_sequence(), 0u);
+
+  shared.AdvanceCommandSyncSequence();
+  shared.AdvanceCommandSyncSequence();
+
+  EXPECT_EQ(shared.command_sync_sequence(), 2u);
+  const auto snap = shared.Snapshot();
+  EXPECT_EQ(snap.command_sync_sequence, 2u);
 }
