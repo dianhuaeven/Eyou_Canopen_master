@@ -12,11 +12,6 @@ AxisLogic::AxisLogic(std::size_t axis_index, BusIO* bus_io,
 
 void AxisLogic::SetIntent(AxisIntent intent) {
   current_intent_ = intent;
-  if (!shared_state_) {
-    return;
-  }
-  shared_state_->SetAxisIntent(axis_index_, intent);
-  shared_state_->AdvanceIntentSequence();
 }
 
 void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
@@ -133,7 +128,7 @@ void AxisLogic::ProcessHeartbeat(bool lost) {
       feedback_cache_.is_fault = true;
       feedback_cache_.is_operational = false;
     } else {
-      feedback_cache_.is_fault = false;
+      // 心跳恢复只表示链路恢复，不代表故障已清除；等待 RPDO 刷新真实 fault 位。
       feedback_cache_.is_operational = false;
     }
   }

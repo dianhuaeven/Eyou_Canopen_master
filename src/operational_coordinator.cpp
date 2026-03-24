@@ -95,40 +95,16 @@ OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
           }
           return false;
         }
-        if (!master_->EnableAll()) {
-          if (detail) {
-            *detail = "EnableAll failed";
-          }
-          return false;
+        if (shared_state_) {
+          shared_state_->SetGlobalFault(false);
+          shared_state_->SetAllAxesHaltedByFault(false);
         }
         return true;
       });
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestEnable() {
-  return DoTransition(
-      {SystemOpMode::Standby}, SystemOpMode::Armed,
-      [this](std::string* detail) {
-        if (!master_) {
-          if (detail) {
-            *detail = "master is null";
-          }
-          return false;
-        }
-        if (!master_->EnableAll()) {
-          if (detail) {
-            *detail = "EnableAll failed";
-          }
-          return false;
-        }
-        if (!master_->HaltAll()) {
-          if (detail) {
-            *detail = "HaltAll failed";
-          }
-          return false;
-        }
-        return true;
-      });
+  return DoTransition({SystemOpMode::Standby}, SystemOpMode::Armed, nullptr);
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestRelease() {
@@ -141,9 +117,9 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRelease() {
           }
           return false;
         }
-        if (!master_->ResumeAll()) {
+        if (!master_->running()) {
           if (detail) {
-            *detail = "ResumeAll failed";
+            *detail = "master not running";
           }
           return false;
         }
@@ -152,23 +128,7 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRelease() {
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestHalt() {
-  return DoTransition(
-      {SystemOpMode::Running}, SystemOpMode::Armed,
-      [this](std::string* detail) {
-        if (!master_) {
-          if (detail) {
-            *detail = "master is null";
-          }
-          return false;
-        }
-        if (!master_->HaltAll()) {
-          if (detail) {
-            *detail = "HaltAll failed";
-          }
-          return false;
-        }
-        return true;
-      });
+  return DoTransition({SystemOpMode::Running}, SystemOpMode::Armed, nullptr);
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
@@ -178,6 +138,12 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
         if (!master_) {
           if (detail) {
             *detail = "master is null";
+          }
+          return false;
+        }
+        if (!master_->running()) {
+          if (detail) {
+            *detail = "master not running";
           }
           return false;
         }
@@ -195,14 +161,6 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
         if (shared_state_) {
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
-        }
-
-        if (!master_->HaltAll()) {
-          mode_.store(SystemOpMode::Faulted, std::memory_order_release);
-          if (detail) {
-            *detail = "recover succeeded but HaltAll failed";
-          }
-          return false;
         }
 
         if (detail && !recover_detail.empty()) {
