@@ -54,6 +54,7 @@ class OperationalCoordinator {
   // 阶段 1 骨架：内部仍复用现有 CanopenMaster 的高层 API。
   Result RequestInit();
   Result RequestEnable();
+  Result RequestDisable();
   Result RequestRelease();
   Result RequestHalt();
   Result RequestRecover();

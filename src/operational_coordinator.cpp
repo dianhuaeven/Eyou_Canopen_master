@@ -191,6 +191,13 @@ OperationalCoordinator::Result OperationalCoordinator::RequestEnable() {
       [this](std::string* detail) { return MasterRunning(detail); });
 }
 
+OperationalCoordinator::Result OperationalCoordinator::RequestDisable() {
+  return DoTransition(
+      {SystemOpMode::Standby, SystemOpMode::Armed, SystemOpMode::Running},
+      SystemOpMode::Standby,
+      [this](std::string* detail) { return MasterRunning(detail); });
+}
+
 OperationalCoordinator::Result OperationalCoordinator::RequestRelease() {
   return DoTransition(
       {SystemOpMode::Armed}, SystemOpMode::Running,

@@ -18,6 +18,7 @@ class ServiceGateway {
  private:
   bool OnInit(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res);
   bool OnEnable(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res);
+  bool OnDisable(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res);
   bool OnHalt(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res);
   bool OnResume(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res);
   bool OnRecover(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res);
@@ -28,6 +29,7 @@ class ServiceGateway {
 
   ros::ServiceServer init_srv_;
   ros::ServiceServer enable_srv_;
+  ros::ServiceServer disable_srv_;
   ros::ServiceServer halt_srv_;
   ros::ServiceServer resume_srv_;
   ros::ServiceServer recover_srv_;

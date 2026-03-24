@@ -30,6 +30,8 @@ ServiceGateway::ServiceGateway(ros::NodeHandle* pnh,
   init_srv_ = pnh->advertiseService("init", &ServiceGateway::OnInit, this);
   enable_srv_ =
       pnh->advertiseService("enable", &ServiceGateway::OnEnable, this);
+  disable_srv_ =
+      pnh->advertiseService("disable", &ServiceGateway::OnDisable, this);
   halt_srv_ = pnh->advertiseService("halt", &ServiceGateway::OnHalt, this);
   resume_srv_ =
       pnh->advertiseService("resume", &ServiceGateway::OnResume, this);
@@ -72,6 +74,25 @@ bool ServiceGateway::OnEnable(std_srvs::Trigger::Request&,
                                                          : "enabled (armed)";
   } else {
     res.message = r.message.empty() ? "enable failed" : r.message;
+  }
+  return true;
+}
+
+bool ServiceGateway::OnDisable(std_srvs::Trigger::Request&,
+                               std_srvs::Trigger::Response& res) {
+  if (!EnsureGatewayReady(coordinator_, loop_mtx_, &res)) {
+    return true;
+  }
+
+  std::lock_guard<std::mutex> lk(*loop_mtx_);
+  const auto r = coordinator_->RequestDisable();
+  res.success = r.ok;
+  if (r.ok) {
+    res.message = (r.message.rfind("already ", 0) == 0)
+                      ? "already disabled"
+                      : "disabled (standby)";
+  } else {
+    res.message = r.message.empty() ? "disable failed" : r.message;
   }
   return true;
 }

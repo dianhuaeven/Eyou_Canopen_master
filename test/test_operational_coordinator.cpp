@@ -85,6 +85,17 @@ TEST(OperationalCoordinator, TransitionMatrixFollows0324ImportPath) {
   coordinator.ComputeIntents();
   EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Run);
 
+  r = coordinator.RequestDisable();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
+
+  coordinator.ComputeIntents();
+  EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Disable);
+
+  r = coordinator.RequestEnable();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+
   r = coordinator.RequestHalt();
   EXPECT_TRUE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
@@ -112,6 +123,31 @@ TEST(OperationalCoordinator, InvalidTransitionsAreRejected) {
   r = coordinator.RequestHalt();
   EXPECT_FALSE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Configured);
+
+  r = coordinator.RequestDisable();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Configured);
+}
+
+TEST(OperationalCoordinator, DisableFromRunningAndArmedToStandby) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+  ASSERT_TRUE(coordinator.RequestInit().ok);
+  ASSERT_TRUE(coordinator.RequestEnable().ok);
+  ASSERT_TRUE(coordinator.RequestRelease().ok);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Running);
+
+  auto r = coordinator.RequestDisable();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
+
+  ASSERT_TRUE(coordinator.RequestEnable().ok);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Armed);
+  r = coordinator.RequestDisable();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
 }
 
 TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToArmed) {
