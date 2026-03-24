@@ -56,6 +56,10 @@ void CiA402Protocol::set_max_delta_per_cycle(int32_t delta_counts) {
   }
 }
 
+void CiA402Protocol::set_max_stale_intent_frames(uint32_t frames) {
+  max_stale_intent_frames_ = frames;
+}
+
 void CiA402Protocol::AdvanceArmEpoch() {
   ++arm_epoch_;
   if (arm_epoch_ == 0) {
@@ -149,11 +153,25 @@ CiA402Protocol::Output CiA402Protocol::Process(const Input& input) {
   out.arm_epoch = arm_epoch_;
   out.safe_mode = input.target_mode;
 
-  const bool want_enable = (input.intent == AxisIntent::Enable ||
-                            input.intent == AxisIntent::Halt ||
-                            input.intent == AxisIntent::Run);
-  const bool want_halt = (input.intent == AxisIntent::Halt);
-  const bool want_run = (input.intent == AxisIntent::Run);
+  if (input.intent_sequence != last_intent_sequence_) {
+    last_intent_sequence_ = input.intent_sequence;
+    stale_intent_frames_ = 0;
+  } else {
+    if (stale_intent_frames_ != UINT32_MAX) {
+      ++stale_intent_frames_;
+    }
+  }
+
+  AxisIntent effective_intent = input.intent;
+  if (stale_intent_frames_ >= max_stale_intent_frames_) {
+    effective_intent = AxisIntent::Disable;
+  }
+
+  const bool want_enable = (effective_intent == AxisIntent::Enable ||
+                            effective_intent == AxisIntent::Halt ||
+                            effective_intent == AxisIntent::Run);
+  const bool want_halt = (effective_intent == AxisIntent::Halt);
+  const bool want_run = (effective_intent == AxisIntent::Run);
 
   switch (state_) {
     case CiA402State::NotReadyToSwitchOn:

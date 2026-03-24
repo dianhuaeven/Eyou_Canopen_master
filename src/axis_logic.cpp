@@ -26,11 +26,13 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
 
   {
     std::lock_guard<std::mutex> lk(mtx_);
+    uint64_t observed_intent_sequence = 0;
 
     if (shared_state_) {
       global_fault_ = shared_state_->GetGlobalFault();
 
       const uint64_t seq = shared_state_->intent_sequence();
+      observed_intent_sequence = seq;
       if (seq != last_intent_sequence_) {
         last_intent_sequence_ = seq;
         current_intent_ = shared_state_->GetAxisIntent(axis_index_);
@@ -49,6 +51,7 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
     input.actual_velocity = actual_velocity;
     input.actual_torque = actual_torque;
     input.intent = effective_intent;
+    input.intent_sequence = observed_intent_sequence;
     input.target_mode = target_mode_;
     input.ros_target_position = ros_target_position_;
     input.ros_target_velocity = ros_target_velocity_;

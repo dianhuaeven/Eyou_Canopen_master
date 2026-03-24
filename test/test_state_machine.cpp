@@ -343,3 +343,29 @@ TEST(CiA402Protocol, RunRequiresValidEpochBeforeUnlock) {
   EXPECT_TRUE(out.is_operational);
   EXPECT_EQ(out.safe_target_position, 1200);
 }
+
+TEST(CiA402Protocol, StaleIntentSequenceFallsBackToDisable) {
+  CiA402Protocol protocol;
+  protocol.set_max_stale_intent_frames(2);
+
+  CiA402Protocol::Input in{};
+  in.target_mode = kMode_CSP;
+  in.intent = AxisIntent::Run;
+  in.intent_sequence = 42;
+  in.actual_position = 10;
+  in.statusword = 0x0040;
+
+  auto out = protocol.Process(in);
+  EXPECT_EQ(out.controlword, kCtrl_Shutdown);
+
+  out = protocol.Process(in);
+  EXPECT_EQ(out.controlword, kCtrl_Shutdown);
+
+  out = protocol.Process(in);
+  EXPECT_EQ(out.controlword, canopen_hw::kCtrl_DisableVoltage);
+
+  // intent 序列推进后恢复为新鲜意图。
+  in.intent_sequence = 43;
+  out = protocol.Process(in);
+  EXPECT_EQ(out.controlword, kCtrl_Shutdown);
+}

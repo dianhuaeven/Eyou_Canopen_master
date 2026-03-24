@@ -243,6 +243,23 @@ TEST_F(AxisLogicTest, IntentDisableOverridesLegacyRequestEnable) {
   EXPECT_EQ(bus_.calls[0].value, kCtrl_Shutdown);
 }
 
+TEST_F(AxisLogicTest, StaleIntentSequenceFallsBackToDisable) {
+  shared_->SetAxisIntent(0, AxisIntent::Run);
+  shared_->AdvanceIntentSequence();
+
+  bus_.calls.clear();
+  for (int i = 0; i < 25; ++i) {
+    logic_->ProcessRpdo(kSW_SwitchOnDisabled, 0, 0, 0, kMode_CSP);
+  }
+
+  ASSERT_FALSE(bus_.calls.empty());
+  EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls.back().type, BusCall::kTorque);
+  const auto controlword_index = bus_.calls.size() - 5;
+  EXPECT_EQ(bus_.calls[controlword_index].type, BusCall::kControlword);
+  EXPECT_EQ(bus_.calls[controlword_index].value, kCtrl_DisableVoltage);
+}
+
 // --- 命令接口 ---
 
 TEST_F(AxisLogicTest, ConfigureDelegatesToStateMachine) {

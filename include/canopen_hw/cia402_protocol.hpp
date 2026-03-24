@@ -21,6 +21,7 @@ class CiA402Protocol {
     int16_t actual_torque = 0;
 
     AxisIntent intent = AxisIntent::Disable;
+    uint64_t intent_sequence = 0;
     int8_t target_mode = kMode_CSP;
     int32_t ros_target_position = 0;
     int32_t ros_target_velocity = 0;
@@ -49,6 +50,7 @@ class CiA402Protocol {
 
   void set_position_lock_threshold(int32_t threshold_counts);
   void set_max_delta_per_cycle(int32_t delta_counts);
+  void set_max_stale_intent_frames(uint32_t frames);
 
   static CiA402State DecodeState(uint16_t statusword);
 
@@ -67,6 +69,9 @@ class CiA402Protocol {
   int32_t position_lock_threshold_ = 15000;
   int32_t max_delta_per_cycle_ = 2147483647;
   int32_t last_safe_target_position_ = 0;
+  uint64_t last_intent_sequence_ = 0;
+  uint32_t stale_intent_frames_ = 0;
+  uint32_t max_stale_intent_frames_ = 20;
 };
 
 }  // namespace canopen_hw
