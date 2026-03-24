@@ -32,7 +32,18 @@ class OperationalCoordinator {
     std::string message;
   };
 
+  // 用于单测注入的 master 行为钩子；为空时走 CanopenMaster 实现。
+  struct MasterOps {
+    std::function<bool()> start;
+    std::function<bool()> running;
+    std::function<bool(std::string*)> reset_all_faults;
+    std::function<bool(std::string*)> graceful_shutdown;
+    std::function<void()> stop;
+  };
+
   OperationalCoordinator(CanopenMaster* master, SharedState* shared_state,
+                         std::size_t axis_count);
+  OperationalCoordinator(MasterOps master_ops, SharedState* shared_state,
                          std::size_t axis_count);
 
   SystemOpMode mode() const { return mode_.load(std::memory_order_acquire); }
@@ -59,10 +70,17 @@ class OperationalCoordinator {
                       SystemOpMode to,
                       std::function<bool(std::string*)> action = nullptr);
 
+  bool MasterStart(std::string* detail);
+  bool MasterRunning(std::string* detail = nullptr) const;
+  bool MasterResetAllFaults(std::string* detail);
+  bool MasterGracefulShutdown(std::string* detail);
+  void MasterStop();
+
   std::atomic<SystemOpMode> mode_{SystemOpMode::Inactive};
   mutable std::mutex transition_mtx_;
 
   CanopenMaster* master_ = nullptr;
+  MasterOps master_ops_;
   SharedState* shared_state_ = nullptr;
   std::size_t axis_count_ = 0;
 };

@@ -256,3 +256,9 @@ add_executable(test_boot_identity_diag
 )
 target_link_libraries(test_boot_identity_diag PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_boot_identity_diag)
+
+add_executable(test_operational_coordinator
+  test/test_operational_coordinator.cpp
+)
+target_link_libraries(test_operational_coordinator PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_operational_coordinator)

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <utility>
 
 #include "canopen_hw/logging.hpp"
 
@@ -32,10 +33,100 @@ const char* SystemOpModeName(SystemOpMode mode) {
 OperationalCoordinator::OperationalCoordinator(CanopenMaster* master,
                                                SharedState* shared_state,
                                                std::size_t axis_count)
-    : master_(master), shared_state_(shared_state), axis_count_(axis_count) {}
+    : master_(master), shared_state_(shared_state), axis_count_(axis_count) {
+  master_ops_.start = [this]() {
+    if (master_ == nullptr) {
+      return false;
+    }
+    if (master_->running()) {
+      return true;
+    }
+    return master_->Start();
+  };
+  master_ops_.running = [this]() {
+    return master_ != nullptr && master_->running();
+  };
+  master_ops_.reset_all_faults = [this](std::string* detail) {
+    if (master_ == nullptr) {
+      if (detail) {
+        *detail = "master is null";
+      }
+      return false;
+    }
+    return master_->ResetAllFaults(detail);
+  };
+  master_ops_.graceful_shutdown = [this](std::string* detail) {
+    if (master_ == nullptr) {
+      if (detail) {
+        *detail = "master is null";
+      }
+      return false;
+    }
+    return master_->GracefulShutdown(detail);
+  };
+  master_ops_.stop = [this]() {
+    if (master_ != nullptr) {
+      master_->Stop();
+    }
+  };
+}
+
+OperationalCoordinator::OperationalCoordinator(MasterOps master_ops,
+                                               SharedState* shared_state,
+                                               std::size_t axis_count)
+    : master_(nullptr),
+      master_ops_(std::move(master_ops)),
+      shared_state_(shared_state),
+      axis_count_(axis_count) {}
 
 void OperationalCoordinator::SetConfigured() {
   mode_.store(SystemOpMode::Configured, std::memory_order_release);
+}
+
+bool OperationalCoordinator::MasterStart(std::string* detail) {
+  if (!master_ops_.start || !master_ops_.start()) {
+    if (detail && detail->empty()) {
+      *detail = "master start failed";
+    }
+    return false;
+  }
+  return true;
+}
+
+bool OperationalCoordinator::MasterRunning(std::string* detail) const {
+  if (!master_ops_.running || !master_ops_.running()) {
+    if (detail && detail->empty()) {
+      *detail = "master not running";
+    }
+    return false;
+  }
+  return true;
+}
+
+bool OperationalCoordinator::MasterResetAllFaults(std::string* detail) {
+  if (!master_ops_.reset_all_faults) {
+    if (detail && detail->empty()) {
+      *detail = "fault reset path not available";
+    }
+    return false;
+  }
+  return master_ops_.reset_all_faults(detail);
+}
+
+bool OperationalCoordinator::MasterGracefulShutdown(std::string* detail) {
+  if (!master_ops_.graceful_shutdown) {
+    if (detail && detail->empty()) {
+      *detail = "graceful shutdown path not available";
+    }
+    return false;
+  }
+  return master_ops_.graceful_shutdown(detail);
+}
+
+void OperationalCoordinator::MasterStop() {
+  if (master_ops_.stop) {
+    master_ops_.stop();
+  }
 }
 
 OperationalCoordinator::Result OperationalCoordinator::DoTransition(
@@ -81,18 +172,9 @@ OperationalCoordinator::Result OperationalCoordinator::DoTransition(
 
 OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
   return DoTransition(
-      {SystemOpMode::Configured}, SystemOpMode::Running,
+      {SystemOpMode::Configured}, SystemOpMode::Standby,
       [this](std::string* detail) {
-        if (!master_) {
-          if (detail) {
-            *detail = "master is null";
-          }
-          return false;
-        }
-        if (!master_->running() && !master_->Start()) {
-          if (detail) {
-            *detail = "master start failed";
-          }
+        if (!MasterStart(detail)) {
           return false;
         }
         if (shared_state_) {
@@ -104,27 +186,15 @@ OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestEnable() {
-  return DoTransition({SystemOpMode::Standby}, SystemOpMode::Armed, nullptr);
+  return DoTransition(
+      {SystemOpMode::Standby}, SystemOpMode::Armed,
+      [this](std::string* detail) { return MasterRunning(detail); });
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestRelease() {
   return DoTransition(
       {SystemOpMode::Armed}, SystemOpMode::Running,
-      [this](std::string* detail) {
-        if (!master_) {
-          if (detail) {
-            *detail = "master is null";
-          }
-          return false;
-        }
-        if (!master_->running()) {
-          if (detail) {
-            *detail = "master not running";
-          }
-          return false;
-        }
-        return true;
-      });
+      [this](std::string* detail) { return MasterRunning(detail); });
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestHalt() {
@@ -135,22 +205,13 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
   return DoTransition(
       {SystemOpMode::Faulted}, SystemOpMode::Armed,
       [this](std::string* detail) {
-        if (!master_) {
-          if (detail) {
-            *detail = "master is null";
-          }
-          return false;
-        }
-        if (!master_->running()) {
-          if (detail) {
-            *detail = "master not running";
-          }
+        if (!MasterRunning(detail)) {
           return false;
         }
         mode_.store(SystemOpMode::Recovering, std::memory_order_release);
 
         std::string recover_detail;
-        if (!master_->ResetAllFaults(&recover_detail)) {
+        if (!MasterResetAllFaults(&recover_detail)) {
           mode_.store(SystemOpMode::Faulted, std::memory_order_release);
           if (detail) {
             *detail = recover_detail.empty() ? "recover failed" : recover_detail;
@@ -176,18 +237,11 @@ OperationalCoordinator::Result OperationalCoordinator::RequestShutdown() {
        SystemOpMode::Running, SystemOpMode::Faulted},
       SystemOpMode::Configured,
       [this](std::string* detail) {
-        if (!master_) {
-          if (detail) {
-            *detail = "master is null";
-          }
-          return false;
-        }
-
         mode_.store(SystemOpMode::ShuttingDown, std::memory_order_release);
 
         std::string graceful_detail;
-        const bool graceful_ok = master_->GracefulShutdown(&graceful_detail);
-        master_->Stop();
+        const bool graceful_ok = MasterGracefulShutdown(&graceful_detail);
+        MasterStop();
 
         if (!graceful_ok) {
           if (detail) {

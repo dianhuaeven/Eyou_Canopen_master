@@ -1,0 +1,165 @@
+#include <gtest/gtest.h>
+
+#include <memory>
+#include <string>
+
+#include "canopen_hw/operational_coordinator.hpp"
+#include "canopen_hw/shared_state.hpp"
+
+namespace canopen_hw {
+namespace {
+
+struct FakeMaster {
+  bool start_ok = true;
+  bool running = false;
+  bool reset_ok = true;
+  bool graceful_ok = true;
+  int start_calls = 0;
+  int reset_calls = 0;
+  int graceful_calls = 0;
+  int stop_calls = 0;
+};
+
+OperationalCoordinator::MasterOps MakeMasterOps(FakeMaster* master) {
+  OperationalCoordinator::MasterOps ops;
+  ops.start = [master]() {
+    ++master->start_calls;
+    if (!master->start_ok) {
+      return false;
+    }
+    master->running = true;
+    return true;
+  };
+  ops.running = [master]() { return master->running; };
+  ops.reset_all_faults = [master](std::string* detail) {
+    ++master->reset_calls;
+    if (!master->reset_ok) {
+      if (detail) {
+        *detail = "reset failed";
+      }
+      return false;
+    }
+    return true;
+  };
+  ops.graceful_shutdown = [master](std::string* detail) {
+    ++master->graceful_calls;
+    if (!master->graceful_ok) {
+      if (detail) {
+        *detail = "graceful timeout";
+      }
+      return false;
+    }
+    return true;
+  };
+  ops.stop = [master]() {
+    ++master->stop_calls;
+    master->running = false;
+  };
+  return ops;
+}
+
+TEST(OperationalCoordinator, TransitionMatrixFollows0324ImportPath) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+
+  auto r = coordinator.RequestInit();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
+
+  coordinator.ComputeIntents();
+  EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Disable);
+
+  r = coordinator.RequestEnable();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+
+  coordinator.ComputeIntents();
+  EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Halt);
+
+  r = coordinator.RequestRelease();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
+
+  coordinator.ComputeIntents();
+  EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Run);
+
+  r = coordinator.RequestHalt();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+
+  r = coordinator.RequestShutdown();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Configured);
+  EXPECT_EQ(fake.stop_calls, 1);
+}
+
+TEST(OperationalCoordinator, InvalidTransitionsAreRejected) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+
+  auto r = coordinator.RequestRelease();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Configured);
+
+  r = coordinator.RequestRecover();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Configured);
+
+  r = coordinator.RequestHalt();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Configured);
+}
+
+TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToArmed) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+  ASSERT_TRUE(coordinator.RequestInit().ok);
+  ASSERT_TRUE(coordinator.RequestEnable().ok);
+  ASSERT_TRUE(coordinator.RequestRelease().ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
+
+  AxisFeedback fb;
+  fb.is_fault = true;
+  shared.UpdateFeedback(0, fb);
+  coordinator.UpdateFromFeedback();
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  EXPECT_TRUE(shared.GetGlobalFault());
+  EXPECT_TRUE(shared.GetAllAxesHaltedByFault());
+
+  auto r = coordinator.RequestRecover();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+  EXPECT_FALSE(shared.GetGlobalFault());
+  EXPECT_FALSE(shared.GetAllAxesHaltedByFault());
+}
+
+TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
+  SharedState shared(1);
+  FakeMaster fake;
+  fake.reset_ok = false;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+  ASSERT_TRUE(coordinator.RequestInit().ok);
+  ASSERT_TRUE(coordinator.RequestEnable().ok);
+  ASSERT_TRUE(coordinator.RequestRelease().ok);
+
+  AxisFeedback fb;
+  fb.heartbeat_lost = true;
+  shared.UpdateFeedback(0, fb);
+  coordinator.UpdateFromFeedback();
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+
+  const auto r = coordinator.RequestRecover();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(r.message, "reset failed");
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+}
+
+}  // namespace
+}  // namespace canopen_hw
