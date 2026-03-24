@@ -131,7 +131,7 @@ rosservice call /canopen_hw_node/init "{}"
 
 | Service | 类型 | 说明 |
 |---------|------|------|
-| `~init` | `std_srvs/Trigger` | `Configured -> Running`（通过 Coordinator 显式使能） |
+| `~init` | `std_srvs/Trigger` | `Configured -> Running`（启动主站，后续由 `AxisIntent::Run` 驱动使能链） |
 | `~halt` | `std_srvs/Trigger` | `Running -> Armed`（置 Halt bit，冻结输出） |
 | `~resume` | `std_srvs/Trigger` | `Armed -> Running`；若 fault latch 存在需先 `~recover` |
 | `~recover` | `std_srvs/Trigger` | `Faulted -> Armed`（仅清故障，不自动回 Running） |
@@ -246,12 +246,12 @@ rosservice call /canopen_hw_node/resume "{}"
 3. `Shutdown` (0x6040=0x0006)
 4. 等待状态进入 `ReadyToSwitchOn`（超时 1s）
 5. `NMT Stop` + `master_->Stop()` 停通信
-6. 标记为“需要重新 init”，随后 `~recover` 会拒绝并提示先 `~init`
+6. 返回 `Configured`；随后 `~recover` 会因状态不合法被拒绝，需先 `~init`
 
 若第 2/4 步超时：
 - 仍继续执行第 5 步，避免 service 卡死
 - service 返回 `success=false`，`message` 给出超时轴信息
-- 仍标记为“需要重新 init”
+- 状态仍回到 `Configured`，后续需先 `~init`
 
 ### 8.2 Ctrl+C（进程级 teardown）
 

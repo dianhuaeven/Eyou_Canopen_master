@@ -15,13 +15,13 @@
 | 方法 | 说明 |
 |------|------|
 | `SetConfigured()` | Configure 成功后设置起始模式 |
-| `RequestInit()` | `Configured -> Running`（启动主站并显式使能） |
+| `RequestInit()` | `Configured -> Running`（启动主站；使能链由 `AxisIntent::Run` 周期驱动） |
 | `RequestHalt()` | `Running -> Armed` |
 | `RequestRelease()` | `Armed -> Running`（对应 `~/resume`） |
 | `RequestRecover()` | `Faulted -> Armed`（不自动回到 Running） |
 | `RequestShutdown()` | 通信停机并回到 `Configured` |
 | `UpdateFromFeedback()` | 在 `Armed/Running` 下自动检测 fault/heartbeat 丢失并降级到 `Faulted` |
-| `ComputeIntents()` | 按模式下发每轴 `AxisIntent`（当前为 shadow 通道） |
+| `ComputeIntents()` | 按模式下发每轴 `AxisIntent`（控制主通道） |
 
 ## ServiceGateway
 
@@ -47,7 +47,7 @@
 | `Halt()` | 轻量停转：置 Halt bit，保持 Active |
 | `Resume()` | 清 Halt bit 恢复运动（global fault latch 期间会被拒绝） |
 | `Recover()` | 仅对 fault 轴执行复位（不重启通信、不自动使能；需后续 `Resume()`） |
-| `StopCommunication()` | 执行 402 降级 + 停通信，置 `require_init=true` |
+| `StopCommunication()` | 执行 402 降级 + 停通信，状态回 Configured |
 | `Shutdown()` | 完全关闭，释放所有资源 |
 | `robot_hw()` | 返回 CanopenRobotHw 指针 |
 
@@ -57,8 +57,8 @@
 |------|------|
 | `GracefulShutdown(detail)` | 402 降级 + NMT Stop；超时返回 false 并给 detail |
 | `HaltAll()` / `ResumeAll()` | 全轴置/清 Halt bit（保持 Operation Enabled） |
-| `RecoverFaultedAxes(detail)` | 仅对 fault 轴复位，超时返回 false 并给 detail |
-| `ResetAllFaults(detail)` | `RecoverFaultedAxes` 的协调层入口别名 |
+| `RecoverFaultedAxes(detail)` | 兼容入口，内部转发到 `ResetAllFaults` |
+| `ResetAllFaults(detail)` | 故障复位执行器（发送 0x0080 复位脉冲并等待 fault 清除） |
 | `EnableAxis/DisableAxis/ResetAxisFault` | 单轴手动控制接口 |
 | `GetAxisFeedback(i, out)` | 读取单轴反馈快照 |
 

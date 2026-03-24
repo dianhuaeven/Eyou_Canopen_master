@@ -16,7 +16,14 @@
 | C07 | 已完成 | `dbc50fd` |
 | C08 | 已完成 | `865efcc` |
 | C09（可选） | 未执行 | — |
-| C10 | 进行中 | — |
+| C10 | 已完成 | `b686a27` |
+| C11 | 已完成 | `ddad23b` |
+| C12 | 已完成 | `b9a93f9` |
+| C13 | 已完成 | `9d55ada` |
+| C14 | 已完成 | `0cc27f7` |
+| C15 | 已完成 | `d9e2d63` |
+| C16 | 已完成 | `当前提交` |
+| C17（可选） | 未执行 | — |
 
 ## 1. 调研结论（实际情况）
 
@@ -120,3 +127,18 @@ flowchart TD
 1. 若 C04-C08 任一提交出现现场不稳定，按单提交回滚，不回滚 C01 测试基线。  
 2. C09 为独立可选提交，可随时放弃，不影响功能闭环。  
 3. 回滚后必须保留 `C01` 新增回归用例，并补一个修复提交重新进入主线。
+
+## 7. 第二阶段（终态）计划表
+
+> 目标：从当前过渡版（`b686a27`）迁移到 `0324import` 定义的最终版。  
+> 范围：必做 6 个 commit（C11-C16）+ 可选 1 个性能 commit（C17）。
+
+| ID | 目标 commit message | 主要内容 | 关键文件 | 提交前验证 |
+|---|---|---|---|---|
+| C11 | `refactor(protocol): implement pure CiA402Protocol and remove strategy state` | 将 `CiA402Protocol` 从适配器实现为纯协议翻译，策略字段不再驻留协议层 | `include/src/cia402_protocol.*`, `include/src/cia402_state_machine.*`, `test/test_state_machine.cpp` | `cmake --build build -j$(nproc)` + `ctest -R "CiA402SM|CiA402Protocol|StateMachineMultiMode|Boundary" --output-on-failure` |
+| C12 | `refactor(axis): drive control path by AxisIntent as primary source` | `AxisLogic/AxisDriver` 切到 `AxisIntent` 主驱动；旧 latch 路径降级为兼容或移除 | `include/src/axis_logic.*`, `src/axis_driver.cpp`, `test/test_axis_logic.cpp` | `cmake --build build -j$(nproc)` + `ctest -R "AxisLogicTest|CiA402Protocol" --output-on-failure` |
+| C13 | `refactor(master): keep CanopenMaster as bus lifecycle and fault-reset executor` | `CanopenMaster` 收口为通信管理和故障复位执行层，去除策略编排职责 | `include/src/canopen_master.*`, `src/canopen_master.cpp`, `test/test_canopen_master.cpp` | `cmake --build build -j$(nproc)` + `ctest -R "MasterConfig|CanopenMaster|StartupIntegration" --output-on-failure` |
+| C14 | `refactor(coord): finalize SystemOpMode transition matrix and atomic recover flow` | 完成 Coordinator 终态：唯一策略写入者、Recovering 原子流程、自动故障降级闭环 | `include/src/operational_coordinator.*`, `src/service_gateway.cpp`, `test/test_lifecycle_manager.cpp` | `cmake --build build -j$(nproc)` + `ctest -R "LifecycleManager|AxisLogicTest|MasterConfig" --output-on-failure` |
+| C15 | `refactor(lifecycle+node): reduce LifecycleManager to owner and remove shadow semantics` | `LifecycleManager` 彻底退化为 owner，`node` 完全由 `ServiceGateway+Coordinator` 驱动 | `include/src/lifecycle_manager.*`, `src/lifecycle_manager.cpp`, `src/canopen_hw_ros_node.cpp` | `cmake --build build -j$(nproc)` + `ctest -R "LifecycleManager|StartupIntegration|RobotHw" --output-on-failure` |
+| C16 | `test+docs: finalize final-state migration matrix and operational contract` | 终态测试矩阵与运维契约收口，更新 API/usage/计划状态 | `docs/*.md`, `test/*(按需)` | `cmake --build build -j$(nproc)` + `ctest -N` + `ctest -R "CiA402SM|CiA402Protocol|LifecycleManager|AxisLogicTest" --output-on-failure` |
+| C17（可选） | `perf(shared_state): switch global mutex to per-axis seqlock` | `SharedState` 大锁替换为 per-axis seqlock（性能优化） | `include/src/shared_state.*`, `include/canopen_hw/seqlock.hpp`, `test/test_shared_state_concurrent.cpp` | `cmake --build build -j$(nproc)` + `ctest -R "SharedState|SharedStateConcurrent" --output-on-failure` |
