@@ -6,8 +6,9 @@
 
 - `Inactive`
 - `Configured`
-- `Running`
+- `Standby`
 - `Armed`
+- `Running`
 - `Faulted`
 - `Recovering`
 - `ShuttingDown`
@@ -15,7 +16,8 @@
 | 方法 | 说明 |
 |------|------|
 | `SetConfigured()` | Configure 成功后设置起始模式 |
-| `RequestInit()` | `Configured -> Running`（启动主站；使能链由 `AxisIntent::Run` 周期驱动） |
+| `RequestInit()` | `Configured -> Standby`（仅启动主站，不放行动作） |
+| `RequestEnable()` | `Standby -> Armed`（进入使能冻结态） |
 | `RequestHalt()` | `Running -> Armed` |
 | `RequestRelease()` | `Armed -> Running`（对应 `~/resume`） |
 | `RequestRecover()` | `Faulted -> Armed`（不自动回到 Running） |
@@ -28,6 +30,7 @@
 | Service | 内部转发 |
 |------|------|
 | `~/init` | `OperationalCoordinator::RequestInit()` |
+| `~/enable` | `OperationalCoordinator::RequestEnable()` |
 | `~/halt` | `OperationalCoordinator::RequestHalt()` |
 | `~/resume` | `OperationalCoordinator::RequestRelease()` |
 | `~/recover` | `OperationalCoordinator::RequestRecover()` |

@@ -121,7 +121,9 @@ rosservice call /canopen_hw_node/init "{}"
 - `dcf_path:=<path>` — DCF 文件路径
 - `joints_path:=<path>` — joints.yaml 路径
 - `loop_hz:=100.0` — 控制循环频率
-- `auto_init:=false|true` — 是否启动后自动初始化电机（默认 `false`）
+- `auto_init:=false|true` — 是否启动后自动 `~/init`（默认 `false`）
+- `auto_enable:=false|true` — 是否在 `auto_init` 后自动 `~/enable`（默认 `false`）
+- `auto_release:=false|true` — 是否在 `auto_enable` 后自动 `~/resume`（默认 `false`）
 
 ---
 
@@ -131,7 +133,8 @@ rosservice call /canopen_hw_node/init "{}"
 
 | Service | 类型 | 说明 |
 |---------|------|------|
-| `~init` | `std_srvs/Trigger` | `Configured -> Running`（启动主站，后续由 `AxisIntent::Run` 驱动使能链） |
+| `~init` | `std_srvs/Trigger` | `Configured -> Standby`（启动主站，不自动进入运行） |
+| `~enable` | `std_srvs/Trigger` | `Standby -> Armed`（使能并冻结输出） |
 | `~halt` | `std_srvs/Trigger` | `Running -> Armed`（置 Halt bit，冻结输出） |
 | `~resume` | `std_srvs/Trigger` | `Armed -> Running`；若 fault latch 存在需先 `~recover` |
 | `~recover` | `std_srvs/Trigger` | `Faulted -> Armed`（仅清故障，不自动回 Running） |
@@ -157,15 +160,17 @@ rosservice call /canopen_hw_node/init "{}"
 
 - `~shutdown`：停通信并回到 `Configured`，节点进程不退出。
 - `~recover`：仅处理 fault 并回到 `Armed`，不自动放行运动。
-- `~init`：`~shutdown` 后重新建立通信并进入 `Running`。
+- `~init`：`~shutdown` 后重新建立通信并进入 `Standby`。
+- `~enable`：将 `Standby` 推到 `Armed`。
 - `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。
 - 当 `global_fault` 闩锁为 true 时，`~resume` 会被拒绝；必须先 `~recover`。
 
 ### 6.2 模式切换流程
 
 ```bash
-# 0. 首次启动先初始化电机（若 auto_init:=false）
+# 0. 首次启动先执行 init + enable（若 auto_init:=false）
 rosservice call /canopen_hw_node/init "{}"
+rosservice call /canopen_hw_node/enable "{}"
 
 # 1. 轻量停转（保持 Active，不断通信）
 rosservice call /canopen_hw_node/halt

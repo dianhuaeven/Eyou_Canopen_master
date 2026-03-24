@@ -88,7 +88,7 @@ roslaunch Eyou_Canopen_Master bringup.launch auto_init:=false
 roslaunch Eyou_Canopen_Master bringup.launch \
   dcf_path:=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/master.dcf \
   joints_path:=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/joints.yaml \
-  loop_hz:=200.0 auto_init:=false
+  loop_hz:=200.0 auto_init:=false auto_enable:=false auto_release:=false
 ```
 
 ## 6. Service 调用
@@ -103,6 +103,7 @@ rosservice list | grep canopen_hw_node
 
 ```bash
 rosservice call /canopen_hw_node/init "{}"
+rosservice call /canopen_hw_node/enable "{}"
 rosservice call /canopen_hw_node/halt "{}"
 rosservice call /canopen_hw_node/resume "{}"
 rosservice call /canopen_hw_node/recover "{}"
@@ -110,7 +111,8 @@ rosservice call /canopen_hw_node/shutdown "{}"
 ```
 
 状态语义（当前）：
-- `init`: `Configured -> Running`
+- `init`: `Configured -> Standby`
+- `enable`: `Standby -> Armed`
 - `halt`: `Running -> Armed`
 - `resume`: `Armed -> Running`
 - `recover`: `Faulted -> Armed`（不自动 Running）
@@ -201,6 +203,7 @@ roslaunch Eyou_Canopen_Master bringup.launch auto_init:=false
 
 # 4) 初始化
 rosservice call /canopen_hw_node/init "{}"
+rosservice call /canopen_hw_node/enable "{}"
 
 # 5) （可选）切到 IP
 rosservice call /canopen_hw_node/halt "{}"
