@@ -60,6 +60,8 @@ class CanopenRobotHw {
 
   // 每轴当前使能会话号（来自反馈侧 arm_epoch）。
   uint32_t arm_epoch(std::size_t axis_index) const;
+  // 命令重同步序列（来自 SharedState.command_sync_sequence）。
+  uint64_t command_sync_sequence() const { return command_sync_sequence_; }
 
   // 命令元数据（valid/epoch）写入接口，由上层适配层驱动。
   void SetCommandReady(std::size_t axis_index, bool ready);
@@ -99,6 +101,7 @@ class CanopenRobotHw {
   std::vector<uint32_t> axis_arm_epoch_;
   std::vector<bool> axis_cmd_ready_;
   std::vector<uint32_t> axis_cmd_epoch_;
+  uint64_t command_sync_sequence_ = 0;
 
   bool all_operational_ = false;
   bool all_axes_halted_by_fault_ = false;

@@ -64,3 +64,18 @@ TEST(RobotHw, WritePositionWhileNotOperationalZerosVelocityAndTorque) {
   EXPECT_EQ(snap.commands[0].target_velocity, 0);
   EXPECT_EQ(snap.commands[0].target_torque, 0);
 }
+
+TEST(RobotHw, CommandSyncSequenceMirrorsSharedStateSnapshot) {
+  canopen_hw::SharedState shared(1);
+  canopen_hw::CanopenRobotHw hw(&shared);
+  EXPECT_EQ(hw.command_sync_sequence(), 0u);
+
+  shared.AdvanceCommandSyncSequence();
+  hw.ReadFromSharedState();
+  EXPECT_EQ(hw.command_sync_sequence(), 1u);
+
+  shared.AdvanceCommandSyncSequence();
+  shared.AdvanceCommandSyncSequence();
+  hw.ReadFromSharedState();
+  EXPECT_EQ(hw.command_sync_sequence(), 3u);
+}

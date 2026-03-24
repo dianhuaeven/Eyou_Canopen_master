@@ -40,6 +40,7 @@ void CanopenRobotHw::ReadFromSharedState() {
   const SharedSnapshot snap = shared_state_->Snapshot();
   all_operational_ = snap.all_operational;
   all_axes_halted_by_fault_ = snap.all_axes_halted_by_fault;
+  command_sync_sequence_ = snap.command_sync_sequence;
 
   for (std::size_t i = 0; i < axis_count_; ++i) {
     joint_pos_[i] = TicksToRad(i, snap.feedback[i].actual_position);
