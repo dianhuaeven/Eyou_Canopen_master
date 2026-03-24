@@ -1,6 +1,7 @@
 #include "canopen_hw/operational_coordinator.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <sstream>
 #include <utility>
 
@@ -129,6 +130,41 @@ void OperationalCoordinator::MasterStop() {
   }
 }
 
+bool OperationalCoordinator::CheckHealthyForMotion(std::string* detail) const {
+  if (!shared_state_) {
+    return true;
+  }
+
+  const SharedSnapshot snap = shared_state_->Snapshot();
+  if (snap.global_fault) {
+    if (detail) {
+      *detail = "global fault latch active";
+    }
+    return false;
+  }
+
+  const std::size_t n = std::min(axis_count_, snap.feedback.size());
+  for (std::size_t i = 0; i < n; ++i) {
+    if (snap.feedback[i].is_fault) {
+      if (detail) {
+        std::ostringstream oss;
+        oss << "axis " << i << " fault active";
+        *detail = oss.str();
+      }
+      return false;
+    }
+    if (snap.feedback[i].heartbeat_lost) {
+      if (detail) {
+        std::ostringstream oss;
+        oss << "axis " << i << " heartbeat lost";
+        *detail = oss.str();
+      }
+      return false;
+    }
+  }
+  return true;
+}
+
 OperationalCoordinator::Result OperationalCoordinator::DoTransition(
     std::initializer_list<SystemOpMode> allowed_from, SystemOpMode to,
     std::function<bool(std::string*)> action) {
@@ -226,7 +262,12 @@ OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
 OperationalCoordinator::Result OperationalCoordinator::RequestEnable() {
   return DoTransition(
       {SystemOpMode::Standby}, SystemOpMode::Armed,
-      [this](std::string* detail) { return MasterRunning(detail); });
+      [this](std::string* detail) {
+        if (!MasterRunning(detail)) {
+          return false;
+        }
+        return CheckHealthyForMotion(detail);
+      });
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestDisable() {
@@ -239,7 +280,12 @@ OperationalCoordinator::Result OperationalCoordinator::RequestDisable() {
 OperationalCoordinator::Result OperationalCoordinator::RequestRelease() {
   return DoTransition(
       {SystemOpMode::Armed}, SystemOpMode::Running,
-      [this](std::string* detail) { return MasterRunning(detail); });
+      [this](std::string* detail) {
+        if (!MasterRunning(detail)) {
+          return false;
+        }
+        return CheckHealthyForMotion(detail);
+      });
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestHalt() {

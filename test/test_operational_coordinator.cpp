@@ -188,6 +188,43 @@ TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
 }
 
+TEST(OperationalCoordinator, ReleaseRejectedWhenAxisUnhealthy) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+
+  ASSERT_TRUE(coordinator.RequestInit().ok);
+  ASSERT_TRUE(coordinator.RequestEnable().ok);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Armed);
+
+  AxisFeedback fb;
+  fb.is_fault = true;
+  shared.UpdateFeedback(0, fb);
+
+  const auto r = coordinator.RequestRelease();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+  EXPECT_NE(r.message.find("fault"), std::string::npos);
+}
+
+TEST(OperationalCoordinator, EnableRejectedWhenGlobalFaultLatched) {
+  SharedState shared(1);
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+
+  ASSERT_TRUE(coordinator.RequestInit().ok);
+  ASSERT_TRUE(coordinator.RequestDisable().ok);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Standby);
+
+  shared.SetGlobalFault(true);
+  const auto r = coordinator.RequestEnable();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
+  EXPECT_NE(r.message.find("global fault"), std::string::npos);
+}
+
 TEST(OperationalCoordinator, InitSafetyCheckFaultFallbackToFaulted) {
   SharedState shared(1);
   AxisFeedback fb;

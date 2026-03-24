@@ -76,6 +76,7 @@ class OperationalCoordinator {
   bool MasterResetAllFaults(std::string* detail);
   bool MasterGracefulShutdown(std::string* detail);
   void MasterStop();
+  bool CheckHealthyForMotion(std::string* detail) const;
 
   std::atomic<SystemOpMode> mode_{SystemOpMode::Inactive};
   mutable std::mutex transition_mtx_;
