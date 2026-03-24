@@ -4,6 +4,8 @@
   <arg name="controllers_file" default="$(find Eyou_Canopen_Master)/config/ros/controllers.yaml"/>
   <arg name="loop_hz" default="200.0"/>
   <arg name="auto_init" default="false"/>
+  <arg name="auto_enable" default="false"/>
+  <arg name="auto_release" default="false"/>
 
   <arg name="robot_urdf" default="$(find Eyou_Canopen_Master)/urdf/robot.urdf"/>
   <arg name="use_robot_state_publisher" default="true"/>
@@ -18,6 +20,8 @@
     <param name="joints_path" value="$(arg joints_path)"/>
     <param name="loop_hz" value="$(arg loop_hz)"/>
     <param name="auto_init" value="$(arg auto_init)"/>
+    <param name="auto_enable" value="$(arg auto_enable)"/>
+    <param name="auto_release" value="$(arg auto_release)"/>
   </node>
 
   <node name="spawner_joint_state_controller" pkg="controller_manager" type="spawner"

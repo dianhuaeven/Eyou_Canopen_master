@@ -113,15 +113,12 @@ int main(int argc, char** argv) {
                                            Eyou_Canopen_Master::SetMode::Response>(
       "set_mode", [&](Eyou_Canopen_Master::SetMode::Request& req,
                       Eyou_Canopen_Master::SetMode::Response& res) {
-        bool need_confirm = false;
-        canopen_hw::CanopenMaster* master = nullptr;
-
         {
           std::lock_guard<std::mutex> lk(loop_mtx);
           const auto mode = coordinator.mode();
-          if (mode == canopen_hw::SystemOpMode::Running) {
+          if (mode != canopen_hw::SystemOpMode::Standby) {
             res.success = false;
-            res.message = "set_mode not allowed in Running state; call ~/halt first";
+            res.message = "set_mode only allowed in Standby; call ~/disable first";
             return true;
           }
           if (req.axis_index >= robot_hw_ros.axis_count()) {
@@ -138,31 +135,10 @@ int main(int argc, char** argv) {
           }
 
           robot_hw_ros.SetMode(req.axis_index, req.mode);
-          need_confirm = (mode == canopen_hw::SystemOpMode::Armed);
-          master = lifecycle.master();
         }
 
-        if (!need_confirm) {
-          res.success = true;
-          res.message = "mode set";
-          return true;
-        }
-
-        const auto deadline = std::chrono::steady_clock::now() +
-                              std::chrono::milliseconds(500);
-        canopen_hw::AxisFeedback fb;
-        while (std::chrono::steady_clock::now() < deadline) {
-          if (master && master->GetAxisFeedback(req.axis_index, &fb) &&
-              fb.mode_display == req.mode) {
-            res.success = true;
-            res.message = "mode set";
-            return true;
-          }
-          std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-
-        res.success = false;
-        res.message = "mode switch not confirmed in halted state; try ~/shutdown then ~/init";
+        res.success = true;
+        res.message = "mode set";
         return true;
       });
 

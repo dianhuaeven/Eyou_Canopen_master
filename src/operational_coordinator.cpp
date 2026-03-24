@@ -172,12 +172,50 @@ OperationalCoordinator::Result OperationalCoordinator::DoTransition(
 
 OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
   return DoTransition(
-      {SystemOpMode::Configured}, SystemOpMode::Standby,
+      {SystemOpMode::Configured}, SystemOpMode::Armed,
       [this](std::string* detail) {
         if (!MasterStart(detail)) {
           return false;
         }
+        if (!MasterRunning(detail)) {
+          // 主站启动不完整，回落到 Standby 以便人工排查后再 enable。
+          mode_.store(SystemOpMode::Standby, std::memory_order_release);
+          return false;
+        }
+
         if (shared_state_) {
+          const SharedSnapshot snap = shared_state_->Snapshot();
+          const std::size_t n = std::min(axis_count_, snap.feedback.size());
+          bool any_fault = false;
+          bool heartbeat_lost = false;
+          for (std::size_t i = 0; i < n; ++i) {
+            if (snap.feedback[i].is_fault) {
+              any_fault = true;
+              break;
+            }
+            if (snap.feedback[i].heartbeat_lost) {
+              heartbeat_lost = true;
+            }
+          }
+          if (any_fault || snap.global_fault) {
+            shared_state_->SetGlobalFault(true);
+            shared_state_->SetAllAxesHaltedByFault(true);
+            mode_.store(SystemOpMode::Faulted, std::memory_order_release);
+            if (detail) {
+              *detail = "safety check failed: fault present after init";
+            }
+            return false;
+          }
+          if (heartbeat_lost) {
+            // 心跳问题按可恢复启动异常处理，停留 Standby，不自动上电。
+            shared_state_->SetGlobalFault(false);
+            shared_state_->SetAllAxesHaltedByFault(false);
+            mode_.store(SystemOpMode::Standby, std::memory_order_release);
+            if (detail) {
+              *detail = "safety check failed: heartbeat lost";
+            }
+            return false;
+          }
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
         }
@@ -210,7 +248,7 @@ OperationalCoordinator::Result OperationalCoordinator::RequestHalt() {
 
 OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
   return DoTransition(
-      {SystemOpMode::Faulted}, SystemOpMode::Armed,
+      {SystemOpMode::Faulted}, SystemOpMode::Standby,
       [this](std::string* detail) {
         if (!MasterRunning(detail)) {
           return false;
@@ -240,14 +278,17 @@ OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
 
 OperationalCoordinator::Result OperationalCoordinator::RequestShutdown() {
   return DoTransition(
-      {SystemOpMode::Configured, SystemOpMode::Standby, SystemOpMode::Armed,
-       SystemOpMode::Running, SystemOpMode::Faulted},
+      {SystemOpMode::Inactive, SystemOpMode::Configured, SystemOpMode::Standby,
+       SystemOpMode::Armed, SystemOpMode::Running, SystemOpMode::Faulted,
+       SystemOpMode::Recovering, SystemOpMode::ShuttingDown},
       SystemOpMode::Configured,
       [this](std::string* detail) {
         mode_.store(SystemOpMode::ShuttingDown, std::memory_order_release);
 
         std::string graceful_detail;
-        const bool graceful_ok = MasterGracefulShutdown(&graceful_detail);
+        const bool running = master_ops_.running ? master_ops_.running() : false;
+        const bool graceful_ok =
+            running ? MasterGracefulShutdown(&graceful_detail) : true;
         MasterStop();
 
         if (!graceful_ok) {
@@ -285,13 +326,13 @@ void OperationalCoordinator::ComputeIntents() {
       intent = AxisIntent::Run;
       break;
     case SystemOpMode::Armed:
-    case SystemOpMode::Recovering:
     case SystemOpMode::Faulted:
       intent = AxisIntent::Halt;
       break;
     case SystemOpMode::Inactive:
     case SystemOpMode::Configured:
     case SystemOpMode::Standby:
+    case SystemOpMode::Recovering:
     case SystemOpMode::ShuttingDown:
       intent = AxisIntent::Disable;
       break;

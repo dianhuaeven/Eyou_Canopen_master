@@ -53,7 +53,7 @@ bool ServiceGateway::OnInit(std_srvs::Trigger::Request&,
   if (r.ok) {
     res.message = (r.message.rfind("already ", 0) == 0)
                       ? "already initialized"
-                      : "initialized (standby)";
+                      : "initialized (armed)";
   } else {
     res.message = r.message.empty() ? "init failed" : r.message;
   }
@@ -128,7 +128,7 @@ bool ServiceGateway::OnResume(std_srvs::Trigger::Request&,
     res.message = (r.message.rfind("already ", 0) == 0) ? "already running"
                                                          : "resumed";
   } else {
-    res.message = r.message.empty() ? "resume failed; call ~/recover first"
+    res.message = r.message.empty() ? "resume failed; call ~/enable (or ~/recover then ~/enable) first"
                                     : r.message;
   }
   return true;
@@ -144,7 +144,7 @@ bool ServiceGateway::OnRecover(std_srvs::Trigger::Request&,
   const auto r = coordinator_->RequestRecover();
   res.success = r.ok;
   if (r.ok) {
-    res.message = r.message.empty() ? "recovered" : r.message;
+    res.message = r.message.empty() ? "recovered (standby)" : r.message;
   } else {
     res.message = r.message.empty() ? "recover failed" : r.message;
   }

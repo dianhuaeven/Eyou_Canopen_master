@@ -16,11 +16,12 @@
 | 方法 | 说明 |
 |------|------|
 | `SetConfigured()` | Configure 成功后设置起始模式 |
-| `RequestInit()` | `Configured -> Standby`（仅启动主站，不放行动作） |
+| `RequestInit()` | `Configured -> Armed`（启动主站并自动上电到冻结态） |
 | `RequestEnable()` | `Standby -> Armed`（进入使能冻结态） |
+| `RequestDisable()` | `Running/Armed/Standby -> Standby`（去使能但保持通信在线） |
 | `RequestHalt()` | `Running -> Armed` |
 | `RequestRelease()` | `Armed -> Running`（对应 `~/resume`） |
-| `RequestRecover()` | `Faulted -> Armed`（不自动回到 Running） |
+| `RequestRecover()` | `Faulted -> Standby`（清故障后保持去使能） |
 | `RequestShutdown()` | 通信停机并回到 `Configured` |
 | `UpdateFromFeedback()` | 在 `Armed/Running` 下自动检测 fault/heartbeat 丢失并降级到 `Faulted` |
 | `ComputeIntents()` | 按模式下发每轴 `AxisIntent`（控制主通道） |
@@ -31,6 +32,7 @@
 |------|------|
 | `~/init` | `OperationalCoordinator::RequestInit()` |
 | `~/enable` | `OperationalCoordinator::RequestEnable()` |
+| `~/disable` | `OperationalCoordinator::RequestDisable()` |
 | `~/halt` | `OperationalCoordinator::RequestHalt()` |
 | `~/resume` | `OperationalCoordinator::RequestRelease()` |
 | `~/recover` | `OperationalCoordinator::RequestRecover()` |

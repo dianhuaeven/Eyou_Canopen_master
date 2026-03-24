@@ -66,17 +66,14 @@ TEST(OperationalCoordinator, TransitionMatrixFollows0324ImportPath) {
 
   auto r = coordinator.RequestInit();
   EXPECT_TRUE(r.ok);
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
-
-  coordinator.ComputeIntents();
-  EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Disable);
-
-  r = coordinator.RequestEnable();
-  EXPECT_TRUE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
 
   coordinator.ComputeIntents();
   EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Halt);
+
+  r = coordinator.RequestEnable();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
 
   r = coordinator.RequestRelease();
   EXPECT_TRUE(r.ok);
@@ -85,18 +82,15 @@ TEST(OperationalCoordinator, TransitionMatrixFollows0324ImportPath) {
   coordinator.ComputeIntents();
   EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Run);
 
+  r = coordinator.RequestHalt();
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+
   r = coordinator.RequestDisable();
   EXPECT_TRUE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
 
-  coordinator.ComputeIntents();
-  EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Disable);
-
   r = coordinator.RequestEnable();
-  EXPECT_TRUE(r.ok);
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
-
-  r = coordinator.RequestHalt();
   EXPECT_TRUE(r.ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
 
@@ -135,7 +129,6 @@ TEST(OperationalCoordinator, DisableFromRunningAndArmedToStandby) {
   OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
   coordinator.SetConfigured();
   ASSERT_TRUE(coordinator.RequestInit().ok);
-  ASSERT_TRUE(coordinator.RequestEnable().ok);
   ASSERT_TRUE(coordinator.RequestRelease().ok);
   ASSERT_EQ(coordinator.mode(), SystemOpMode::Running);
 
@@ -150,13 +143,12 @@ TEST(OperationalCoordinator, DisableFromRunningAndArmedToStandby) {
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
 }
 
-TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToArmed) {
+TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToStandby) {
   SharedState shared(1);
   FakeMaster fake;
   OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
   coordinator.SetConfigured();
   ASSERT_TRUE(coordinator.RequestInit().ok);
-  ASSERT_TRUE(coordinator.RequestEnable().ok);
   ASSERT_TRUE(coordinator.RequestRelease().ok);
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
 
@@ -170,7 +162,7 @@ TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToArmed) {
 
   auto r = coordinator.RequestRecover();
   EXPECT_TRUE(r.ok);
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
   EXPECT_FALSE(shared.GetGlobalFault());
   EXPECT_FALSE(shared.GetAllAxesHaltedByFault());
 }
@@ -182,7 +174,6 @@ TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
   OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
   coordinator.SetConfigured();
   ASSERT_TRUE(coordinator.RequestInit().ok);
-  ASSERT_TRUE(coordinator.RequestEnable().ok);
   ASSERT_TRUE(coordinator.RequestRelease().ok);
 
   AxisFeedback fb;
@@ -195,6 +186,22 @@ TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
   EXPECT_FALSE(r.ok);
   EXPECT_EQ(r.message, "reset failed");
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+}
+
+TEST(OperationalCoordinator, InitSafetyCheckFaultFallbackToFaulted) {
+  SharedState shared(1);
+  AxisFeedback fb;
+  fb.is_fault = true;
+  shared.UpdateFeedback(0, fb);
+
+  FakeMaster fake;
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  coordinator.SetConfigured();
+
+  const auto r = coordinator.RequestInit();
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  EXPECT_EQ(r.message, "safety check failed: fault present after init");
 }
 
 }  // namespace

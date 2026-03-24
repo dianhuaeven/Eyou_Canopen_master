@@ -104,6 +104,7 @@ rosservice list | grep canopen_hw_node
 ```bash
 rosservice call /canopen_hw_node/init "{}"
 rosservice call /canopen_hw_node/enable "{}"
+rosservice call /canopen_hw_node/disable "{}"
 rosservice call /canopen_hw_node/halt "{}"
 rosservice call /canopen_hw_node/resume "{}"
 rosservice call /canopen_hw_node/recover "{}"
@@ -111,11 +112,12 @@ rosservice call /canopen_hw_node/shutdown "{}"
 ```
 
 状态语义（当前）：
-- `init`: `Configured -> Standby`
+- `init`: `Configured -> Armed`
 - `enable`: `Standby -> Armed`
+- `disable`: `Running/Armed/Standby -> Standby`
 - `halt`: `Running -> Armed`
 - `resume`: `Armed -> Running`
-- `recover`: `Faulted -> Armed`（不自动 Running）
+- `recover`: `Faulted -> Standby`（不自动上电）
 - `shutdown`: `* -> Configured`
 
 模式切换（白名单：`7/8/9/10`）：
@@ -203,10 +205,10 @@ roslaunch Eyou_Canopen_Master bringup.launch auto_init:=false
 
 # 4) 初始化
 rosservice call /canopen_hw_node/init "{}"
-rosservice call /canopen_hw_node/enable "{}"
 
 # 5) （可选）切到 IP
-rosservice call /canopen_hw_node/halt "{}"
+rosservice call /canopen_hw_node/disable "{}"
 rosservice call /canopen_hw_node/set_mode "{axis_index: 0, mode: 7}"
+rosservice call /canopen_hw_node/enable "{}"
 rosservice call /canopen_hw_node/resume "{}"
 ```

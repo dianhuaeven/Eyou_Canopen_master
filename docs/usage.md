@@ -133,13 +133,14 @@ rosservice call /canopen_hw_node/init "{}"
 
 | Service | 类型 | 说明 |
 |---------|------|------|
-| `~init` | `std_srvs/Trigger` | `Configured -> Standby`（启动主站，不自动进入运行） |
+| `~init` | `std_srvs/Trigger` | `Configured -> Armed`（启动主站并自动上电到冻结态） |
 | `~enable` | `std_srvs/Trigger` | `Standby -> Armed`（使能并冻结输出） |
+| `~disable` | `std_srvs/Trigger` | `Running/Armed/Standby -> Standby`（去使能但不断开通信） |
 | `~halt` | `std_srvs/Trigger` | `Running -> Armed`（置 Halt bit，冻结输出） |
 | `~resume` | `std_srvs/Trigger` | `Armed -> Running`；若 fault latch 存在需先 `~recover` |
-| `~recover` | `std_srvs/Trigger` | `Faulted -> Armed`（仅清故障，不自动回 Running） |
+| `~recover` | `std_srvs/Trigger` | `Faulted -> Standby`（仅清故障，不自动上电） |
 | `~shutdown` | `std_srvs/Trigger` | 停通信并回 `Configured`，节点不退出（随后需 `~init`） |
-| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 仅在非 `Running` 态允许（典型：`~halt` 后） |
+| `~set_mode` | `Eyou_Canopen_Master/SetMode` | 仅在 `Standby` 允许（典型：`~disable` 后） |
 
 ### 6.1.2 命令协议（epoch-ready）
 
@@ -159,21 +160,21 @@ rosservice call /canopen_hw_node/init "{}"
 ### 6.1.1 shutdown/recover/init 关系（Coordinator 语义）
 
 - `~shutdown`：停通信并回到 `Configured`，节点进程不退出。
-- `~recover`：仅处理 fault 并回到 `Armed`，不自动放行运动。
-- `~init`：`~shutdown` 后重新建立通信并进入 `Standby`。
+- `~recover`：仅处理 fault 并回到 `Standby`，不自动上电。
+- `~init`：`~shutdown` 后重新建立通信并进入 `Armed`。
 - `~enable`：将 `Standby` 推到 `Armed`。
+- `~disable`：将 `Running/Armed` 回到 `Standby`，但保持通信在线。
 - `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。
-- 当 `global_fault` 闩锁为 true 时，`~resume` 会被拒绝；必须先 `~recover`。
+- 当 `global_fault` 闩锁为 true 时，`~resume` 会被拒绝；必须先 `~recover`，再 `~enable`。
 
 ### 6.2 模式切换流程
 
 ```bash
-# 0. 首次启动先执行 init + enable（若 auto_init:=false）
+# 0. 首次启动先执行 init（若 auto_init:=false）
 rosservice call /canopen_hw_node/init "{}"
-rosservice call /canopen_hw_node/enable "{}"
 
-# 1. 轻量停转（保持 Active，不断通信）
-rosservice call /canopen_hw_node/halt
+# 1. 去使能到 Standby（保持通信，不断总线）
+rosservice call /canopen_hw_node/disable "{}"
 
 # 2. 切换到 CSV 模式（所有轴）
 for i in 0 1 2 3 4 5; do
@@ -184,22 +185,24 @@ done
 rosrun controller_manager controller_manager stop arm_position_controller
 rosrun controller_manager controller_manager start arm_velocity_controller
 
-# 4. 恢复运动
+# 4. 重新上电并恢复运动
+rosservice call /canopen_hw_node/enable "{}"
 rosservice call /canopen_hw_node/resume
 ```
 
 切换到 IP 模式（mode=7）：
 
 ```bash
-# 1) 停转
-rosservice call /canopen_hw_node/halt "{}"
+# 1) 去使能到 Standby
+rosservice call /canopen_hw_node/disable "{}"
 
 # 2) 切到 IP
 for i in 0 1 2 3 4 5; do
   rosservice call /canopen_hw_node/set_mode "{axis_index: $i, mode: 7}"
 done
 
-# 3) 恢复
+# 3) 重新上电并恢复
+rosservice call /canopen_hw_node/enable "{}"
 rosservice call /canopen_hw_node/resume "{}"
 ```
 
