@@ -338,6 +338,10 @@ bool CanopenMaster::ResumeAll() {
 }
 
 bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
+  return ResetAllFaults(detail);
+}
+
+bool CanopenMaster::ResetAllFaults(std::string* detail) {
   if (detail) {
     detail->clear();
   }
@@ -368,13 +372,9 @@ bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
       is_fault = (st == CiA402State::Fault ||
                   st == CiA402State::FaultReactionActive);
     }
-
-    if (!is_fault) {
-      continue;
+    if (is_fault) {
+      fault_axes.emplace_back(i);
     }
-
-    axis->ResetFault();
-    fault_axes.emplace_back(i);
   }
 
   if (fault_axes.empty()) {
@@ -384,10 +384,36 @@ bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
     return true;
   }
 
+  for (const std::size_t axis_index : fault_axes) {
+    const auto& axis = axis_drivers_[axis_index];
+    if (!axis) {
+      continue;
+    }
+    axis->RequestDisable();
+    axis->SendControlword(kCtrl_DisableVoltage);
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+  for (const std::size_t axis_index : fault_axes) {
+    const auto& axis = axis_drivers_[axis_index];
+    if (!axis) {
+      continue;
+    }
+    axis->SendControlword(kCtrl_FaultReset);
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+  for (const std::size_t axis_index : fault_axes) {
+    const auto& axis = axis_drivers_[axis_index];
+    if (!axis) {
+      continue;
+    }
+    axis->SendControlword(kCtrl_DisableVoltage);
+  }
+
   const auto deadline = std::chrono::steady_clock::now() +
                         std::chrono::milliseconds(1500);
   std::vector<std::size_t> pending;
-
   while (std::chrono::steady_clock::now() < deadline) {
     pending.clear();
     SharedSnapshot snap;
@@ -399,7 +425,8 @@ bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
       bool still_fault = false;
       if (shared_state_ && axis_index < snap.feedback.size()) {
         still_fault = snap.feedback[axis_index].is_fault;
-      } else if (axis_index < axis_drivers_.size() && axis_drivers_[axis_index]) {
+      } else if (axis_index < axis_drivers_.size() &&
+                 axis_drivers_[axis_index]) {
         const CiA402State st = axis_drivers_[axis_index]->feedback_state();
         still_fault = (st == CiA402State::Fault ||
                        st == CiA402State::FaultReactionActive);
@@ -439,12 +466,7 @@ bool CanopenMaster::RecoverFaultedAxes(std::string* detail) {
     oss << "; try /init to reinitialize";
     *detail = oss.str();
   }
-
   return false;
-}
-
-bool CanopenMaster::ResetAllFaults(std::string* detail) {
-  return RecoverFaultedAxes(detail);
 }
 
 void CanopenMaster::EmergencyStop() {
