@@ -6,6 +6,7 @@
 using canopen_hw::CiA402State;
 using canopen_hw::CiA402Protocol;
 using canopen_hw::CiA402StateMachine;
+using canopen_hw::AxisIntent;
 using canopen_hw::kCtrl_DisableOperation;
 using canopen_hw::kCtrl_EnableOperation;
 using canopen_hw::kCtrl_Bit_Halt;
@@ -255,14 +256,90 @@ TEST(CiA402SM, IpModeSetsInterpolationEnableBitInOperationEnabled) {
   EXPECT_EQ(sm.controlword(), expected);
 }
 
-TEST(CiA402Protocol, AdapterMatchesEnableChainBehavior) {
+TEST(CiA402Protocol, EnableChainFollowsIntentLevel) {
   CiA402Protocol protocol;
-  protocol.set_target_mode(kMode_CSP);
-  protocol.request_enable();
+  CiA402Protocol::Input in{};
+  in.target_mode = kMode_CSP;
+  in.intent = AxisIntent::Run;
+  in.actual_position = 100;
 
-  protocol.Update(0x0040, kMode_CSP, 100);
-  EXPECT_EQ(protocol.controlword(), kCtrl_Shutdown);
+  in.statusword = 0x0040;
+  auto out = protocol.Process(in);
+  EXPECT_EQ(out.controlword, kCtrl_Shutdown);
+  EXPECT_FALSE(out.is_operational);
 
-  protocol.Update(0x0021, kMode_CSP, 100);
-  EXPECT_EQ(protocol.controlword(), kCtrl_EnableOperation);
+  in.statusword = 0x0021;
+  out = protocol.Process(in);
+  EXPECT_EQ(out.controlword, kCtrl_EnableOperation);
+  EXPECT_FALSE(out.is_operational);
+}
+
+TEST(CiA402Protocol, FaultStateNeverSendsFaultReset) {
+  CiA402Protocol protocol;
+  CiA402Protocol::Input in{};
+  in.target_mode = kMode_CSP;
+  in.intent = AxisIntent::Run;
+  in.statusword = 0x0008;
+  in.actual_position = 321;
+
+  const auto out = protocol.Process(in);
+  EXPECT_EQ(out.decoded_state, CiA402State::Fault);
+  EXPECT_TRUE(out.is_fault);
+  EXPECT_EQ(out.controlword, canopen_hw::kCtrl_DisableVoltage);
+  EXPECT_EQ(out.safe_target_position, 321);
+}
+
+TEST(CiA402Protocol, HaltToRunAdvancesEpochAndRelocks) {
+  CiA402Protocol protocol;
+  CiA402Protocol::Input in{};
+  in.target_mode = kMode_CSP;
+  in.statusword = 0x0027;
+  in.actual_position = 5000;
+  in.intent = AxisIntent::Halt;
+
+  auto out = protocol.Process(in);
+  ASSERT_TRUE(out.arm_epoch_advanced);
+  const uint32_t first_epoch = out.arm_epoch;
+  EXPECT_EQ(out.controlword,
+            static_cast<uint16_t>(kCtrl_EnableOperation | kCtrl_Bit_Halt));
+  EXPECT_FALSE(out.is_operational);
+
+  in.intent = AxisIntent::Run;
+  in.cmd_valid = true;
+  in.cmd_arm_epoch = first_epoch;
+  in.ros_target_position = 5000;
+  out = protocol.Process(in);
+
+  EXPECT_TRUE(out.arm_epoch_advanced);
+  EXPECT_GT(out.arm_epoch, first_epoch);
+  EXPECT_FALSE(out.is_operational);
+  EXPECT_EQ(out.safe_target_position, 5000);
+}
+
+TEST(CiA402Protocol, RunRequiresValidEpochBeforeUnlock) {
+  CiA402Protocol protocol;
+  CiA402Protocol::Input in{};
+  in.target_mode = kMode_CSP;
+  in.statusword = 0x0027;
+  in.actual_position = 1200;
+  in.intent = AxisIntent::Run;
+  in.ros_target_position = 1200;
+
+  auto out = protocol.Process(in);
+  const uint32_t epoch = out.arm_epoch;
+  ASSERT_TRUE(out.arm_epoch_advanced);
+  EXPECT_FALSE(out.is_operational);
+
+  // cmd_epoch 不匹配时保持锁定。
+  in.cmd_valid = true;
+  in.cmd_arm_epoch = epoch + 1;
+  out = protocol.Process(in);
+  EXPECT_FALSE(out.is_operational);
+  EXPECT_EQ(out.safe_target_position, 1200);
+
+  // epoch 匹配后允许透传并进入 operational。
+  in.cmd_arm_epoch = epoch;
+  out = protocol.Process(in);
+  EXPECT_TRUE(out.is_operational);
+  EXPECT_EQ(out.safe_target_position, 1200);
 }
