@@ -80,6 +80,32 @@ TEST(IpFollowJointTrajectoryExecutor, StepProducesProgressTowardsGoal) {
   EXPECT_LT(cmd.position, 1.0);
 }
 
+TEST(IpFollowJointTrajectoryExecutor, ConsecutiveStepsAdvanceBeyondFirstSample) {
+  IpFollowJointTrajectoryExecutor::Config config;
+  config.max_velocity = 2.0;
+  config.max_acceleration = 4.0;
+  config.max_jerk = 20.0;
+  config.goal_tolerance = 1e-4;
+  IpFollowJointTrajectoryExecutor executor(nullptr, nullptr, nullptr, config);
+
+  auto goal = MakeSingleJointGoal("joint_1");
+  IpFollowJointTrajectoryExecutor::State actual;
+  actual.position = 0.0;
+
+  std::string error;
+  ASSERT_TRUE(executor.startGoal(goal, actual, &error)) << error;
+
+  IpFollowJointTrajectoryExecutor::State first_cmd;
+  ASSERT_EQ(executor.step(actual, &first_cmd, &error),
+            IpFollowJointTrajectoryExecutor::StepStatus::kWorking);
+
+  IpFollowJointTrajectoryExecutor::State second_cmd;
+  ASSERT_EQ(executor.step(actual, &second_cmd, &error),
+            IpFollowJointTrajectoryExecutor::StepStatus::kWorking);
+
+  EXPECT_GT(second_cmd.position, first_cmd.position);
+}
+
 TEST(IpFollowJointTrajectoryExecutor, CancelClearsActiveGoal) {
   IpFollowJointTrajectoryExecutor executor(nullptr, nullptr, nullptr);
   auto goal = MakeSingleJointGoal("joint_1");
