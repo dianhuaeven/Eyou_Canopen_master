@@ -164,10 +164,6 @@ IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::ste
     return StepStatus::kIdle;
   }
 
-  input_.current_position[0] = actual.position;
-  input_.current_velocity[0] = actual.velocity;
-  input_.current_acceleration[0] = actual.acceleration;
-
   const auto result = otg_.update(input_, output_);
   if (result == ruckig::Result::ErrorInvalidInput ||
       result == ruckig::Result::Error ||
@@ -193,14 +189,20 @@ IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::ste
   output_.pass_to_input(input_);
 
   const auto& target = active_goal_->trajectory.points.back().positions.front();
-  const bool reached =
-      std::abs(command->position - target) <= config_.goal_tolerance;
-  if (result == ruckig::Result::Finished || reached) {
+  const bool actual_reached =
+      std::abs(actual.position - target) <= config_.goal_tolerance;
+  if (result == ruckig::Result::Finished && actual_reached) {
     active_goal_.reset();
     last_terminal_status_ = StepStatus::kFinished;
     last_terminal_error_.clear();
     exec_cv_.notify_all();
     return StepStatus::kFinished;
+  }
+
+  if (result == ruckig::Result::Finished) {
+    command->position = target;
+    command->velocity = 0.0;
+    command->acceleration = 0.0;
   }
 
   return StepStatus::kWorking;
