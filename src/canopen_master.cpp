@@ -437,6 +437,11 @@ bool CanopenMaster::ResetAllFaults(std::string* detail) {
     }
 
     if (pending.empty()) {
+      for (const std::size_t axis_index : fault_axes) {
+        if (axis_index < axis_drivers_.size() && axis_drivers_[axis_index]) {
+          axis_drivers_[axis_index]->ResetFault();
+        }
+      }
       return true;
     }
 

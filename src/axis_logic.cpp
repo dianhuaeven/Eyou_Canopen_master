@@ -74,7 +74,9 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
     feedback_cache_.mode_display = mode_display;
     feedback_cache_.state = out.decoded_state;
     feedback_cache_.is_operational = out.is_operational;
-    feedback_cache_.is_fault = out.is_fault;
+    if (out.is_fault) {
+      feedback_cache_.is_fault = true;  // 只允许置位，清除需通过 recover。
+    }
     feedback_cache_.arm_epoch = out.arm_epoch;
     fault_detected = feedback_cache_.is_fault;
 
@@ -243,6 +245,7 @@ void AxisLogic::ResetFault() {
   cmd_valid_ = false;
   cmd_arm_epoch_ = 0;
   health_.fault_reset_attempts.store(0, std::memory_order_relaxed);
+  feedback_cache_.is_fault = false;  // 显式清除，不依赖 RPDO 自动刷新。
 }
 
 CiA402State AxisLogic::feedback_state() const {
