@@ -648,7 +648,7 @@ AccessType=RW
 DataType=0x0005
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=1
+DefaultValue=0
 
 [1401]
 SubNumber=0x03
@@ -681,7 +681,7 @@ AccessType=RW
 DataType=0x0005
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=1
+DefaultValue=0
 
 [1402]
 SubNumber=0x03
@@ -1138,7 +1138,7 @@ AccessType=RW
 DataType=0x0005
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=1
+DefaultValue=0
 
 [1800sub3]
 ParameterName=Inhibit Time
@@ -1191,7 +1191,7 @@ AccessType=RW
 DataType=0x0005
 PDOMapping=0
 ObjFlags=0x00000000
-DefaultValue=1
+DefaultValue=0
 
 [1801sub3]
 ParameterName=Inhibit Time
