@@ -2,9 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
-#include <thread>
 #include <ctime>
+#include <filesystem>
 #include <sstream>
+#include <thread>
 
 #include "canopen_hw/cia402_defs.hpp"
 #include "canopen_hw/logging.hpp"
@@ -43,6 +44,16 @@ CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
 bool CanopenMaster::Start() {
   if (running_.load()) {
     return true;
+  }
+
+  if (config_.master_dcf_path.empty()) {
+    CANOPEN_LOG_ERROR("CanopenMaster start failed: master_dcf_path is empty");
+    return false;
+  }
+  if (!std::filesystem::exists(config_.master_dcf_path)) {
+    CANOPEN_LOG_ERROR("CanopenMaster start failed: master DCF not found: {}",
+                      config_.master_dcf_path);
+    return false;
   }
 
   try {
