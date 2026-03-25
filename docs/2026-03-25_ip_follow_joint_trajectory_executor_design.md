@@ -101,8 +101,8 @@ AxisDriver / AxisLogic
 
 执行器直接放在 `Eyou_Canopen_Master` 包内：
 
-- `include/canopen_hw/ip_follow_joint_trajectory_executor.hpp`
-- `src/ip_follow_joint_trajectory_executor.cpp`
+- `include/canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp`
+- `src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp`
 - `test/test_ip_follow_joint_trajectory_executor.cpp`
 
 第一阶段不做单独 package，也不做 ros_control plugin。

@@ -59,8 +59,8 @@
 
 涉及文件：
 
-- `include/canopen_hw/ip_follow_joint_trajectory_executor.hpp`
-- `src/ip_follow_joint_trajectory_executor.cpp`
+- `include/canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp`
+- `src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp`
 - `test/test_ip_follow_joint_trajectory_executor.cpp`
 - `package.xml`
 - `CMakeLists.txt`
@@ -91,8 +91,8 @@ ctest -R "^OperationalCoordinator\\.|^CiA402Protocol\\.|^AxisLogicTest\\.|^Robot
 
 涉及文件：
 
-- `include/canopen_hw/ip_follow_joint_trajectory_executor.hpp`
-- `src/ip_follow_joint_trajectory_executor.cpp`
+- `include/canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp`
+- `src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp`
 - `test/test_ip_follow_joint_trajectory_executor.cpp`
 
 编译与验证：
@@ -135,8 +135,8 @@ ctest -R "^OperationalCoordinator\\.|^CiA402Protocol\\.|^AxisLogicTest\\.|^Robot
 
 - `include/canopen_hw/canopen_robot_hw_ros.hpp`
 - `src/canopen_robot_hw_ros.cpp`
-- `include/canopen_hw/ip_follow_joint_trajectory_executor.hpp`
-- `src/ip_follow_joint_trajectory_executor.cpp`
+- `include/canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp`
+- `src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp`
 - `src/canopen_hw_ros_node.cpp`
 
 编译与验证：
@@ -271,8 +271,8 @@ read -> cm.update -> ip_executor.update -> write
 
 当前 executor 实现涉及的核心文件如下：
 
-- `include/canopen_hw/ip_follow_joint_trajectory_executor.hpp`
-- `src/ip_follow_joint_trajectory_executor.cpp`
+- `include/canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp`
+- `src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp`
 - `test/test_ip_follow_joint_trajectory_executor.cpp`
 - `include/canopen_hw/canopen_robot_hw_ros.hpp`
 - `src/canopen_robot_hw_ros.cpp`

@@ -63,8 +63,8 @@
 内容：
 
 - 新增：
-  - `include/canopen_hw/ip_follow_joint_trajectory_executor.hpp`
-  - `src/ip_follow_joint_trajectory_executor.cpp`
+- `include/canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp`
+- `src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp`
 - 定义：
   - action server 骨架
   - 单轴状态机骨架
