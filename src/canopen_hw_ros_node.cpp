@@ -111,6 +111,12 @@ int main(int argc, char** argv) {
   std::unique_ptr<canopen_hw::IpFollowJointTrajectoryExecutor> ip_executor;
   if (use_ip_executor) {
     canopen_hw::IpFollowJointTrajectoryExecutor::Config exec_cfg;
+    exec_cfg.joint_names.clear();
+    exec_cfg.joint_indices.clear();
+    exec_cfg.max_velocities.clear();
+    exec_cfg.max_accelerations.clear();
+    exec_cfg.max_jerks.clear();
+    exec_cfg.goal_tolerances.clear();
     exec_cfg.action_ns = ip_executor_action_ns;
     exec_cfg.command_rate_hz = ip_executor_rate_hz;
     exec_cfg.joint_names.reserve(master_cfg.joints.size());
