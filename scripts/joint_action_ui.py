@@ -104,6 +104,7 @@ class JointActionUi:
         self.joint_set = set(self.joint_names)
 
         self.lock = threading.Lock()
+        self.action_client_gen = 0
         self.server_connected = False
         self.goal_state_text = "IDLE"
         self.service_status_text = "READY"
@@ -126,27 +127,25 @@ class JointActionUi:
         self.fault_vars: Dict[str, tk.StringVar] = {}
         self.hb_vars: Dict[str, tk.StringVar] = {}
 
+        self.action_ns_var = tk.StringVar(value=action_ns)
         self.server_var = tk.StringVar(value="DISCONNECTED")
         self.goal_state_var = tk.StringVar(value=self.goal_state_text)
         self.service_status_var = tk.StringVar(value=self.service_status_text)
         self.duration_var = tk.StringVar(value=f"{self.goal_duration_default:.3f}")
         self.mode_joint_var = tk.StringVar(value=self.joint_names[0])
         self.mode_value_var = tk.StringVar(value="7")
+        self.action_candidates: List[str] = []
 
-        self.client = actionlib.SimpleActionClient(action_ns, FollowJointTrajectoryAction)
+        self.client = None
+        self.feedback_sub = None
+        self.reconnect_action_client(action_ns)
         self.joint_state_sub = rospy.Subscriber("/joint_states", JointState, self.on_joint_state, queue_size=1)
         self.diag_sub = rospy.Subscriber("/diagnostics", DiagnosticArray, self.on_diagnostics, queue_size=10)
-        self.feedback_sub = rospy.Subscriber(
-            f"{action_ns}/feedback",
-            FollowJointTrajectoryActionFeedback,
-            self.on_action_feedback,
-            queue_size=10,
-        )
 
         self.build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        threading.Thread(target=self.wait_action_server, daemon=True).start()
+        self.refresh_action_candidates()
         self.root.after(self.refresh_ms, self.refresh_ui)
 
     def build_ui(self) -> None:
@@ -159,15 +158,24 @@ class JointActionUi:
         ttk.Label(top, text="joints.yaml").grid(row=0, column=0, sticky="w")
         ttk.Label(top, text=self.yaml_path).grid(row=0, column=1, sticky="w")
         ttk.Label(top, text="action_ns").grid(row=1, column=0, sticky="w")
-        ttk.Label(top, text=self.action_ns).grid(row=1, column=1, sticky="w")
+        self.action_combo = ttk.Combobox(
+            top,
+            width=56,
+            textvariable=self.action_ns_var,
+            state="normal",
+        )
+        self.action_combo.grid(row=1, column=1, sticky="ew")
+        ttk.Button(top, text="应用", command=self.apply_action_ns).grid(row=1, column=2, sticky="w", padx=4)
+        ttk.Button(top, text="刷新候选", command=self.refresh_action_candidates).grid(row=1, column=3, sticky="w", padx=4)
+
         ttk.Label(top, text="service_ns").grid(row=2, column=0, sticky="w")
         ttk.Label(top, text=self.service_ns).grid(row=2, column=1, sticky="w")
-        ttk.Label(top, text="server").grid(row=0, column=2, sticky="w", padx=(12, 0))
-        ttk.Label(top, textvariable=self.server_var).grid(row=0, column=3, sticky="w")
-        ttk.Label(top, text="goal").grid(row=1, column=2, sticky="w", padx=(12, 0))
-        ttk.Label(top, textvariable=self.goal_state_var).grid(row=1, column=3, sticky="w")
-        ttk.Label(top, text="service").grid(row=2, column=2, sticky="w", padx=(12, 0))
-        ttk.Label(top, textvariable=self.service_status_var).grid(row=2, column=3, sticky="w")
+        ttk.Label(top, text="server").grid(row=0, column=4, sticky="w", padx=(12, 0))
+        ttk.Label(top, textvariable=self.server_var).grid(row=0, column=5, sticky="w")
+        ttk.Label(top, text="goal").grid(row=1, column=4, sticky="w", padx=(12, 0))
+        ttk.Label(top, textvariable=self.goal_state_var).grid(row=1, column=5, sticky="w")
+        ttk.Label(top, text="service").grid(row=2, column=4, sticky="w", padx=(12, 0))
+        ttk.Label(top, textvariable=self.service_status_var).grid(row=2, column=5, sticky="w")
 
         ctrl = ttk.Frame(self.root, padding=8)
         ctrl.grid(row=1, column=0, sticky="ew")
@@ -274,12 +282,87 @@ class JointActionUi:
         table.columnconfigure(6, weight=1)
         table.columnconfigure(10, weight=1)
 
-    def wait_action_server(self) -> None:
+    def wait_action_server(self, gen: int, client) -> None:
         while not rospy.is_shutdown():
-            if self.client.wait_for_server(rospy.Duration(0.5)):
-                with self.lock:
-                    self.server_connected = True
+            if gen != self.action_client_gen:
                 return
+            if client.wait_for_server(rospy.Duration(0.5)):
+                with self.lock:
+                    if gen == self.action_client_gen:
+                        self.server_connected = True
+                return
+
+    def reconnect_action_client(self, action_ns: str) -> None:
+        action_ns = normalize_action_ns(action_ns)
+
+        with self.lock:
+            self.action_ns = action_ns
+            self.action_ns_var.set(action_ns)
+            self.server_connected = False
+            self.goal_state_text = "IDLE"
+            self.action_client_gen += 1
+            gen = self.action_client_gen
+
+        if self.feedback_sub is not None:
+            try:
+                self.feedback_sub.unregister()
+            except Exception:
+                pass
+            self.feedback_sub = None
+
+        client = actionlib.SimpleActionClient(action_ns, FollowJointTrajectoryAction)
+        self.client = client
+        self.feedback_sub = rospy.Subscriber(
+            f"{action_ns}/feedback",
+            FollowJointTrajectoryActionFeedback,
+            self.on_action_feedback,
+            queue_size=10,
+        )
+        threading.Thread(target=self.wait_action_server, args=(gen, client), daemon=True).start()
+
+    def refresh_action_candidates(self) -> None:
+        candidates = set()
+        candidates.add(normalize_action_ns(self.action_ns_var.get()))
+        try:
+            configured = rospy.get_param(
+                "/canopen_hw_node/ip_executor_action_ns",
+                "/arm_position_controller/follow_joint_trajectory",
+            )
+            candidates.add(normalize_action_ns(configured))
+        except Exception:
+            pass
+
+        try:
+            for topic_name, topic_type in rospy.get_published_topics():
+                if (
+                    topic_type == "control_msgs/FollowJointTrajectoryActionGoal"
+                    and topic_name.endswith("/goal")
+                ):
+                    candidates.add(normalize_action_ns(topic_name[:-5]))
+                elif (
+                    topic_type == "control_msgs/FollowJointTrajectoryActionFeedback"
+                    and topic_name.endswith("/feedback")
+                ):
+                    candidates.add(normalize_action_ns(topic_name[:-9]))
+        except Exception as e:
+            self.set_service_status(f"refresh topics failed: {e}")
+            return
+
+        self.action_candidates = sorted(candidates)
+        self.action_combo["values"] = self.action_candidates
+        self.set_service_status(f"action candidates: {len(self.action_candidates)}")
+
+    def apply_action_ns(self) -> None:
+        raw = self.action_ns_var.get().strip()
+        if not raw:
+            messagebox.showerror("action_ns", "action_ns must not be empty")
+            return
+        try:
+            self.reconnect_action_client(raw)
+            self.refresh_action_candidates()
+            self.set_service_status(f"action_ns switched: {self.action_ns}")
+        except Exception as e:
+            messagebox.showerror("action_ns", str(e))
 
     def on_joint_state(self, msg: JointState) -> None:
         with self.lock:
@@ -355,6 +438,9 @@ class JointActionUi:
             messagebox.showerror("invalid duration", "duration must be > 0")
             return
 
+        if self.client is None:
+            messagebox.showwarning("action server", "action client is not initialized")
+            return
         if not self.server_connected:
             messagebox.showwarning("action server", f"action server not connected: {self.action_ns}")
             return
@@ -375,7 +461,8 @@ class JointActionUi:
         self.client.send_goal(goal, done_cb=self.on_goal_done, active_cb=self.on_goal_active)
 
     def cancel_goal(self) -> None:
-        self.client.cancel_all_goals()
+        if self.client is not None:
+            self.client.cancel_all_goals()
         self.set_goal_state("CANCEL_SENT")
 
     def set_service_status(self, text: str) -> None:
@@ -457,9 +544,15 @@ class JointActionUi:
 
     def on_close(self) -> None:
         try:
-            self.client.cancel_all_goals()
+            if self.client is not None:
+                self.client.cancel_all_goals()
         except Exception:
             pass
+        if self.feedback_sub is not None:
+            try:
+                self.feedback_sub.unregister()
+            except Exception:
+                pass
         rospy.signal_shutdown("ui closed")
         self.root.quit()
         self.root.destroy()
