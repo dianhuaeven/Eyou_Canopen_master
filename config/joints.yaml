@@ -20,3 +20,7 @@ joints:
     max_velocity_for_clamp: 500000
     velocity_scale: 1.0
     torque_scale: 1.0
+    ip_max_velocity: 1.0
+    ip_max_acceleration: 2.0
+    ip_max_jerk: 10.0
+    ip_goal_tolerance: 0.001

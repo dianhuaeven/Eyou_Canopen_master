@@ -175,6 +175,18 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
       if (joint["torque_scale"]) {
         jcfg.torque_scale = joint["torque_scale"].as<double>();
       }
+      if (joint["ip_max_velocity"]) {
+        jcfg.ip_max_velocity = joint["ip_max_velocity"].as<double>();
+      }
+      if (joint["ip_max_acceleration"]) {
+        jcfg.ip_max_acceleration = joint["ip_max_acceleration"].as<double>();
+      }
+      if (joint["ip_max_jerk"]) {
+        jcfg.ip_max_jerk = joint["ip_max_jerk"].as<double>();
+      }
+      if (joint["ip_goal_tolerance"]) {
+        jcfg.ip_goal_tolerance = joint["ip_goal_tolerance"].as<double>();
+      }
     } catch (const YAML::Exception& e) {
       std::ostringstream oss;
       oss << "invalid field type at joints[" << axis_index << "]: " << e.what();

@@ -98,57 +98,34 @@ int main(int argc, char** argv) {
   bool auto_release = false;
   bool use_ip_executor = false;
   double ip_executor_rate_hz = master_cfg.loop_hz;
-  double ip_executor_max_velocity = 1.0;
-  double ip_executor_max_acceleration = 2.0;
-  double ip_executor_max_jerk = 10.0;
-  double ip_executor_goal_tolerance = 1e-3;
   std::string ip_executor_action_ns =
       "arm_position_controller/follow_joint_trajectory";
-  std::string ip_executor_joint_name =
-      joint_names.empty() ? std::string("joint_1") : joint_names.front();
   pnh.param("auto_init", auto_init, false);
   pnh.param("auto_enable", auto_enable, false);
   pnh.param("auto_release", auto_release, false);
   pnh.param("use_ip_executor", use_ip_executor, false);
   pnh.param("ip_executor_rate_hz", ip_executor_rate_hz, ip_executor_rate_hz);
-  pnh.param("ip_executor_max_velocity", ip_executor_max_velocity,
-            ip_executor_max_velocity);
-  pnh.param("ip_executor_max_acceleration", ip_executor_max_acceleration,
-            ip_executor_max_acceleration);
-  pnh.param("ip_executor_max_jerk", ip_executor_max_jerk,
-            ip_executor_max_jerk);
-  pnh.param("ip_executor_goal_tolerance", ip_executor_goal_tolerance,
-            ip_executor_goal_tolerance);
   pnh.param("ip_executor_action_ns", ip_executor_action_ns,
             ip_executor_action_ns);
-  pnh.param("ip_executor_joint_name", ip_executor_joint_name,
-            ip_executor_joint_name);
 
-  std::size_t ip_executor_joint_index = 0;
-  const auto joint_it =
-      std::find(joint_names.begin(), joint_names.end(), ip_executor_joint_name);
-  if (joint_it != joint_names.end()) {
-    ip_executor_joint_index =
-        static_cast<std::size_t>(std::distance(joint_names.begin(), joint_it));
-  } else if (use_ip_executor) {
-    CANOPEN_LOG_ERROR("ip_executor_joint_name '{}' not found in joints.yaml",
-                      ip_executor_joint_name);
-    return 1;
-  }
-
-  std::unique_ptr<canopen_hw::IpFollowJointTrajectoryExecutor> ip_executor;
+  std::vector<std::unique_ptr<canopen_hw::IpFollowJointTrajectoryExecutor>> ip_executors;
   if (use_ip_executor) {
-    canopen_hw::IpFollowJointTrajectoryExecutor::Config exec_cfg;
-    exec_cfg.action_ns = ip_executor_action_ns;
-    exec_cfg.joint_name = ip_executor_joint_name;
-    exec_cfg.joint_index = ip_executor_joint_index;
-    exec_cfg.command_rate_hz = ip_executor_rate_hz;
-    exec_cfg.max_velocity = ip_executor_max_velocity;
-    exec_cfg.max_acceleration = ip_executor_max_acceleration;
-    exec_cfg.max_jerk = ip_executor_max_jerk;
-    exec_cfg.goal_tolerance = ip_executor_goal_tolerance;
-    ip_executor = std::make_unique<canopen_hw::IpFollowJointTrajectoryExecutor>(
-        &pnh, &robot_hw_ros, &loop_mtx, exec_cfg);
+    for (std::size_t i = 0; i < master_cfg.joints.size(); ++i) {
+      const auto& jcfg = master_cfg.joints[i];
+      canopen_hw::IpFollowJointTrajectoryExecutor::Config exec_cfg;
+      exec_cfg.joint_name = jcfg.name;
+      exec_cfg.joint_index = i;
+      exec_cfg.command_rate_hz = ip_executor_rate_hz;
+      exec_cfg.max_velocity = jcfg.ip_max_velocity;
+      exec_cfg.max_acceleration = jcfg.ip_max_acceleration;
+      exec_cfg.max_jerk = jcfg.ip_max_jerk;
+      exec_cfg.goal_tolerance = jcfg.ip_goal_tolerance;
+      // action_ns 按惯例为 <action_ns_base>/<joint_name>/follow_joint_trajectory
+      exec_cfg.action_ns = ip_executor_action_ns + "/" + jcfg.name;
+      ip_executors.push_back(
+          std::make_unique<canopen_hw::IpFollowJointTrajectoryExecutor>(
+              &pnh, &robot_hw_ros, &loop_mtx, exec_cfg));
+    }
   }
 
   if ((auto_enable || auto_release) && !auto_init) {
@@ -274,8 +251,10 @@ int main(int argc, char** argv) {
       coordinator.ComputeIntents();
       robot_hw_ros.read(now, period);
       cm.update(now, period);
-      if (ip_executor) {
-        ip_executor->update(now, period);
+      if (!ip_executors.empty()) {
+        for (auto& exec : ip_executors) {
+          exec->update(now, period);
+        }
       }
       robot_hw_ros.write(now, period);
       diag_updater.update();

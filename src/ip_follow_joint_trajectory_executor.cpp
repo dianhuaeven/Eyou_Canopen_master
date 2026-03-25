@@ -126,6 +126,13 @@ bool IpFollowJointTrajectoryExecutor::startGoal(
   input_.max_acceleration[0] = config_.max_acceleration;
   input_.max_jerk[0] = config_.max_jerk;
 
+  const double t = target_point.time_from_start.toSec();
+  if (t > 0.0) {
+    input_.minimum_duration = t;
+  } else {
+    input_.minimum_duration.reset();
+  }
+
   if (!otg_.validate_input(input_)) {
     active_goal_.reset();
     if (error) {
