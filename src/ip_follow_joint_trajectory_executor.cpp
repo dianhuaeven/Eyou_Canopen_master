@@ -187,6 +187,7 @@ IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::ste
   command->position = output_.new_position[0];
   command->velocity = output_.new_velocity[0];
   command->acceleration = output_.new_acceleration[0];
+  last_trajectory_time_ = output_.time;
 
   output_.pass_to_input(input_);
 
@@ -207,6 +208,40 @@ IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::ste
 bool IpFollowJointTrajectoryExecutor::hasActiveGoal() const {
   std::lock_guard<std::mutex> lk(exec_mtx_);
   return active_goal_.has_value();
+}
+
+void IpFollowJointTrajectoryExecutor::publishFeedback(
+    const State& actual, const State& command) const {
+  if (!server_ || !server_->isActive()) {
+    return;
+  }
+
+  control_msgs::FollowJointTrajectoryFeedback feedback;
+  feedback.joint_names = {config_.joint_name};
+  feedback.desired.positions = {command.position};
+  feedback.desired.velocities = {command.velocity};
+  feedback.desired.accelerations = {command.acceleration};
+  feedback.desired.time_from_start = ros::Duration(last_trajectory_time_);
+
+  feedback.actual.positions = {actual.position};
+  feedback.actual.velocities = {actual.velocity};
+  feedback.actual.accelerations = {actual.acceleration};
+  feedback.actual.time_from_start = ros::Duration(last_trajectory_time_);
+
+  feedback.error.positions = {command.position - actual.position};
+  feedback.error.velocities = {command.velocity - actual.velocity};
+  feedback.error.accelerations = {command.acceleration - actual.acceleration};
+  feedback.error.time_from_start = ros::Duration(0.0);
+  server_->publishFeedback(feedback);
+}
+
+void IpFollowJointTrajectoryExecutor::holdCurrentPosition() {
+  if (hw_ == nullptr || loop_mtx_ == nullptr) {
+    return;
+  }
+  std::lock_guard<std::mutex> loop_lock(*loop_mtx_);
+  hw_->SetExternalPositionCommand(config_.joint_index,
+                                  hw_->joint_position(config_.joint_index));
 }
 
 void IpFollowJointTrajectoryExecutor::ExecuteGoal(const GoalConstPtr& goal) {
@@ -258,6 +293,7 @@ void IpFollowJointTrajectoryExecutor::ExecuteGoal(const GoalConstPtr& goal) {
     lk.unlock();
     if (server_->isPreemptRequested()) {
       cancelGoal();
+      holdCurrentPosition();
       control_msgs::FollowJointTrajectoryResult result;
       result.error_code = control_msgs::FollowJointTrajectoryResult::SUCCESSFUL;
       result.error_string = "goal preempted";
@@ -274,6 +310,7 @@ void IpFollowJointTrajectoryExecutor::ExecuteGoal(const GoalConstPtr& goal) {
     result.error_string = "goal completed";
     server_->setSucceeded(result, result.error_string);
   } else {
+    holdCurrentPosition();
     result.error_code =
         control_msgs::FollowJointTrajectoryResult::PATH_TOLERANCE_VIOLATED;
     result.error_string =

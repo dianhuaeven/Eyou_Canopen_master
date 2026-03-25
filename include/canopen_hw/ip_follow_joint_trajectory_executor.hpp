@@ -70,6 +70,8 @@ class IpFollowJointTrajectoryExecutor {
   using Server = actionlib::SimpleActionServer<Action>;
 
   void ExecuteGoal(const GoalConstPtr& goal);
+  void publishFeedback(const State& actual, const State& command) const;
+  void holdCurrentPosition();
 
   CanopenRobotHwRos* hw_ = nullptr;
   std::mutex* loop_mtx_ = nullptr;
@@ -82,6 +84,7 @@ class IpFollowJointTrajectoryExecutor {
   std::optional<StepStatus> last_terminal_status_;
   std::string last_terminal_error_;
   double cycle_remainder_sec_ = 0.0;
+  double last_trajectory_time_ = 0.0;
   ruckig::Ruckig<1> otg_;
   ruckig::InputParameter<1> input_;
   ruckig::OutputParameter<1> output_;

@@ -6,6 +6,14 @@
   <arg name="auto_init" default="false"/>
   <arg name="auto_enable" default="false"/>
   <arg name="auto_release" default="false"/>
+  <arg name="use_ip_executor" default="false"/>
+  <arg name="ip_executor_action_ns" default="arm_position_controller/follow_joint_trajectory"/>
+  <arg name="ip_executor_joint_name" default="joint_1"/>
+  <arg name="ip_executor_rate_hz" default="100.0"/>
+  <arg name="ip_executor_max_velocity" default="1.0"/>
+  <arg name="ip_executor_max_acceleration" default="2.0"/>
+  <arg name="ip_executor_max_jerk" default="10.0"/>
+  <arg name="ip_executor_goal_tolerance" default="0.001"/>
 
   <arg name="robot_urdf" default="$(find Eyou_Canopen_Master)/urdf/robot.urdf"/>
   <arg name="use_robot_state_publisher" default="true"/>
@@ -22,15 +30,23 @@
     <param name="auto_init" value="$(arg auto_init)"/>
     <param name="auto_enable" value="$(arg auto_enable)"/>
     <param name="auto_release" value="$(arg auto_release)"/>
+    <param name="use_ip_executor" value="$(arg use_ip_executor)"/>
+    <param name="ip_executor_action_ns" value="$(arg ip_executor_action_ns)"/>
+    <param name="ip_executor_joint_name" value="$(arg ip_executor_joint_name)"/>
+    <param name="ip_executor_rate_hz" value="$(arg ip_executor_rate_hz)"/>
+    <param name="ip_executor_max_velocity" value="$(arg ip_executor_max_velocity)"/>
+    <param name="ip_executor_max_acceleration" value="$(arg ip_executor_max_acceleration)"/>
+    <param name="ip_executor_max_jerk" value="$(arg ip_executor_max_jerk)"/>
+    <param name="ip_executor_goal_tolerance" value="$(arg ip_executor_goal_tolerance)"/>
   </node>
 
   <node name="spawner_joint_state_controller" pkg="controller_manager" type="spawner"
         args="joint_state_controller" output="screen"/>
 
-  <node if="$(arg start_position_controller)" name="spawner_arm_position_controller"
+  <node if="$(eval arg('start_position_controller') and not arg('use_ip_executor'))" name="spawner_arm_position_controller"
         pkg="controller_manager" type="spawner"
         args="arm_position_controller" output="screen"/>
-  <node unless="$(arg start_position_controller)" name="spawner_arm_position_controller_stopped"
+  <node if="$(eval (not arg('start_position_controller')) and (not arg('use_ip_executor')))" name="spawner_arm_position_controller_stopped"
         pkg="controller_manager" type="spawner"
         args="--stopped arm_position_controller" output="screen"/>
 
