@@ -108,24 +108,30 @@ int main(int argc, char** argv) {
   pnh.param("ip_executor_action_ns", ip_executor_action_ns,
             ip_executor_action_ns);
 
-  std::vector<std::unique_ptr<canopen_hw::IpFollowJointTrajectoryExecutor>> ip_executors;
+  std::unique_ptr<canopen_hw::IpFollowJointTrajectoryExecutor> ip_executor;
   if (use_ip_executor) {
+    canopen_hw::IpFollowJointTrajectoryExecutor::Config exec_cfg;
+    exec_cfg.action_ns = ip_executor_action_ns;
+    exec_cfg.command_rate_hz = ip_executor_rate_hz;
+    exec_cfg.joint_names.reserve(master_cfg.joints.size());
+    exec_cfg.joint_indices.reserve(master_cfg.joints.size());
+    exec_cfg.max_velocities.reserve(master_cfg.joints.size());
+    exec_cfg.max_accelerations.reserve(master_cfg.joints.size());
+    exec_cfg.max_jerks.reserve(master_cfg.joints.size());
+    exec_cfg.goal_tolerances.reserve(master_cfg.joints.size());
+
     for (std::size_t i = 0; i < master_cfg.joints.size(); ++i) {
       const auto& jcfg = master_cfg.joints[i];
-      canopen_hw::IpFollowJointTrajectoryExecutor::Config exec_cfg;
-      exec_cfg.joint_name = jcfg.name;
-      exec_cfg.joint_index = i;
-      exec_cfg.command_rate_hz = ip_executor_rate_hz;
-      exec_cfg.max_velocity = jcfg.ip_max_velocity;
-      exec_cfg.max_acceleration = jcfg.ip_max_acceleration;
-      exec_cfg.max_jerk = jcfg.ip_max_jerk;
-      exec_cfg.goal_tolerance = jcfg.ip_goal_tolerance;
-      // action_ns 按惯例为 <action_ns_base>/<joint_name>/follow_joint_trajectory
-      exec_cfg.action_ns = ip_executor_action_ns + "/" + jcfg.name;
-      ip_executors.push_back(
-          std::make_unique<canopen_hw::IpFollowJointTrajectoryExecutor>(
-              &pnh, &robot_hw_ros, &loop_mtx, exec_cfg));
+      exec_cfg.joint_names.push_back(jcfg.name);
+      exec_cfg.joint_indices.push_back(i);
+      exec_cfg.max_velocities.push_back(jcfg.ip_max_velocity);
+      exec_cfg.max_accelerations.push_back(jcfg.ip_max_acceleration);
+      exec_cfg.max_jerks.push_back(jcfg.ip_max_jerk);
+      exec_cfg.goal_tolerances.push_back(jcfg.ip_goal_tolerance);
     }
+
+    ip_executor = std::make_unique<canopen_hw::IpFollowJointTrajectoryExecutor>(
+        &pnh, &robot_hw_ros, &loop_mtx, std::move(exec_cfg));
   }
 
   if ((auto_enable || auto_release) && !auto_init) {
@@ -251,10 +257,8 @@ int main(int argc, char** argv) {
       coordinator.ComputeIntents();
       robot_hw_ros.read(now, period);
       cm.update(now, period);
-      if (!ip_executors.empty()) {
-        for (auto& exec : ip_executors) {
-          exec->update(now, period);
-        }
+      if (ip_executor) {
+        ip_executor->update(now, period);
       }
       robot_hw_ros.write(now, period);
       diag_updater.update();

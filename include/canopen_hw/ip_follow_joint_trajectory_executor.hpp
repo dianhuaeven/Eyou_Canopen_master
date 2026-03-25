@@ -4,6 +4,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <vector>
 #include <condition_variable>
 
 #include <actionlib/server/simple_action_server.h>
@@ -21,9 +22,9 @@ namespace canopen_hw {
 class IpFollowJointTrajectoryExecutor {
  public:
   struct State {
-    double position = 0.0;
-    double velocity = 0.0;
-    double acceleration = 0.0;
+    std::vector<double> positions;
+    std::vector<double> velocities;
+    std::vector<double> accelerations;
   };
 
   enum class StepStatus {
@@ -37,13 +38,13 @@ class IpFollowJointTrajectoryExecutor {
     Config() = default;
 
     std::string action_ns{"ip_follow_joint_trajectory"};
-    std::string joint_name{"joint_1"};
-    std::size_t joint_index{0};
+    std::vector<std::string> joint_names{"joint_1"};
+    std::vector<std::size_t> joint_indices{0};
     double command_rate_hz{100.0};
-    double max_velocity{1.0};
-    double max_acceleration{2.0};
-    double max_jerk{10.0};
-    double goal_tolerance{1e-3};
+    std::vector<double> max_velocities{1.0};
+    std::vector<double> max_accelerations{2.0};
+    std::vector<double> max_jerks{10.0};
+    std::vector<double> goal_tolerances{1e-3};
   };
 
   IpFollowJointTrajectoryExecutor(ros::NodeHandle* pnh, CanopenRobotHwRos* hw,
@@ -52,11 +53,11 @@ class IpFollowJointTrajectoryExecutor {
                                   std::mutex* loop_mtx, Config config);
 
   void update(const ros::Time& now, const ros::Duration& period);
-  bool enabled() const { return server_ != nullptr; }
+  bool enabled() const { return config_valid_ && server_ != nullptr; }
 
   static bool ValidateGoal(
       const control_msgs::FollowJointTrajectoryGoal& goal,
-      const std::string& joint_name, std::string* error);
+      const std::vector<std::string>& joint_names, std::string* error);
 
   bool startGoal(const control_msgs::FollowJointTrajectoryGoal& goal,
                  const State& actual, std::string* error);
@@ -83,12 +84,15 @@ class IpFollowJointTrajectoryExecutor {
   std::optional<control_msgs::FollowJointTrajectoryGoal> active_goal_;
   std::optional<StepStatus> last_terminal_status_;
   std::string last_terminal_error_;
+  std::string config_error_;
+  bool config_valid_ = false;
   double cycle_remainder_sec_ = 0.0;
   double last_trajectory_time_ = 0.0;
   std::size_t waypoint_index_ = 0;
-  ruckig::Ruckig<1> otg_;
-  ruckig::InputParameter<1> input_;
-  ruckig::OutputParameter<1> output_;
+  std::vector<std::size_t> goal_to_config_indices_;
+  ruckig::Ruckig<0> otg_;
+  ruckig::InputParameter<0> input_;
+  ruckig::OutputParameter<0> output_;
 };
 
 }  // namespace canopen_hw
