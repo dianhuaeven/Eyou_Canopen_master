@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -52,6 +53,7 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
   uint64_t prev_command_sync_sequence_ = 0;
   bool prev_all_axes_halted_by_fault_ = false;
   int cmd_ready_guard_frames_ = 20;
+  double cmd_ready_position_threshold_rad_ = 1e-3;
 
   hardware_interface::JointStateInterface jnt_state_iface_;
   hardware_interface::PositionJointInterface pos_cmd_iface_;

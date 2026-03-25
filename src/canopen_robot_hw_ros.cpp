@@ -1,6 +1,7 @@
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 
 #include <cassert>
+#include <cmath>
 
 #include "canopen_hw/cia402_defs.hpp"
 
@@ -93,7 +94,9 @@ void CanopenRobotHwRos::read(const ros::Time& /*time*/,
     if (!cmd_ready_[i] && cmd_ready_guard_[i] > 0) {
       --cmd_ready_guard_[i];
     }
-    if (!cmd_ready_[i] && cmd_ready_guard_[i] == 0) {
+    const bool position_aligned =
+        std::abs(pos_cmd_[i] - pos_[i]) <= cmd_ready_position_threshold_rad_;
+    if (!cmd_ready_[i] && cmd_ready_guard_[i] == 0 && position_aligned) {
       cmd_ready_[i] = true;
     }
   }
@@ -106,6 +109,8 @@ void CanopenRobotHwRos::write(const ros::Time& /*time*/,
                                const ros::Duration& /*period*/) {
   const bool fault_halted = hw_->all_axes_halted_by_fault();
   for (std::size_t i = 0; i < pos_cmd_.size(); ++i) {
+    const bool ready =
+        cmd_ready_[i] && !fault_halted && (arm_epoch_cache_[i] != 0u);
     switch (active_mode_[i]) {
       case kMode_CSV:
         hw_->SetJointVelocityCommand(i, vel_cmd_[i]);
@@ -113,12 +118,12 @@ void CanopenRobotHwRos::write(const ros::Time& /*time*/,
       case kMode_IP:
       case kMode_CSP:
       default:
-        hw_->SetJointCommand(i, pos_cmd_[i]);
+        // 在 controller 完成位置对齐前，持续向下层发送当前位置，
+        // 避免 ros_control 持有的旧 setpoint（常见为 0）在 guard 结束后被放行。
+        hw_->SetJointCommand(i, ready ? pos_cmd_[i] : pos_[i]);
         break;
     }
 
-    const bool ready =
-        cmd_ready_[i] && !fault_halted && (arm_epoch_cache_[i] != 0u);
     hw_->SetCommandReady(i, ready);
     hw_->SetCommandEpoch(i, arm_epoch_cache_[i]);
   }
