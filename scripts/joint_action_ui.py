@@ -11,6 +11,7 @@ from typing import Dict, List
 import actionlib
 import rospy
 import yaml
+from Eyou_Canopen_Master.srv import SetMode
 from control_msgs.msg import (
     FollowJointTrajectoryAction,
     FollowJointTrajectoryActionFeedback,
@@ -18,6 +19,7 @@ from control_msgs.msg import (
 )
 from diagnostic_msgs.msg import DiagnosticArray
 from sensor_msgs.msg import JointState
+from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectoryPoint
 
 
@@ -34,6 +36,15 @@ def normalize_action_ns(action_ns: str) -> str:
     if not action_ns.startswith("/"):
         action_ns = "/" + action_ns
     return action_ns.rstrip("/")
+
+
+def normalize_service_ns(service_ns: str) -> str:
+    service_ns = service_ns.strip()
+    if not service_ns:
+        raise ValueError("service_ns is empty")
+    if not service_ns.startswith("/"):
+        service_ns = "/" + service_ns
+    return service_ns.rstrip("/")
 
 
 def load_joint_items(yaml_path: str) -> List[JointItem]:
@@ -73,6 +84,7 @@ class JointActionUi:
         root: tk.Tk,
         yaml_path: str,
         action_ns: str,
+        service_ns: str,
         slider_limit: float,
         slider_resolution: float,
         goal_duration: float,
@@ -81,6 +93,7 @@ class JointActionUi:
         self.root = root
         self.yaml_path = yaml_path
         self.action_ns = action_ns
+        self.service_ns = service_ns
         self.slider_limit = slider_limit
         self.slider_resolution = slider_resolution
         self.refresh_ms = refresh_ms
@@ -93,10 +106,12 @@ class JointActionUi:
         self.lock = threading.Lock()
         self.server_connected = False
         self.goal_state_text = "IDLE"
+        self.service_status_text = "READY"
 
         self.actual: Dict[str, float] = {n: 0.0 for n in self.joint_names}
         self.target: Dict[str, float] = {n: 0.0 for n in self.joint_names}
         self.diag_summary: Dict[str, str] = {n: "STALE:no data" for n in self.joint_names}
+        self.diag_all: Dict[str, str] = {n: "" for n in self.joint_names}
         self.diag_op: Dict[str, str] = {n: "-" for n in self.joint_names}
         self.diag_fault: Dict[str, str] = {n: "-" for n in self.joint_names}
         self.diag_hb: Dict[str, str] = {n: "-" for n in self.joint_names}
@@ -106,13 +121,17 @@ class JointActionUi:
         self.target_vars: Dict[str, tk.StringVar] = {}
         self.error_vars: Dict[str, tk.StringVar] = {}
         self.status_vars: Dict[str, tk.StringVar] = {}
+        self.diag_all_vars: Dict[str, tk.StringVar] = {}
         self.op_vars: Dict[str, tk.StringVar] = {}
         self.fault_vars: Dict[str, tk.StringVar] = {}
         self.hb_vars: Dict[str, tk.StringVar] = {}
 
         self.server_var = tk.StringVar(value="DISCONNECTED")
         self.goal_state_var = tk.StringVar(value=self.goal_state_text)
+        self.service_status_var = tk.StringVar(value=self.service_status_text)
         self.duration_var = tk.StringVar(value=f"{self.goal_duration_default:.3f}")
+        self.mode_joint_var = tk.StringVar(value=self.joint_names[0])
+        self.mode_value_var = tk.StringVar(value="7")
 
         self.client = actionlib.SimpleActionClient(action_ns, FollowJointTrajectoryAction)
         self.joint_state_sub = rospy.Subscriber("/joint_states", JointState, self.on_joint_state, queue_size=1)
@@ -141,10 +160,14 @@ class JointActionUi:
         ttk.Label(top, text=self.yaml_path).grid(row=0, column=1, sticky="w")
         ttk.Label(top, text="action_ns").grid(row=1, column=0, sticky="w")
         ttk.Label(top, text=self.action_ns).grid(row=1, column=1, sticky="w")
+        ttk.Label(top, text="service_ns").grid(row=2, column=0, sticky="w")
+        ttk.Label(top, text=self.service_ns).grid(row=2, column=1, sticky="w")
         ttk.Label(top, text="server").grid(row=0, column=2, sticky="w", padx=(12, 0))
         ttk.Label(top, textvariable=self.server_var).grid(row=0, column=3, sticky="w")
         ttk.Label(top, text="goal").grid(row=1, column=2, sticky="w", padx=(12, 0))
         ttk.Label(top, textvariable=self.goal_state_var).grid(row=1, column=3, sticky="w")
+        ttk.Label(top, text="service").grid(row=2, column=2, sticky="w", padx=(12, 0))
+        ttk.Label(top, textvariable=self.service_status_var).grid(row=2, column=3, sticky="w")
 
         ctrl = ttk.Frame(self.root, padding=8)
         ctrl.grid(row=1, column=0, sticky="ew")
@@ -154,9 +177,37 @@ class JointActionUi:
         ttk.Button(ctrl, text="发送 Action", command=self.send_goal).grid(row=0, column=3, padx=6)
         ttk.Button(ctrl, text="取消 Goal", command=self.cancel_goal).grid(row=0, column=4, padx=6)
 
+        srv = ttk.Frame(self.root, padding=8)
+        srv.grid(row=2, column=0, sticky="ew")
+        ttk.Button(srv, text="init", command=lambda: self.call_trigger_service("init")).grid(row=0, column=0, padx=2)
+        ttk.Button(srv, text="enable", command=lambda: self.call_trigger_service("enable")).grid(row=0, column=1, padx=2)
+        ttk.Button(srv, text="disable", command=lambda: self.call_trigger_service("disable")).grid(row=0, column=2, padx=2)
+        ttk.Button(srv, text="halt", command=lambda: self.call_trigger_service("halt")).grid(row=0, column=3, padx=2)
+        ttk.Button(srv, text="resume", command=lambda: self.call_trigger_service("resume")).grid(row=0, column=4, padx=2)
+        ttk.Button(srv, text="recover", command=lambda: self.call_trigger_service("recover")).grid(row=0, column=5, padx=2)
+        ttk.Button(srv, text="shutdown", command=lambda: self.call_trigger_service("shutdown")).grid(row=0, column=6, padx=2)
+
+        ttk.Label(srv, text="set_mode joint").grid(row=0, column=7, padx=(10, 2))
+        ttk.Combobox(
+            srv,
+            width=10,
+            textvariable=self.mode_joint_var,
+            values=self.joint_names,
+            state="readonly",
+        ).grid(row=0, column=8, padx=2)
+        ttk.Label(srv, text="mode").grid(row=0, column=9, padx=(6, 2))
+        ttk.Combobox(
+            srv,
+            width=4,
+            textvariable=self.mode_value_var,
+            values=["7", "8", "9", "10"],
+            state="readonly",
+        ).grid(row=0, column=10, padx=2)
+        ttk.Button(srv, text="set_mode", command=self.call_set_mode_service).grid(row=0, column=11, padx=(4, 0))
+
         table = ttk.Frame(self.root, padding=8)
-        table.grid(row=2, column=0, sticky="nsew")
-        self.root.rowconfigure(2, weight=1)
+        table.grid(row=3, column=0, sticky="nsew")
+        self.root.rowconfigure(3, weight=1)
         self.root.columnconfigure(0, weight=1)
 
         headers = [
@@ -166,6 +217,7 @@ class JointActionUi:
             "target(rad)",
             "error(rad)",
             "status",
+            "diag(all fields)",
             "op",
             "fault",
             "hb_lost",
@@ -181,6 +233,7 @@ class JointActionUi:
             self.target_vars[name] = tk.StringVar(value="0.0000")
             self.error_vars[name] = tk.StringVar(value="0.0000")
             self.status_vars[name] = tk.StringVar(value="STALE:no data")
+            self.diag_all_vars[name] = tk.StringVar(value="")
             self.op_vars[name] = tk.StringVar(value="-")
             self.fault_vars[name] = tk.StringVar(value="-")
             self.hb_vars[name] = tk.StringVar(value="-")
@@ -192,9 +245,16 @@ class JointActionUi:
             ttk.Label(table, textvariable=self.target_vars[name]).grid(row=row_idx, column=3, sticky="w", padx=2, pady=2)
             ttk.Label(table, textvariable=self.error_vars[name]).grid(row=row_idx, column=4, sticky="w", padx=2, pady=2)
             ttk.Label(table, textvariable=self.status_vars[name]).grid(row=row_idx, column=5, sticky="w", padx=2, pady=2)
-            ttk.Label(table, textvariable=self.op_vars[name]).grid(row=row_idx, column=6, sticky="w", padx=2, pady=2)
-            ttk.Label(table, textvariable=self.fault_vars[name]).grid(row=row_idx, column=7, sticky="w", padx=2, pady=2)
-            ttk.Label(table, textvariable=self.hb_vars[name]).grid(row=row_idx, column=8, sticky="w", padx=2, pady=2)
+            ttk.Label(
+                table,
+                textvariable=self.diag_all_vars[name],
+                anchor="w",
+                justify="left",
+                wraplength=420,
+            ).grid(row=row_idx, column=6, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.op_vars[name]).grid(row=row_idx, column=7, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.fault_vars[name]).grid(row=row_idx, column=8, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.hb_vars[name]).grid(row=row_idx, column=9, sticky="w", padx=2, pady=2)
 
             slider = tk.Scale(
                 table,
@@ -206,12 +266,13 @@ class JointActionUi:
                 variable=self.slider_vars[name],
                 length=300,
             )
-            slider.grid(row=row_idx, column=9, sticky="ew", padx=2, pady=2)
+            slider.grid(row=row_idx, column=10, sticky="ew", padx=2, pady=2)
             ttk.Entry(table, width=10, textvariable=self.slider_vars[name]).grid(
-                row=row_idx, column=10, sticky="w", padx=2, pady=2
+                row=row_idx, column=11, sticky="w", padx=2, pady=2
             )
 
-        table.columnconfigure(9, weight=1)
+        table.columnconfigure(6, weight=1)
+        table.columnconfigure(10, weight=1)
 
     def wait_action_server(self) -> None:
         while not rospy.is_shutdown():
@@ -242,6 +303,7 @@ class JointActionUi:
                     continue
                 kv = {x.key: x.value for x in status.values}
                 self.diag_summary[name] = f"{level_text(status.level)}:{status.message}"
+                self.diag_all[name] = ", ".join([f"{k}={v}" for k, v in kv.items()])
                 self.diag_op[name] = "1" if parse_bool(kv.get("is_operational", "false")) else "0"
                 self.diag_fault[name] = "1" if parse_bool(kv.get("is_fault", "false")) else "0"
                 self.diag_hb[name] = "1" if parse_bool(kv.get("heartbeat_lost_flag", "false")) else "0"
@@ -316,10 +378,66 @@ class JointActionUi:
         self.client.cancel_all_goals()
         self.set_goal_state("CANCEL_SENT")
 
+    def set_service_status(self, text: str) -> None:
+        with self.lock:
+            self.service_status_text = text
+
+    def _call_trigger_service_worker(self, service_name: str) -> None:
+        full_name = f"{self.service_ns}/{service_name}"
+        try:
+            rospy.wait_for_service(full_name, timeout=2.0)
+            proxy = rospy.ServiceProxy(full_name, Trigger)
+            res = proxy()
+            prefix = "OK" if res.success else "FAIL"
+            self.set_service_status(f"{service_name}: {prefix} {res.message}")
+        except Exception as e:
+            self.set_service_status(f"{service_name}: ERROR {e}")
+
+    def call_trigger_service(self, service_name: str) -> None:
+        threading.Thread(
+            target=self._call_trigger_service_worker,
+            args=(service_name,),
+            daemon=True,
+        ).start()
+
+    def _call_set_mode_service_worker(self, axis_index: int, mode: int) -> None:
+        full_name = f"{self.service_ns}/set_mode"
+        try:
+            rospy.wait_for_service(full_name, timeout=2.0)
+            proxy = rospy.ServiceProxy(full_name, SetMode)
+            res = proxy(axis_index=axis_index, mode=mode)
+            prefix = "OK" if res.success else "FAIL"
+            self.set_service_status(
+                f"set_mode[{axis_index}]={mode}: {prefix} {res.message}"
+            )
+        except Exception as e:
+            self.set_service_status(f"set_mode: ERROR {e}")
+
+    def call_set_mode_service(self) -> None:
+        joint = self.mode_joint_var.get().strip()
+        if joint not in self.joint_set:
+            messagebox.showerror("set_mode", f"invalid joint: {joint}")
+            return
+        try:
+            mode = int(self.mode_value_var.get().strip())
+        except ValueError:
+            messagebox.showerror("set_mode", "mode must be integer")
+            return
+        if mode not in (7, 8, 9, 10):
+            messagebox.showerror("set_mode", "mode must be one of 7/8/9/10")
+            return
+        axis_index = self.joint_names.index(joint)
+        threading.Thread(
+            target=self._call_set_mode_service_worker,
+            args=(axis_index, mode),
+            daemon=True,
+        ).start()
+
     def refresh_ui(self) -> None:
         with self.lock:
             self.server_var.set("CONNECTED" if self.server_connected else "DISCONNECTED")
             self.goal_state_var.set(self.goal_state_text)
+            self.service_status_var.set(self.service_status_text)
 
             for name in self.joint_names:
                 actual = self.actual.get(name, 0.0)
@@ -329,6 +447,7 @@ class JointActionUi:
                 self.target_vars[name].set(f"{target:.4f}")
                 self.error_vars[name].set(f"{error:.4f}")
                 self.status_vars[name].set(self.diag_summary.get(name, "STALE:no data"))
+                self.diag_all_vars[name].set(self.diag_all.get(name, ""))
                 self.op_vars[name].set(self.diag_op.get(name, "-"))
                 self.fault_vars[name].set(self.diag_fault.get(name, "-"))
                 self.hb_vars[name].set(self.diag_hb.get(name, "-"))
@@ -370,6 +489,12 @@ def resolve_action_ns(explicit_ns: str) -> str:
     return normalize_action_ns(param_ns)
 
 
+def resolve_service_ns(explicit_ns: str) -> str:
+    if explicit_ns:
+        return normalize_service_ns(explicit_ns)
+    return normalize_service_ns("/canopen_hw_node")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Joint trajectory action UI for Eyou_Canopen_Master."
@@ -383,6 +508,11 @@ def parse_args():
         "--action-ns",
         default="",
         help="FollowJointTrajectory action namespace. Default: /canopen_hw_node/ip_executor_action_ns",
+    )
+    parser.add_argument(
+        "--service-ns",
+        default="",
+        help="Service namespace root. Default: /canopen_hw_node",
     )
     parser.add_argument(
         "--slider-limit",
@@ -420,11 +550,13 @@ def main():
         raise RuntimeError(f"joints.yaml not found: {yaml_path}")
 
     action_ns = resolve_action_ns(args.action_ns)
+    service_ns = resolve_service_ns(args.service_ns)
     root = tk.Tk()
     JointActionUi(
         root=root,
         yaml_path=yaml_path,
         action_ns=action_ns,
+        service_ns=service_ns,
         slider_limit=args.slider_limit,
         slider_resolution=args.slider_resolution,
         goal_duration=args.goal_duration,
