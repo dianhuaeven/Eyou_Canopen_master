@@ -12,6 +12,7 @@
 #include "canopen_hw/boot_identity_diag.hpp"
 #include "canopen_hw/logging.hpp"
 #include "canopen_hw/pdo_mapping.hpp"
+#include "canopen_hw/position_channel_routing.hpp"
 
 namespace canopen_hw {
 
@@ -130,27 +131,35 @@ bool AxisDriver::WriteControlword(uint16_t cw) {
 }
 
 bool AxisDriver::WriteTargetPosition(int32_t pos) {
-  std::error_code ec;
   const int8_t target_mode = logic_.target_mode();
-  if (target_mode == kMode_IP) {
-    tpdo_mapped[0x60C1][1].Write(pos, ec);
-    if (!ec) {
-      tpdo_mapped[0x60C1][1].WriteEvent(ec);
-      return !ec;
-    }
-    // 兼容回退：若驱动器拒绝 0x60C1 PDO 映射，则临时退回 0x607A 通道。
-    const bool warned = ip_target_fallback_warned_.exchange(true);
-    if (!warned) {
-      CANOPEN_LOG_WARN(
-          "axis={} node={}: write 0x60C1:01 failed ({}), fallback to 0x607A",
-          axis_index_, static_cast<int>(id()), ec.message());
-    }
-    ec.clear();
-  }
-  tpdo_mapped[0x607A][0].Write(pos, ec);
-  if (ec) return false;
-  tpdo_mapped[0x607A][0].WriteEvent(ec);
-  return !ec;
+  return detail::WritePositionChannels(
+      target_mode, pos,
+      [this](int32_t target_pos) {
+        std::error_code ec;
+        tpdo_mapped[0x60C1][1].Write(target_pos, ec);
+        if (ec) {
+          return false;
+        }
+        tpdo_mapped[0x60C1][1].WriteEvent(ec);
+        return !ec;
+      },
+      [this](int32_t target_pos) {
+        std::error_code ec;
+        tpdo_mapped[0x607A][0].Write(target_pos, ec);
+        if (ec) {
+          return false;
+        }
+        tpdo_mapped[0x607A][0].WriteEvent(ec);
+        return !ec;
+      },
+      [this]() {
+        const bool warned = ip_target_fallback_warned_.exchange(true);
+        if (!warned) {
+          CANOPEN_LOG_WARN(
+              "axis={} node={}: write 0x60C1:01 failed, mirror only 0x607A",
+              axis_index_, static_cast<int>(id()));
+        }
+      });
 }
 
 bool AxisDriver::WriteTargetVelocity(int32_t vel) {

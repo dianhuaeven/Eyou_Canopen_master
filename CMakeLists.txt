@@ -175,6 +175,12 @@ add_executable(test_canopen_robot_hw_ros
 target_link_libraries(test_canopen_robot_hw_ros PRIVATE canopen_ros_adapter GTest::gtest_main)
 gtest_discover_tests(test_canopen_robot_hw_ros)
 
+add_executable(test_position_channel_routing
+  test/test_position_channel_routing.cpp
+)
+target_link_libraries(test_position_channel_routing PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_position_channel_routing)
+
 add_executable(test_unit_conversion
   test/test_unit_conversion.cpp
 )
