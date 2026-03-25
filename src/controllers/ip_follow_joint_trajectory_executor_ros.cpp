@@ -84,10 +84,13 @@ void IpFollowJointTrajectoryExecutor::publishFeedback(
 }
 
 void IpFollowJointTrajectoryExecutor::holdCurrentPosition() {
-  if (hw_ == nullptr) {
+  if (hw_ == nullptr || loop_mtx_ == nullptr) {
     return;
   }
 
+  // ExecuteGoal runs in actionlib callback thread; guard shared hw buffers
+  // against concurrent access from the realtime control loop.
+  std::lock_guard<std::mutex> lk(*loop_mtx_);
   for (std::size_t i = 0; i < config_.joint_indices.size(); ++i) {
     const double pos = hw_->joint_position(config_.joint_indices[i]);
     hw_->SetExternalPositionCommand(config_.joint_indices[i], pos);
