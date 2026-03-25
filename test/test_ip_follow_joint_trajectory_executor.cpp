@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <control_msgs/FollowJointTrajectoryAction.h>
+#include <ros/time.h>
 #include <trajectory_msgs/JointTrajectoryPoint.h>
 
 #include "canopen_hw/ip_follow_joint_trajectory_executor.hpp"
@@ -43,6 +44,52 @@ TEST(IpFollowJointTrajectoryExecutor, AcceptsSingleJointGoal) {
   EXPECT_TRUE(IpFollowJointTrajectoryExecutor::ValidateGoal(
       goal, "joint_1", &error));
   EXPECT_TRUE(error.empty());
+}
+
+TEST(IpFollowJointTrajectoryExecutor, StartsFromActualState) {
+  IpFollowJointTrajectoryExecutor executor(nullptr, nullptr, nullptr);
+  auto goal = MakeSingleJointGoal("joint_1");
+  IpFollowJointTrajectoryExecutor::State actual;
+  actual.position = 0.25;
+  actual.velocity = -0.1;
+
+  std::string error;
+  ASSERT_TRUE(executor.startGoal(goal, actual, &error)) << error;
+  EXPECT_TRUE(executor.hasActiveGoal());
+}
+
+TEST(IpFollowJointTrajectoryExecutor, StepProducesProgressTowardsGoal) {
+  IpFollowJointTrajectoryExecutor::Config config;
+  config.max_velocity = 2.0;
+  config.max_acceleration = 4.0;
+  config.max_jerk = 20.0;
+  config.goal_tolerance = 1e-4;
+  IpFollowJointTrajectoryExecutor executor(nullptr, nullptr, nullptr, config);
+
+  auto goal = MakeSingleJointGoal("joint_1");
+  IpFollowJointTrajectoryExecutor::State actual;
+  actual.position = 0.0;
+
+  std::string error;
+  ASSERT_TRUE(executor.startGoal(goal, actual, &error)) << error;
+
+  IpFollowJointTrajectoryExecutor::State cmd;
+  const auto status = executor.step(actual, &cmd, &error);
+  EXPECT_EQ(status, IpFollowJointTrajectoryExecutor::StepStatus::kWorking);
+  EXPECT_GT(cmd.position, 0.0);
+  EXPECT_LT(cmd.position, 1.0);
+}
+
+TEST(IpFollowJointTrajectoryExecutor, CancelClearsActiveGoal) {
+  IpFollowJointTrajectoryExecutor executor(nullptr, nullptr, nullptr);
+  auto goal = MakeSingleJointGoal("joint_1");
+  IpFollowJointTrajectoryExecutor::State actual;
+  std::string error;
+  ASSERT_TRUE(executor.startGoal(goal, actual, &error)) << error;
+  ASSERT_TRUE(executor.hasActiveGoal());
+
+  executor.cancelGoal();
+  EXPECT_FALSE(executor.hasActiveGoal());
 }
 
 }  // namespace
