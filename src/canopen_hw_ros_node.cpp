@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
   bool auto_enable = false;
   bool auto_release = false;
   bool use_ip_executor = false;
-  double ip_executor_rate_hz = 100.0;
+  double ip_executor_rate_hz = master_cfg.loop_hz;
   double ip_executor_max_velocity = 1.0;
   double ip_executor_max_acceleration = 2.0;
   double ip_executor_max_jerk = 10.0;

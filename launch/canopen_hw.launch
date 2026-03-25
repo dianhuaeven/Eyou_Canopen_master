@@ -11,7 +11,6 @@
   <arg name="use_ip_executor" default="false"/>
   <arg name="ip_executor_action_ns" default="arm_position_controller/follow_joint_trajectory"/>
   <arg name="ip_executor_joint_name" default="joint_1"/>
-  <arg name="ip_executor_rate_hz" default="100.0"/>
   <arg name="ip_executor_max_velocity" default="1.0"/>
   <arg name="ip_executor_max_acceleration" default="2.0"/>
   <arg name="ip_executor_max_jerk" default="10.0"/>
@@ -31,7 +30,6 @@
     <param name="use_ip_executor" value="$(arg use_ip_executor)"/>
     <param name="ip_executor_action_ns" value="$(arg ip_executor_action_ns)"/>
     <param name="ip_executor_joint_name" value="$(arg ip_executor_joint_name)"/>
-    <param name="ip_executor_rate_hz" value="$(arg ip_executor_rate_hz)"/>
     <param name="ip_executor_max_velocity" value="$(arg ip_executor_max_velocity)"/>
     <param name="ip_executor_max_acceleration" value="$(arg ip_executor_max_acceleration)"/>
     <param name="ip_executor_max_jerk" value="$(arg ip_executor_max_jerk)"/>
