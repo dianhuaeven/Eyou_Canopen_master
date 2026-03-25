@@ -112,7 +112,9 @@ target_link_libraries(canopen_hw_node
 # ── ROS1 适配层 ───────────────────────────────────────
 add_library(canopen_ros_adapter
   src/canopen_robot_hw_ros.cpp
-  src/ip_follow_joint_trajectory_executor.cpp
+  src/controllers/ip_follow_joint_trajectory_executor_validation.cpp
+  src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp
+  src/controllers/ip_follow_joint_trajectory_executor_ros.cpp
   src/service_gateway.cpp
 )
 target_include_directories(canopen_ros_adapter

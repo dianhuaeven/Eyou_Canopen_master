@@ -14,7 +14,7 @@
 #include "Eyou_Canopen_Master/SetMode.h"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 #include "canopen_hw/cia402_defs.hpp"
-#include "canopen_hw/ip_follow_joint_trajectory_executor.hpp"
+#include "canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"

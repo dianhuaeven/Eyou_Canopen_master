@@ -8,7 +8,7 @@
 #include <ros/time.h>
 #include <trajectory_msgs/JointTrajectoryPoint.h>
 
-#include "canopen_hw/ip_follow_joint_trajectory_executor.hpp"
+#include "canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp"
 
 namespace canopen_hw {
 namespace {
