@@ -1,85 +1,89 @@
 # 发布就绪评审清单
 
-> 适用于 canopen_hw 驱动层正式上线前的最终评审
-> 日期：2026-03-19
+更新时间：2026-03-25  
+适用范围：`Eyou_Canopen_Master`
 
 ---
 
-## 一、问题清零表
+## 1. 代码与提交状态
 
-基于 `quality_upgrade_plan.md` 中的全量问题清单，确认每项的处置状态。
-
-### P0 — 必须修复
-
-| # | 问题 | 修复 Commit | 状态 |
-|---|------|-------------|------|
-| P0-1 | PdoMappingReader 生命周期竞态（UAF） | C01 + C02 | ✅ 已修复 |
-| P0-2 | PublishSnapshot 命令覆盖竞态 | C03 | ✅ 已修复 |
-| P0-3 | assert() 测试在 Release 下空转 | C04 + C05 | ✅ 已修复 |
-
-### P1 — 应当修复
-
-| # | 问题 | 修复 Commit | 状态 |
-|---|------|-------------|------|
-| P1-1 | axis_count 无上限约束 | C07 | ✅ 已修复 |
-| P1-2 | node_id 映射逻辑脆弱 | C07 | ✅ 已修复 |
-| P1-3 | 缺少边界测试 | C06 | ✅ 已修复 |
-| P1-4 | 裸 iostream 日志 | C09 | ✅ 已修复 |
-| P1-5 | 缺少 CI 质量门 | C11 + C12 | ✅ 已修复 |
-| P1-6 | WaitForAllState busy-wait | C10 | ✅ 已修复 |
-| P1-7 | 配置结构冗余 | C08 | ✅ 已修复 |
-
-### P2 — 建议改进
-
-| # | 问题 | 修复 Commit | 状态 |
-|---|------|-------------|------|
-| P2-1 | -Wshadow 警告未消除 | C11 | ✅ 已修复 |
-| P2-2 | kCtrl 同值常量无注释 | C11 | ✅ 已修复 |
-| P2-3 | kAxisCount 硬编码 vs 运行时不一致 | — | ⚠️ 接受风险（见下） |
-| P2-4 | joints.yaml 只配了 1 轴 | C13 | ✅ 已修复 |
-| P2-5 | AbsDiff int32 截断 | C06 + C14 | ✅ 已修复 |
-| P2-6 | 缺少 Soak 和故障注入文档 | C13 | ✅ 已修复 |
+1. 工作区无非预期脏改动（允许现场参数文件如 `config/joints.yaml` 的单独本地差异）。
+2. 本次发布涉及的功能提交已按主题拆分（`feat/refactor/fix`）。
+3. 关键风险修复已纳入历史：
+   - IP executor 多轴化与模块拆分
+   - 生命周期缺失 DCF 导致的启动崩溃防护
+   - action 回调线程与主循环共享数据互斥保护
 
 ---
 
-## 二、风险接受清单
+## 2. 构建与测试门槛
 
-以下问题经评估决定接受风险，不在本轮修复：
+必过命令：
 
-| # | 问题 | 接受理由 |
-|---|------|----------|
-| P2-3 | `kAxisCount` 编译期硬编码 6 | 当前硬件固定为 6 轴，运行时通过 `active_axis_count_` 配置实际使用轴数，`kAxisCount` 仅为数组上界。后续支持动态轴数时再重构 |
-
----
-
-## 三、质量指标检查
-
-| 检查项 | 通过标准 | 状态 |
-|--------|----------|------|
-| 编译 | `-Wall -Wextra -Werror` 零警告 | ✅ |
-| 单元测试 | 29/29 通过 (Debug + Release) | ✅ |
-| CI | GitHub Actions Debug/Release 双构建通过 | ⬜ 待验证 |
-| clang-tidy | 无 bugprone/performance 类错误 | ⬜ 待验证 |
-| 8h Soak 测试 | 按 soak_test_plan.md 执行 | ⬜ 待执行 |
-| 故障注入测试 | 按 fault_injection_checklist.md 10 项全部通过 | ⬜ 待执行 |
-| 代码审查 | 线程安全、生命周期相关变更已 review | ⬜ 待执行 |
-
----
-
-## 四、发布前最终确认
-
+```bash
+cd ~/Robot24_catkin_ws
+catkin_make -DCATKIN_WHITELIST_PACKAGES=Eyou_Canopen_Master --no-color
 ```
+
+推荐最小回归集：
+
+```bash
+cd ~/Robot24_catkin_ws/build/Eyou_Canopen_Master
+ctest -R '^(CanopenRobotHwRos|IpFollowJointTrajectoryExecutor|LifecycleManager)\.' --output-on-failure
+```
+
+发布前完整回归（建议）：
+
+```bash
+cd ~/Robot24_catkin_ws/build/Eyou_Canopen_Master
+ctest --output-on-failure
+```
+
+---
+
+## 3. 配置与现场一致性检查
+
+1. `master.dcf` 存在且与当前驱动固件匹配。
+2. `joints.yaml` 轴数量、`node_id`、缩放参数、IP 约束参数与现场一致。
+3. 启动参数与目标模式匹配：
+   - 若走 JTC：`use_ip_executor=false`
+   - 若走 IP executor：`use_ip_executor=true`，并确认 action namespace 正确
+4. 启动后 `/diagnostics` 可见每轴健康数据。
+
+---
+
+## 4. 功能验收项
+
+1. 生命周期服务链路可用：`init -> enable -> resume -> halt/disable -> shutdown`。
+2. 故障路径可控：故障后 `recover -> enable -> resume` 行为符合预期。
+3. IP 模式下对象通道行为正确：
+   - 优先 `0x60C1:01`
+   - 失败时回退 `0x607A` 并有日志
+4. `use_ip_executor=true` 时，多轴 `FollowJointTrajectory` 可执行并反馈正常。
+
+---
+
+## 5. 压测与故障注入（发布前建议）
+
+1. 按 `docs/soak_test_plan.md` 跑 soak。
+2. 按 `docs/fault_injection_checklist.md` 完成故障注入。
+3. 对发现的问题补充回归测试后再发版。
+
+---
+
+## 6. 最终签核模板
+
+```text
 日期:        ____
 评审人:      ____
-Git Commit:  ____
+发布 Commit: ____
 
-[ ] 问题清零表中所有 P0/P1 项已修复并验证
-[ ] 风险接受清单已获技术负责人签字
-[ ] CI 管线通过（Debug + Release）
-[ ] 8 小时 Soak 测试通过
-[ ] 故障注入 10 个场景全部通过
-[ ] joints.yaml 参数已按实际硬件校准
-[ ] master.dcf 与驱动器固件版本匹配
+[ ] 构建通过
+[ ] 最小回归集通过
+[ ] 配置一致性检查通过
+[ ] 生命周期与故障恢复验收通过
+[ ] （建议）完整回归通过
+[ ] （建议）soak 与故障注入通过
 
 结论: [ ] 可发布  [ ] 不可发布
 备注: ____

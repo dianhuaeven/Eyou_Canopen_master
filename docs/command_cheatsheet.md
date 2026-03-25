@@ -1,6 +1,6 @@
 # CANopen 联调命令速查
 
-更新时间：2026-03-24  
+更新时间：2026-03-25  
 适用包：`Eyou_Canopen_Master`
 
 ## 1. CAN 启动与检查
@@ -91,6 +91,17 @@ roslaunch Eyou_Canopen_Master bringup.launch \
   loop_hz:=200.0 auto_init:=false auto_enable:=false auto_release:=false
 ```
 
+启用 IP 轨迹执行器：
+
+```bash
+roslaunch Eyou_Canopen_Master bringup.launch \
+  use_ip_executor:=true \
+  ip_executor_action_ns:=arm_position_controller/follow_joint_trajectory
+
+# 可选：覆盖执行器频率
+rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
+```
+
 ## 6. Service 调用
 
 列出服务：
@@ -123,7 +134,7 @@ rosservice call /canopen_hw_node/shutdown "{}"
 模式切换（白名单：`7/8/9/10`）：
 
 ```bash
-# 单轴切换到 IP
+# 指定轴切换到 IP
 rosservice call /canopen_hw_node/set_mode "{axis_index: 0, mode: 7}"
 
 # 全轴切换到 CSV
@@ -184,6 +195,24 @@ rostopic pub -1 /arm_position_controller/command trajectory_msgs/JointTrajectory
 ```bash
 rostopic pub -1 /arm_velocity_controller/command trajectory_msgs/JointTrajectory \
 "{joint_names: ['joint_1'], points: [{velocities: [0.5], time_from_start: {secs: 1, nsecs: 0}}]}"
+```
+
+发送多轴 `FollowJointTrajectory`（IP executor / MoveIt 路径）：
+
+```bash
+rostopic pub -1 /arm_position_controller/follow_joint_trajectory/goal \
+control_msgs/FollowJointTrajectoryActionGoal \
+"{
+  goal: {
+    trajectory: {
+      joint_names: ['joint_1','joint_2'],
+      points: [
+        {positions: [0.2, -0.1], time_from_start: {secs: 1, nsecs: 0}},
+        {positions: [0.4,  0.0], time_from_start: {secs: 2, nsecs: 0}}
+      ]
+    }
+  }
+}"
 ```
 
 ## 9. 一键联调顺序（推荐）

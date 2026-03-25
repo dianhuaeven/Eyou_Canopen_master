@@ -50,7 +50,7 @@ candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 - `rated_torque_nm`
 - `velocity_scale`
 - `torque_scale`
- - `canopen.verify_pdo_mapping`（启动时是否验证 PDO 映射）
+- `canopen.verify_pdo_mapping`（启动时是否验证 PDO 映射）
 
 建议每轴都填完整参数，避免默认值掩盖问题。
 
@@ -67,8 +67,8 @@ candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 ## 3. 生成 DCF
 
 ```bash
-dcfgen -S -r -d /home/dianhua/robot_test/config \
-       /home/dianhua/robot_test/config/master.yaml
+cd ~/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
+dcfgen -S -r -d . master.yaml
 ```
 
 说明：
@@ -107,7 +107,7 @@ source devel/setup.bash
 
 说明：
 - `--dcf` 必须指向存在的 DCF 文件，否则程序直接退出。
-- `--joints` 不存在时只报警，但仍可运行。
+- `--joints` 必须指向存在的 `joints.yaml`，否则程序直接退出。
 - 路径建议使用绝对路径，避免工作目录变化导致失败。
 
 ### 5.2 ROS 模式
@@ -123,10 +123,31 @@ rosservice call /canopen_hw_node/init "{}"
 可选参数：
 - `dcf_path:=<path>` — DCF 文件路径
 - `joints_path:=<path>` — joints.yaml 路径
-- `loop_hz:=100.0` — 控制循环频率
+- `loop_hz:=200.0` — 控制循环频率
 - `auto_init:=false|true` — 是否启动后自动 `~/init`（默认 `false`）
 - `auto_enable:=false|true` — 是否在 `auto_init` 后自动 `~/enable`（默认 `false`）
 - `auto_release:=false|true` — 是否在 `auto_enable` 后自动 `~/resume`（默认 `false`）
+- `use_ip_executor:=false|true` — 是否启用 IP 轨迹执行器（默认 `false`）
+- `ip_executor_action_ns:=arm_position_controller/follow_joint_trajectory` — action 名称
+
+节点私有参数（通过 ROS 参数服务器覆盖）：
+- `/canopen_hw_node/ip_executor_rate_hz` — 执行器更新频率（默认跟随 `loop_hz`）
+
+### 5.3 启用 IP 轨迹执行器（多轴）
+
+```bash
+roslaunch Eyou_Canopen_Master bringup.launch \
+  use_ip_executor:=true \
+  ip_executor_action_ns:=arm_position_controller/follow_joint_trajectory
+
+# 可选：单独覆盖 executor 频率
+rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
+```
+
+说明：
+- executor 为单实例多轴执行，轴数由 `joints.yaml` 的 `joints` 列表决定。
+- 每轴约束来自 `joints.yaml`：`ip_max_velocity/ip_max_acceleration/ip_max_jerk/ip_goal_tolerance`。
+- action goal 必须覆盖全部配置轴；`joint_names` 顺序可与配置不同，内部会做映射。
 
 ---
 
@@ -216,13 +237,14 @@ rosservice call /canopen_hw_node/resume "{}"
 - IP 模式位置目标优先走 `0x60C1:01`（RPDO2 映射）。  
 - 若驱动器拒绝 `0x60C1:01` PDO 写入，运行时会回退到 `0x607A`，并打印一次告警日志。  
 - `0x60C2:01`（插补周期，ms）在 boot 时通过 SDO 下发，取自 `joints.yaml` 的 `ip_interpolation_period_ms`（未配置时按 `loop_hz` 推导）。
+- 开启 `use_ip_executor:=true` 后，MoveIt / action client 直接向 `/<ip_executor_action_ns>` 发送 `FollowJointTrajectory` 即可。
 
 ### 6.3 Controllers
 
 | Controller | 类型 | 模式 | 默认状态 |
 |-----------|------|------|---------|
 | `joint_state_controller` | JointStateController | — | 启动 |
-| `arm_position_controller` | position_controllers/JointTrajectoryController | CSP | 启动 |
+| `arm_position_controller` | position_controllers/JointTrajectoryController | CSP | 默认启动（`use_ip_executor=false`） |
 | `arm_velocity_controller` | velocity_controllers/JointTrajectoryController | CSV | 已加载未启动 |
 
 ### 6.4 Diagnostics
@@ -372,6 +394,10 @@ catkin_make run_tests_Eyou_Canopen_Master
 
 ---
 
-## 13. D1~D9 联调记录
+## 13. 联调记录建议
 
-请参见 [docs/debug_notes.md](/home/dianhua/robot_test/docs/debug_notes.md) 的模板并按阶段记录。
+建议在项目 issue 或现场日志中固定记录以下内容：
+
+1. 启动参数（`dcf_path/joints_path/loop_hz/use_ip_executor`）。
+2. 关键 service 调用序列与时间戳。
+3. 故障时的 `candump` 片段、`/diagnostics` 快照与节点日志。

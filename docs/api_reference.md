@@ -63,6 +63,7 @@
 
 | 方法 | 说明 |
 |------|------|
+| `Start()` | 启动主站与事件循环；启动前会校验 `master_dcf_path` 非空且文件存在，失败时返回 false |
 | `GracefulShutdown(detail)` | 402 降级 + NMT Stop；超时返回 false 并给 detail |
 | `HaltAll()` / `ResumeAll()` | 全轴置/清 Halt bit（保持 Operation Enabled） |
 | `RecoverFaultedAxes(detail)` | 兼容入口，内部转发到 `ResetAllFaults` |
@@ -93,6 +94,28 @@
 |------|------|
 | `read()` | 观测 `command_sync_sequence`、`arm_epoch` 变化沿或 fault-halt 上升沿；触发时强制 `pos_cmd = pos`、`cmd_ready = false` 并重置 guard |
 | `write()` | 将 `valid/arm_epoch` 写回 SharedState；guard 未结束或 fault-halt 期间保持 `valid = false` |
+
+## IpFollowJointTrajectoryExecutor
+
+位置：
+- `include/canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp`
+- `src/controllers/ip_follow_joint_trajectory_executor_*.cpp`
+
+关键语义：
+- 一个 action goal 覆盖全轴（标准 `FollowJointTrajectory` 语义）。
+- 关节顺序可与配置不同，内部做 `goal joint -> config axis` 映射。
+- 动态 DOF：`Ruckig<0>`，轴数来自 `joints.yaml`。
+
+| 方法 / 配置 | 说明 |
+|------|------|
+| `Config.joint_names/joint_indices` | 执行器覆盖的关节与轴索引（由节点从 `master_cfg.joints` 聚合） |
+| `Config.max_velocities/max_accelerations/max_jerks` | 每轴 Ruckig 约束 |
+| `Config.goal_tolerances` | 每轴终点容差 |
+| `ValidateGoal()` | 校验关节集合、轨迹点尺寸、时间单调性 |
+| `startGoal()` | 从当前实际状态起步，初始化 Ruckig |
+| `step()` | 周期推进；多段轨迹切换；终点保持与完成判定 |
+| `cancelGoal()` | 清理活动目标并重置执行状态 |
+| `update()` | 节点循环入口：读取实际状态 -> 执行一步 -> 回写外部位置命令 |
 
 ## AxisLogic
 

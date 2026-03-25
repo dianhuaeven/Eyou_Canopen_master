@@ -1,6 +1,6 @@
 # YAML 配置指南
 
-日期：2026-03-17  
+日期：2026-03-25  
 范围：`config/master.yaml` 与 `config/joints.yaml`
 
 ---
@@ -24,7 +24,7 @@
 
 ```yaml
 options:
-  dcf_path: /home/dianhua/robot_test/config
+  dcf_path: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
   heartbeat_multiplier: 3.0
 
 master:
@@ -35,7 +35,7 @@ master:
 
 joint_1:
   node_id: 1
-  dcf: /home/dianhua/robot_test/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
@@ -97,9 +97,9 @@ joint_1:
 1) 修改 `master.sync_period`（单位微秒）。
 2) 重新运行 `dcfgen`：
 
-```
-dcfgen -S -r -d /home/dianhua/robot_test/config \
-       /home/dianhua/robot_test/config/master.yaml
+```bash
+cd ~/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
+dcfgen -S -r -d . master.yaml
 ```
 
 3) 启动时指定新的 `master.dcf`。
@@ -129,6 +129,7 @@ joints:
 `joints.yaml` 顶层 `canopen`（运行时生效）：
 - `interface`：CAN 接口名（例如 `can0`）。
 - `master_node_id`：主站节点号。
+- `loop_hz`：ROS 控制循环频率（Hz）。
 
 说明：
 - `bitrate` / `sync_period_us` 不属于运行时 `joints.yaml` 生效字段。
@@ -139,6 +140,10 @@ joints:
 - `rated_torque_nm`：额定扭矩，Nm。
 - `position_lock_threshold`：CSP 解锁阈值（ticks）。
 - `ip_interpolation_period_ms`：IP 模式插补周期（ms，对应 SDO `0x60C2:01`，范围 1..255）。
+- `ip_max_velocity`：IP 轨迹执行器每轴最大速度（rad/s）。
+- `ip_max_acceleration`：IP 轨迹执行器每轴最大加速度（rad/s²）。
+- `ip_max_jerk`：IP 轨迹执行器每轴最大 jerk（rad/s³）。
+- `ip_goal_tolerance`：IP 轨迹执行器每轴终点容差（rad）。
 - `max_velocity_for_clamp`：位置目标每周期限幅依据的最大速度（ticks/s，必须 > 0）。
 - `velocity_scale`：速度缩放（来自设备定义）。
 - `torque_scale`：力矩缩放（来自设备定义）。
@@ -149,7 +154,7 @@ joints:
 
 ### 3.3 解析行为
 
-- `joints` 为数组，顺序对应轴索引（默认 0~5）。
+- `joints` 为数组，顺序对应轴索引（0 开始，长度由 `joints` 数组决定）。
 - 若 `canopen.node_id` 未设置，则按顺序分配 node_id = index + 1。
 - `verify_pdo_mapping` 仅影响启动校验，不写入设备。
 - `ip_interpolation_period_ms` 未配置时，默认由 `loop_hz` 推导：
@@ -177,7 +182,7 @@ joints:
 ### 4.3 修改应用周期
 
 - 修改 `master.sync_period`（单位微秒）。
-- 保证应用线程周期（当前 100Hz）与 SYNC 对齐。
+- 保证应用线程周期（`joints.yaml` 的 `canopen.loop_hz`，可被 launch 参数覆盖）与 SYNC 对齐。
 
 ---
 
