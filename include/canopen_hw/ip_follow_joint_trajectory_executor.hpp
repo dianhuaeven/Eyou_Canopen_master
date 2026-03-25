@@ -85,6 +85,7 @@ class IpFollowJointTrajectoryExecutor {
   std::string last_terminal_error_;
   double cycle_remainder_sec_ = 0.0;
   double last_trajectory_time_ = 0.0;
+  std::size_t waypoint_index_ = 0;
   ruckig::Ruckig<1> otg_;
   ruckig::InputParameter<1> input_;
   ruckig::OutputParameter<1> output_;

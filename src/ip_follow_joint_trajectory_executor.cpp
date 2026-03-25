@@ -100,35 +100,29 @@ bool IpFollowJointTrajectoryExecutor::startGoal(
     return false;
   }
 
-  const auto& target_point = goal.trajectory.points.back();
-  if (target_point.positions.size() != 1u) {
-    if (error) {
-      *error = "last point must provide exactly one position";
-    }
-    return false;
-  }
-
   std::lock_guard<std::mutex> lk(exec_mtx_);
   active_goal_ = goal;
+  waypoint_index_ = 0;
   last_terminal_status_.reset();
   last_terminal_error_.clear();
   otg_.reset();
 
+  const auto& first_point = active_goal_->trajectory.points[0];
   input_.current_position[0] = actual.position;
   input_.current_velocity[0] = actual.velocity;
   input_.current_acceleration[0] = actual.acceleration;
-  input_.target_position[0] = target_point.positions[0];
+  input_.target_position[0] = first_point.positions[0];
   input_.target_velocity[0] =
-      target_point.velocities.empty() ? 0.0 : target_point.velocities[0];
+      first_point.velocities.empty() ? 0.0 : first_point.velocities[0];
   input_.target_acceleration[0] =
-      target_point.accelerations.empty() ? 0.0 : target_point.accelerations[0];
+      first_point.accelerations.empty() ? 0.0 : first_point.accelerations[0];
   input_.max_velocity[0] = config_.max_velocity;
   input_.max_acceleration[0] = config_.max_acceleration;
   input_.max_jerk[0] = config_.max_jerk;
 
-  const double t = target_point.time_from_start.toSec();
-  if (t > 0.0) {
-    input_.minimum_duration = t;
+  const double t0 = first_point.time_from_start.toSec();
+  if (t0 > 0.0) {
+    input_.minimum_duration = t0;
   } else {
     input_.minimum_duration.reset();
   }
@@ -147,6 +141,7 @@ bool IpFollowJointTrajectoryExecutor::startGoal(
 void IpFollowJointTrajectoryExecutor::cancelGoal() {
   std::lock_guard<std::mutex> lk(exec_mtx_);
   active_goal_.reset();
+  waypoint_index_ = 0;
   last_terminal_status_ = StepStatus::kIdle;
   last_terminal_error_.clear();
   otg_.reset();
@@ -195,21 +190,45 @@ IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::ste
 
   output_.pass_to_input(input_);
 
-  const auto& target = active_goal_->trajectory.points.back().positions.front();
+  const auto& points = active_goal_->trajectory.points;
+  const bool is_last_segment = (waypoint_index_ + 1 >= points.size());
+  const auto& target = points.back().positions.front();
   const bool actual_reached =
       std::abs(actual.position - target) <= config_.goal_tolerance;
-  if (result == ruckig::Result::Finished && actual_reached) {
-    active_goal_.reset();
-    last_terminal_status_ = StepStatus::kFinished;
-    last_terminal_error_.clear();
-    exec_cv_.notify_all();
-    return StepStatus::kFinished;
-  }
-
   if (result == ruckig::Result::Finished) {
+    if (!is_last_segment) {
+      // 推进到下一段
+      ++waypoint_index_;
+      const auto& next = points[waypoint_index_];
+      const auto& prev = points[waypoint_index_ - 1];
+      output_.pass_to_input(input_);
+      input_.target_position[0] = next.positions[0];
+      input_.target_velocity[0] =
+          next.velocities.empty() ? 0.0 : next.velocities[0];
+      input_.target_acceleration[0] =
+          next.accelerations.empty() ? 0.0 : next.accelerations[0];
+      const double dt = next.time_from_start.toSec() - prev.time_from_start.toSec();
+      if (dt > 0.0) {
+        input_.minimum_duration = dt;
+      } else {
+        input_.minimum_duration.reset();
+      }
+      otg_.reset();
+      return StepStatus::kWorking;
+    }
+    if (actual_reached) {
+      active_goal_.reset();
+      waypoint_index_ = 0;
+      last_terminal_status_ = StepStatus::kFinished;
+      last_terminal_error_.clear();
+      exec_cv_.notify_all();
+      return StepStatus::kFinished;
+    }
+    // 最后一段完成但位置未到位：保持终点命令
     command->position = target;
     command->velocity = 0.0;
     command->acceleration = 0.0;
+    return StepStatus::kWorking;
   }
 
   return StepStatus::kWorking;
