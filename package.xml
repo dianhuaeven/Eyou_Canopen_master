@@ -12,8 +12,11 @@
   <exec_depend>message_runtime</exec_depend>
 
   <depend>roscpp</depend>
+  <depend>rospy</depend>
   <depend>actionlib</depend>
   <depend>control_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>diagnostic_msgs</depend>
   <depend>hardware_interface</depend>
   <depend>controller_manager</depend>
   <depend>std_srvs</depend>

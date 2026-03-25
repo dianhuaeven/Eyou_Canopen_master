@@ -1,0 +1,437 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import threading
+import tkinter as tk
+from dataclasses import dataclass
+from tkinter import messagebox, ttk
+from typing import Dict, List
+
+import actionlib
+import rospy
+import yaml
+from control_msgs.msg import (
+    FollowJointTrajectoryAction,
+    FollowJointTrajectoryActionFeedback,
+    FollowJointTrajectoryGoal,
+)
+from diagnostic_msgs.msg import DiagnosticArray
+from sensor_msgs.msg import JointState
+from trajectory_msgs.msg import JointTrajectoryPoint
+
+
+@dataclass
+class JointItem:
+    name: str
+    node_id: int
+
+
+def normalize_action_ns(action_ns: str) -> str:
+    action_ns = action_ns.strip()
+    if not action_ns:
+        raise ValueError("action_ns is empty")
+    if not action_ns.startswith("/"):
+        action_ns = "/" + action_ns
+    return action_ns.rstrip("/")
+
+
+def load_joint_items(yaml_path: str) -> List[JointItem]:
+    with open(yaml_path, "r", encoding="utf-8") as f:
+        root = yaml.safe_load(f)
+    joints = root.get("joints")
+    if not isinstance(joints, list) or not joints:
+        raise ValueError("invalid joints.yaml: top-level 'joints' must be a non-empty list")
+
+    items: List[JointItem] = []
+    for idx, joint in enumerate(joints):
+        if not isinstance(joint, dict):
+            raise ValueError(f"invalid joints.yaml: joints[{idx}] must be a map")
+        name = str(joint.get("name", f"joint_{idx + 1}"))
+        canopen = joint.get("canopen") if isinstance(joint.get("canopen"), dict) else {}
+        node_id = canopen.get("node_id", joint.get("node_id", idx + 1))
+        items.append(JointItem(name=name, node_id=int(node_id)))
+    return items
+
+
+def parse_bool(value: str) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def level_text(level: int) -> str:
+    return {
+        0: "OK",
+        1: "WARN",
+        2: "ERROR",
+        3: "STALE",
+    }.get(level, f"L{level}")
+
+
+class JointActionUi:
+    def __init__(
+        self,
+        root: tk.Tk,
+        yaml_path: str,
+        action_ns: str,
+        slider_limit: float,
+        slider_resolution: float,
+        goal_duration: float,
+        refresh_ms: int,
+    ):
+        self.root = root
+        self.yaml_path = yaml_path
+        self.action_ns = action_ns
+        self.slider_limit = slider_limit
+        self.slider_resolution = slider_resolution
+        self.refresh_ms = refresh_ms
+        self.goal_duration_default = goal_duration
+
+        self.items = load_joint_items(yaml_path)
+        self.joint_names = [x.name for x in self.items]
+        self.joint_set = set(self.joint_names)
+
+        self.lock = threading.Lock()
+        self.server_connected = False
+        self.goal_state_text = "IDLE"
+
+        self.actual: Dict[str, float] = {n: 0.0 for n in self.joint_names}
+        self.target: Dict[str, float] = {n: 0.0 for n in self.joint_names}
+        self.diag_summary: Dict[str, str] = {n: "STALE:no data" for n in self.joint_names}
+        self.diag_op: Dict[str, str] = {n: "-" for n in self.joint_names}
+        self.diag_fault: Dict[str, str] = {n: "-" for n in self.joint_names}
+        self.diag_hb: Dict[str, str] = {n: "-" for n in self.joint_names}
+
+        self.slider_vars: Dict[str, tk.DoubleVar] = {}
+        self.actual_vars: Dict[str, tk.StringVar] = {}
+        self.target_vars: Dict[str, tk.StringVar] = {}
+        self.error_vars: Dict[str, tk.StringVar] = {}
+        self.status_vars: Dict[str, tk.StringVar] = {}
+        self.op_vars: Dict[str, tk.StringVar] = {}
+        self.fault_vars: Dict[str, tk.StringVar] = {}
+        self.hb_vars: Dict[str, tk.StringVar] = {}
+
+        self.server_var = tk.StringVar(value="DISCONNECTED")
+        self.goal_state_var = tk.StringVar(value=self.goal_state_text)
+        self.duration_var = tk.StringVar(value=f"{self.goal_duration_default:.3f}")
+
+        self.client = actionlib.SimpleActionClient(action_ns, FollowJointTrajectoryAction)
+        self.joint_state_sub = rospy.Subscriber("/joint_states", JointState, self.on_joint_state, queue_size=1)
+        self.diag_sub = rospy.Subscriber("/diagnostics", DiagnosticArray, self.on_diagnostics, queue_size=10)
+        self.feedback_sub = rospy.Subscriber(
+            f"{action_ns}/feedback",
+            FollowJointTrajectoryActionFeedback,
+            self.on_action_feedback,
+            queue_size=10,
+        )
+
+        self.build_ui()
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+        threading.Thread(target=self.wait_action_server, daemon=True).start()
+        self.root.after(self.refresh_ms, self.refresh_ui)
+
+    def build_ui(self) -> None:
+        self.root.title("Joint Action UI")
+
+        top = ttk.Frame(self.root, padding=8)
+        top.grid(row=0, column=0, sticky="ew")
+        top.columnconfigure(1, weight=1)
+
+        ttk.Label(top, text="joints.yaml").grid(row=0, column=0, sticky="w")
+        ttk.Label(top, text=self.yaml_path).grid(row=0, column=1, sticky="w")
+        ttk.Label(top, text="action_ns").grid(row=1, column=0, sticky="w")
+        ttk.Label(top, text=self.action_ns).grid(row=1, column=1, sticky="w")
+        ttk.Label(top, text="server").grid(row=0, column=2, sticky="w", padx=(12, 0))
+        ttk.Label(top, textvariable=self.server_var).grid(row=0, column=3, sticky="w")
+        ttk.Label(top, text="goal").grid(row=1, column=2, sticky="w", padx=(12, 0))
+        ttk.Label(top, textvariable=self.goal_state_var).grid(row=1, column=3, sticky="w")
+
+        ctrl = ttk.Frame(self.root, padding=8)
+        ctrl.grid(row=1, column=0, sticky="ew")
+        ttk.Label(ctrl, text="duration(s)").grid(row=0, column=0, sticky="w")
+        ttk.Entry(ctrl, width=8, textvariable=self.duration_var).grid(row=0, column=1, sticky="w")
+        ttk.Button(ctrl, text="目标=实际", command=self.fill_target_from_actual).grid(row=0, column=2, padx=6)
+        ttk.Button(ctrl, text="发送 Action", command=self.send_goal).grid(row=0, column=3, padx=6)
+        ttk.Button(ctrl, text="取消 Goal", command=self.cancel_goal).grid(row=0, column=4, padx=6)
+
+        table = ttk.Frame(self.root, padding=8)
+        table.grid(row=2, column=0, sticky="nsew")
+        self.root.rowconfigure(2, weight=1)
+        self.root.columnconfigure(0, weight=1)
+
+        headers = [
+            "joint",
+            "node_id",
+            "actual(rad)",
+            "target(rad)",
+            "error(rad)",
+            "status",
+            "op",
+            "fault",
+            "hb_lost",
+            "slider(rad)",
+            "value",
+        ]
+        for col, h in enumerate(headers):
+            ttk.Label(table, text=h).grid(row=0, column=col, sticky="w", padx=2, pady=2)
+
+        for row_idx, item in enumerate(self.items, start=1):
+            name = item.name
+            self.actual_vars[name] = tk.StringVar(value="0.0000")
+            self.target_vars[name] = tk.StringVar(value="0.0000")
+            self.error_vars[name] = tk.StringVar(value="0.0000")
+            self.status_vars[name] = tk.StringVar(value="STALE:no data")
+            self.op_vars[name] = tk.StringVar(value="-")
+            self.fault_vars[name] = tk.StringVar(value="-")
+            self.hb_vars[name] = tk.StringVar(value="-")
+            self.slider_vars[name] = tk.DoubleVar(value=0.0)
+
+            ttk.Label(table, text=name).grid(row=row_idx, column=0, sticky="w", padx=2, pady=2)
+            ttk.Label(table, text=str(item.node_id)).grid(row=row_idx, column=1, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.actual_vars[name]).grid(row=row_idx, column=2, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.target_vars[name]).grid(row=row_idx, column=3, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.error_vars[name]).grid(row=row_idx, column=4, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.status_vars[name]).grid(row=row_idx, column=5, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.op_vars[name]).grid(row=row_idx, column=6, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.fault_vars[name]).grid(row=row_idx, column=7, sticky="w", padx=2, pady=2)
+            ttk.Label(table, textvariable=self.hb_vars[name]).grid(row=row_idx, column=8, sticky="w", padx=2, pady=2)
+
+            slider = tk.Scale(
+                table,
+                from_=-self.slider_limit,
+                to=self.slider_limit,
+                resolution=self.slider_resolution,
+                orient=tk.HORIZONTAL,
+                showvalue=False,
+                variable=self.slider_vars[name],
+                length=300,
+            )
+            slider.grid(row=row_idx, column=9, sticky="ew", padx=2, pady=2)
+            ttk.Entry(table, width=10, textvariable=self.slider_vars[name]).grid(
+                row=row_idx, column=10, sticky="w", padx=2, pady=2
+            )
+
+        table.columnconfigure(9, weight=1)
+
+    def wait_action_server(self) -> None:
+        while not rospy.is_shutdown():
+            if self.client.wait_for_server(rospy.Duration(0.5)):
+                with self.lock:
+                    self.server_connected = True
+                return
+
+    def on_joint_state(self, msg: JointState) -> None:
+        with self.lock:
+            for i, name in enumerate(msg.name):
+                if name in self.joint_set and i < len(msg.position):
+                    self.actual[name] = msg.position[i]
+
+    def match_joint_name(self, status_name: str) -> str:
+        if status_name in self.joint_set:
+            return status_name
+        for name in self.joint_names:
+            if status_name.endswith(name):
+                return name
+        return ""
+
+    def on_diagnostics(self, msg: DiagnosticArray) -> None:
+        with self.lock:
+            for status in msg.status:
+                name = self.match_joint_name(status.name)
+                if not name:
+                    continue
+                kv = {x.key: x.value for x in status.values}
+                self.diag_summary[name] = f"{level_text(status.level)}:{status.message}"
+                self.diag_op[name] = "1" if parse_bool(kv.get("is_operational", "false")) else "0"
+                self.diag_fault[name] = "1" if parse_bool(kv.get("is_fault", "false")) else "0"
+                self.diag_hb[name] = "1" if parse_bool(kv.get("heartbeat_lost_flag", "false")) else "0"
+
+    def on_action_feedback(self, msg: FollowJointTrajectoryActionFeedback) -> None:
+        fb = msg.feedback
+        names = list(fb.joint_names) if fb.joint_names else self.joint_names
+        with self.lock:
+            for i, name in enumerate(names):
+                if name not in self.joint_set:
+                    continue
+                if i < len(fb.desired.positions):
+                    self.target[name] = fb.desired.positions[i]
+                if i < len(fb.actual.positions):
+                    self.actual[name] = fb.actual.positions[i]
+
+    def fill_target_from_actual(self) -> None:
+        with self.lock:
+            for name in self.joint_names:
+                value = self.actual.get(name, 0.0)
+                self.slider_vars[name].set(value)
+                self.target[name] = value
+
+    def set_goal_state(self, text: str) -> None:
+        with self.lock:
+            self.goal_state_text = text
+
+    def on_goal_done(self, status: int, _result) -> None:
+        status_text = {
+            2: "PREEMPTED",
+            3: "SUCCEEDED",
+            4: "ABORTED",
+            5: "REJECTED",
+            8: "RECALLED",
+            9: "LOST",
+        }.get(status, f"STATUS_{status}")
+        self.set_goal_state(f"DONE:{status_text}")
+
+    def on_goal_active(self) -> None:
+        self.set_goal_state("ACTIVE")
+
+    def send_goal(self) -> None:
+        try:
+            duration = float(self.duration_var.get())
+        except ValueError:
+            messagebox.showerror("invalid duration", "duration must be a number")
+            return
+        if duration <= 0.0:
+            messagebox.showerror("invalid duration", "duration must be > 0")
+            return
+
+        if not self.server_connected:
+            messagebox.showwarning("action server", f"action server not connected: {self.action_ns}")
+            return
+
+        goal = FollowJointTrajectoryGoal()
+        goal.trajectory.joint_names = list(self.joint_names)
+        point = JointTrajectoryPoint()
+        point.positions = [self.slider_vars[name].get() for name in self.joint_names]
+        point.time_from_start = rospy.Duration.from_sec(duration)
+        goal.trajectory.points = [point]
+        goal.trajectory.header.stamp = rospy.Time.now()
+
+        with self.lock:
+            for i, name in enumerate(self.joint_names):
+                self.target[name] = point.positions[i]
+            self.goal_state_text = "PENDING"
+
+        self.client.send_goal(goal, done_cb=self.on_goal_done, active_cb=self.on_goal_active)
+
+    def cancel_goal(self) -> None:
+        self.client.cancel_all_goals()
+        self.set_goal_state("CANCEL_SENT")
+
+    def refresh_ui(self) -> None:
+        with self.lock:
+            self.server_var.set("CONNECTED" if self.server_connected else "DISCONNECTED")
+            self.goal_state_var.set(self.goal_state_text)
+
+            for name in self.joint_names:
+                actual = self.actual.get(name, 0.0)
+                target = self.target.get(name, self.slider_vars[name].get())
+                error = target - actual
+                self.actual_vars[name].set(f"{actual:.4f}")
+                self.target_vars[name].set(f"{target:.4f}")
+                self.error_vars[name].set(f"{error:.4f}")
+                self.status_vars[name].set(self.diag_summary.get(name, "STALE:no data"))
+                self.op_vars[name].set(self.diag_op.get(name, "-"))
+                self.fault_vars[name].set(self.diag_fault.get(name, "-"))
+                self.hb_vars[name].set(self.diag_hb.get(name, "-"))
+
+        if not rospy.is_shutdown():
+            self.root.after(self.refresh_ms, self.refresh_ui)
+
+    def on_close(self) -> None:
+        try:
+            self.client.cancel_all_goals()
+        except Exception:
+            pass
+        rospy.signal_shutdown("ui closed")
+        self.root.quit()
+        self.root.destroy()
+
+
+def resolve_yaml_path(explicit_path: str) -> str:
+    if explicit_path:
+        return os.path.abspath(explicit_path)
+
+    param_path = rospy.get_param("/canopen_hw_node/joints_path", "")
+    if param_path and os.path.isfile(param_path):
+        return os.path.abspath(param_path)
+
+    default_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "config", "joints.yaml")
+    )
+    return default_path
+
+
+def resolve_action_ns(explicit_ns: str) -> str:
+    if explicit_ns:
+        return normalize_action_ns(explicit_ns)
+    param_ns = rospy.get_param(
+        "/canopen_hw_node/ip_executor_action_ns",
+        "/arm_position_controller/follow_joint_trajectory",
+    )
+    return normalize_action_ns(param_ns)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Joint trajectory action UI for Eyou_Canopen_Master."
+    )
+    parser.add_argument(
+        "--joints-yaml",
+        default="",
+        help="Path to joints.yaml. Default: /canopen_hw_node/joints_path param or package config/joints.yaml",
+    )
+    parser.add_argument(
+        "--action-ns",
+        default="",
+        help="FollowJointTrajectory action namespace. Default: /canopen_hw_node/ip_executor_action_ns",
+    )
+    parser.add_argument(
+        "--slider-limit",
+        type=float,
+        default=3.1416,
+        help="Absolute slider range in radians.",
+    )
+    parser.add_argument(
+        "--slider-resolution",
+        type=float,
+        default=0.001,
+        help="Slider resolution in radians.",
+    )
+    parser.add_argument(
+        "--goal-duration",
+        type=float,
+        default=1.0,
+        help="Default time_from_start in seconds.",
+    )
+    parser.add_argument(
+        "--refresh-ms",
+        type=int,
+        default=100,
+        help="UI refresh period in milliseconds.",
+    )
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    rospy.init_node("joint_action_ui", anonymous=True, disable_signals=True)
+
+    yaml_path = resolve_yaml_path(args.joints_yaml)
+    if not os.path.isfile(yaml_path):
+        raise RuntimeError(f"joints.yaml not found: {yaml_path}")
+
+    action_ns = resolve_action_ns(args.action_ns)
+    root = tk.Tk()
+    JointActionUi(
+        root=root,
+        yaml_path=yaml_path,
+        action_ns=action_ns,
+        slider_limit=args.slider_limit,
+        slider_resolution=args.slider_resolution,
+        goal_duration=args.goal_duration,
+        refresh_ms=max(20, args.refresh_ms),
+    )
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -8,8 +8,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ── catkin ─────────────────────────────��────────────────
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  rospy
   actionlib
   control_msgs
+  sensor_msgs
+  diagnostic_msgs
   hardware_interface
   controller_manager
   std_srvs
@@ -29,7 +32,7 @@ generate_messages(DEPENDENCIES
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES canopen_core canopen_ros_adapter
-  CATKIN_DEPENDS roscpp actionlib control_msgs hardware_interface controller_manager std_srvs message_runtime diagnostic_updater trajectory_msgs
+  CATKIN_DEPENDS roscpp rospy actionlib control_msgs sensor_msgs diagnostic_msgs hardware_interface controller_manager std_srvs message_runtime diagnostic_updater trajectory_msgs
 )
 
 # ── 第三方依赖 ─────────────────────────────────────────
@@ -154,6 +157,11 @@ install(DIRECTORY include/canopen_hw/
 
 install(DIRECTORY launch config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+catkin_install_python(PROGRAMS
+  scripts/joint_action_ui.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 # ── Tests ─────────────────────────────────────────────
