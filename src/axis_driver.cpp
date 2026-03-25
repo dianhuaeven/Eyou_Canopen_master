@@ -523,6 +523,7 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
   }
 
   boot_retry_count_.store(0);
+  logic_.ProcessHeartbeat(false);  // 节点重新 boot 成功，清除心跳丢失标记。
 
   // 节点刚进入 Operational 时，tpdo_mapped 缓冲区全零。
   // Lely 的 SYNC-triggered RPDO 在下一个 SYNC 到来时立即读取快照发送，
