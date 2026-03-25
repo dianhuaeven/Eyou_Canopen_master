@@ -98,6 +98,10 @@ int main(int argc, char** argv) {
   bool auto_release = false;
   bool use_ip_executor = false;
   double ip_executor_rate_hz = 100.0;
+  double ip_executor_max_velocity = 1.0;
+  double ip_executor_max_acceleration = 2.0;
+  double ip_executor_max_jerk = 10.0;
+  double ip_executor_goal_tolerance = 1e-3;
   std::string ip_executor_action_ns =
       "arm_position_controller/follow_joint_trajectory";
   std::string ip_executor_joint_name =
@@ -107,6 +111,14 @@ int main(int argc, char** argv) {
   pnh.param("auto_release", auto_release, false);
   pnh.param("use_ip_executor", use_ip_executor, false);
   pnh.param("ip_executor_rate_hz", ip_executor_rate_hz, ip_executor_rate_hz);
+  pnh.param("ip_executor_max_velocity", ip_executor_max_velocity,
+            ip_executor_max_velocity);
+  pnh.param("ip_executor_max_acceleration", ip_executor_max_acceleration,
+            ip_executor_max_acceleration);
+  pnh.param("ip_executor_max_jerk", ip_executor_max_jerk,
+            ip_executor_max_jerk);
+  pnh.param("ip_executor_goal_tolerance", ip_executor_goal_tolerance,
+            ip_executor_goal_tolerance);
   pnh.param("ip_executor_action_ns", ip_executor_action_ns,
             ip_executor_action_ns);
   pnh.param("ip_executor_joint_name", ip_executor_joint_name,
@@ -118,6 +130,10 @@ int main(int argc, char** argv) {
   if (joint_it != joint_names.end()) {
     ip_executor_joint_index =
         static_cast<std::size_t>(std::distance(joint_names.begin(), joint_it));
+  } else if (use_ip_executor) {
+    CANOPEN_LOG_ERROR("ip_executor_joint_name '{}' not found in joints.yaml",
+                      ip_executor_joint_name);
+    return 1;
   }
 
   std::unique_ptr<canopen_hw::IpFollowJointTrajectoryExecutor> ip_executor;
@@ -127,6 +143,10 @@ int main(int argc, char** argv) {
     exec_cfg.joint_name = ip_executor_joint_name;
     exec_cfg.joint_index = ip_executor_joint_index;
     exec_cfg.command_rate_hz = ip_executor_rate_hz;
+    exec_cfg.max_velocity = ip_executor_max_velocity;
+    exec_cfg.max_acceleration = ip_executor_max_acceleration;
+    exec_cfg.max_jerk = ip_executor_max_jerk;
+    exec_cfg.goal_tolerance = ip_executor_goal_tolerance;
     ip_executor = std::make_unique<canopen_hw::IpFollowJointTrajectoryExecutor>(
         &pnh, &robot_hw_ros, &loop_mtx, exec_cfg);
   }
