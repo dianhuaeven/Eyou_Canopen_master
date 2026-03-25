@@ -8,11 +8,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ── catkin ─────────────────────────────��────────────────
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  actionlib
+  control_msgs
   hardware_interface
   controller_manager
   std_srvs
   message_generation
   diagnostic_updater
+  trajectory_msgs
 )
 
 add_service_files(FILES
@@ -26,7 +29,7 @@ generate_messages(DEPENDENCIES
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES canopen_core canopen_ros_adapter
-  CATKIN_DEPENDS roscpp hardware_interface controller_manager std_srvs message_runtime diagnostic_updater
+  CATKIN_DEPENDS roscpp actionlib control_msgs hardware_interface controller_manager std_srvs message_runtime diagnostic_updater trajectory_msgs
 )
 
 # ── 第三方依赖 ─────────────────────────────────────────
@@ -108,6 +111,7 @@ target_link_libraries(canopen_hw_node
 # ── ROS1 适配层 ───────────────────────────────────────
 add_library(canopen_ros_adapter
   src/canopen_robot_hw_ros.cpp
+  src/ip_follow_joint_trajectory_executor.cpp
   src/service_gateway.cpp
 )
 target_include_directories(canopen_ros_adapter
@@ -174,6 +178,12 @@ add_executable(test_canopen_robot_hw_ros
 )
 target_link_libraries(test_canopen_robot_hw_ros PRIVATE canopen_ros_adapter GTest::gtest_main)
 gtest_discover_tests(test_canopen_robot_hw_ros)
+
+add_executable(test_ip_follow_joint_trajectory_executor
+  test/test_ip_follow_joint_trajectory_executor.cpp
+)
+target_link_libraries(test_ip_follow_joint_trajectory_executor PRIVATE canopen_ros_adapter GTest::gtest_main)
+gtest_discover_tests(test_ip_follow_joint_trajectory_executor)
 
 add_executable(test_position_channel_routing
   test/test_position_channel_routing.cpp
