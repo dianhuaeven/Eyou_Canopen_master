@@ -49,6 +49,11 @@ struct CanopenMasterConfig {
     double rated_torque_nm = 6.0;
     double velocity_scale = 1.0;
     double torque_scale = 1.0;
+    // IP executor 运动约束，由 joints.yaml 配置。
+    double ip_max_velocity = 1.0;
+    double ip_max_acceleration = 2.0;
+    double ip_max_jerk = 10.0;
+    double ip_goal_tolerance = 1e-3;
   };
   std::vector<JointConfig> joints;
 };
