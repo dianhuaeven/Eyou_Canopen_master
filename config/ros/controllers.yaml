@@ -17,3 +17,9 @@ arm_velocity_controller:
   type: velocity_controllers/JointTrajectoryController
   joints:
     - joint_1
+  gains:
+    joint_1:
+      p: 1.0
+      i: 0.0
+      d: 0.0
+      i_clamp: 1.0
