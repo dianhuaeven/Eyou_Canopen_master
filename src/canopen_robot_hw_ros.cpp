@@ -50,6 +50,26 @@ void CanopenRobotHwRos::SetMode(std::size_t axis_index, int8_t mode) {
   hw_->SetJointMode(axis_index, mode);
 }
 
+void CanopenRobotHwRos::SetExternalPositionCommand(std::size_t axis_index,
+                                                   double pos_rad) {
+  if (axis_index >= pos_cmd_.size()) {
+    return;
+  }
+  pos_cmd_[axis_index] = pos_rad;
+}
+
+double CanopenRobotHwRos::joint_position(std::size_t axis_index) const {
+  return axis_index < pos_.size() ? pos_[axis_index] : 0.0;
+}
+
+double CanopenRobotHwRos::joint_velocity(std::size_t axis_index) const {
+  return axis_index < vel_.size() ? vel_[axis_index] : 0.0;
+}
+
+double CanopenRobotHwRos::joint_effort(std::size_t axis_index) const {
+  return axis_index < eff_.size() ? eff_[axis_index] : 0.0;
+}
+
 void CanopenRobotHwRos::read(const ros::Time& /*time*/,
                               const ros::Duration& /*period*/) {
   hw_->ReadFromSharedState();

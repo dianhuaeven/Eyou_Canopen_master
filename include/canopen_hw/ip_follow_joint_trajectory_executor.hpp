@@ -4,6 +4,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <condition_variable>
 
 #include <actionlib/server/simple_action_server.h>
 #include <control_msgs/FollowJointTrajectoryAction.h>
@@ -37,6 +38,7 @@ class IpFollowJointTrajectoryExecutor {
 
     std::string action_ns{"ip_follow_joint_trajectory"};
     std::string joint_name{"joint_1"};
+    std::size_t joint_index{0};
     double command_rate_hz{100.0};
     double max_velocity{1.0};
     double max_acceleration{2.0};
@@ -75,7 +77,11 @@ class IpFollowJointTrajectoryExecutor {
   std::unique_ptr<Server> server_;
 
   mutable std::mutex exec_mtx_;
+  std::condition_variable exec_cv_;
   std::optional<control_msgs::FollowJointTrajectoryGoal> active_goal_;
+  std::optional<StepStatus> last_terminal_status_;
+  std::string last_terminal_error_;
+  double cycle_remainder_sec_ = 0.0;
   ruckig::Ruckig<1> otg_;
   ruckig::InputParameter<1> input_;
   ruckig::OutputParameter<1> output_;

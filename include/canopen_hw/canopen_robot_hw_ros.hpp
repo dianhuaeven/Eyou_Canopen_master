@@ -30,6 +30,11 @@ class CanopenRobotHwRos : public hardware_interface::RobotHW {
 
   // 设置某轴运动模式（kMode_IP=7, kMode_CSP=8, kMode_CSV=9）。
   void SetMode(std::size_t axis_index, int8_t mode);
+  void SetExternalPositionCommand(std::size_t axis_index, double pos_rad);
+
+  double joint_position(std::size_t axis_index) const;
+  double joint_velocity(std::size_t axis_index) const;
+  double joint_effort(std::size_t axis_index) const;
 
   bool all_operational() const { return hw_->all_operational(); }
   std::size_t axis_count() const { return pos_.size(); }

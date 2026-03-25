@@ -14,6 +14,7 @@
 #include "Eyou_Canopen_Master/SetMode.h"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 #include "canopen_hw/cia402_defs.hpp"
+#include "canopen_hw/ip_follow_joint_trajectory_executor.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
@@ -95,9 +96,40 @@ int main(int argc, char** argv) {
   bool auto_init = false;
   bool auto_enable = false;
   bool auto_release = false;
+  bool use_ip_executor = false;
+  double ip_executor_rate_hz = 100.0;
+  std::string ip_executor_action_ns =
+      "arm_position_controller/follow_joint_trajectory";
+  std::string ip_executor_joint_name =
+      joint_names.empty() ? std::string("joint_1") : joint_names.front();
   pnh.param("auto_init", auto_init, false);
   pnh.param("auto_enable", auto_enable, false);
   pnh.param("auto_release", auto_release, false);
+  pnh.param("use_ip_executor", use_ip_executor, false);
+  pnh.param("ip_executor_rate_hz", ip_executor_rate_hz, ip_executor_rate_hz);
+  pnh.param("ip_executor_action_ns", ip_executor_action_ns,
+            ip_executor_action_ns);
+  pnh.param("ip_executor_joint_name", ip_executor_joint_name,
+            ip_executor_joint_name);
+
+  std::size_t ip_executor_joint_index = 0;
+  const auto joint_it =
+      std::find(joint_names.begin(), joint_names.end(), ip_executor_joint_name);
+  if (joint_it != joint_names.end()) {
+    ip_executor_joint_index =
+        static_cast<std::size_t>(std::distance(joint_names.begin(), joint_it));
+  }
+
+  std::unique_ptr<canopen_hw::IpFollowJointTrajectoryExecutor> ip_executor;
+  if (use_ip_executor) {
+    canopen_hw::IpFollowJointTrajectoryExecutor::Config exec_cfg;
+    exec_cfg.action_ns = ip_executor_action_ns;
+    exec_cfg.joint_name = ip_executor_joint_name;
+    exec_cfg.joint_index = ip_executor_joint_index;
+    exec_cfg.command_rate_hz = ip_executor_rate_hz;
+    ip_executor = std::make_unique<canopen_hw::IpFollowJointTrajectoryExecutor>(
+        &pnh, &robot_hw_ros, &loop_mtx, exec_cfg);
+  }
 
   if ((auto_enable || auto_release) && !auto_init) {
     CANOPEN_LOG_ERROR(
@@ -222,6 +254,9 @@ int main(int argc, char** argv) {
       coordinator.ComputeIntents();
       robot_hw_ros.read(now, period);
       cm.update(now, period);
+      if (ip_executor) {
+        ip_executor->update(now, period);
+      }
       robot_hw_ros.write(now, period);
       diag_updater.update();
     }

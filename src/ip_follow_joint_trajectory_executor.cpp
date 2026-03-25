@@ -1,6 +1,8 @@
 #include "canopen_hw/ip_follow_joint_trajectory_executor.hpp"
 
 #include <cmath>
+#include <chrono>
+#include <thread>
 #include <utility>
 
 #include "canopen_hw/logging.hpp"
@@ -29,7 +31,37 @@ IpFollowJointTrajectoryExecutor::IpFollowJointTrajectoryExecutor(
 }
 
 void IpFollowJointTrajectoryExecutor::update(const ros::Time& /*now*/,
-                                             const ros::Duration& /*period*/) {}
+                                             const ros::Duration& period) {
+  if (hw_ == nullptr) {
+    return;
+  }
+
+  cycle_remainder_sec_ += period.toSec();
+  const double cycle = 1.0 / std::max(1.0, config_.command_rate_hz);
+  if (cycle_remainder_sec_ + 1e-9 < cycle) {
+    return;
+  }
+  cycle_remainder_sec_ = std::fmod(cycle_remainder_sec_, cycle);
+
+  State actual;
+  actual.position = hw_->joint_position(config_.joint_index);
+  actual.velocity = hw_->joint_velocity(config_.joint_index);
+
+  State command;
+  std::string error;
+  const StepStatus status = step(actual, &command, &error);
+
+  if (status == StepStatus::kWorking || status == StepStatus::kFinished) {
+    hw_->SetExternalPositionCommand(config_.joint_index, command.position);
+  }
+
+  if (status == StepStatus::kFinished || status == StepStatus::kError) {
+    std::lock_guard<std::mutex> lk(exec_mtx_);
+    last_terminal_status_ = status;
+    last_terminal_error_ = error;
+    exec_cv_.notify_all();
+  }
+}
 
 bool IpFollowJointTrajectoryExecutor::ValidateGoal(
     const control_msgs::FollowJointTrajectoryGoal& goal,
@@ -77,6 +109,8 @@ bool IpFollowJointTrajectoryExecutor::startGoal(
 
   std::lock_guard<std::mutex> lk(exec_mtx_);
   active_goal_ = goal;
+  last_terminal_status_.reset();
+  last_terminal_error_.clear();
   otg_.reset();
 
   input_.current_position[0] = actual.position;
@@ -105,7 +139,10 @@ bool IpFollowJointTrajectoryExecutor::startGoal(
 void IpFollowJointTrajectoryExecutor::cancelGoal() {
   std::lock_guard<std::mutex> lk(exec_mtx_);
   active_goal_.reset();
+  last_terminal_status_ = StepStatus::kIdle;
+  last_terminal_error_.clear();
   otg_.reset();
+  exec_cv_.notify_all();
 }
 
 IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::step(
@@ -140,6 +177,9 @@ IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::ste
     if (error) {
       *error = "ruckig step failed";
     }
+    last_terminal_status_ = StepStatus::kError;
+    last_terminal_error_ = error ? *error : std::string();
+    exec_cv_.notify_all();
     *command = actual;
     return StepStatus::kError;
   }
@@ -155,6 +195,9 @@ IpFollowJointTrajectoryExecutor::StepStatus IpFollowJointTrajectoryExecutor::ste
       std::abs(command->position - target) <= config_.goal_tolerance;
   if (result == ruckig::Result::Finished || reached) {
     active_goal_.reset();
+    last_terminal_status_ = StepStatus::kFinished;
+    last_terminal_error_.clear();
+    exec_cv_.notify_all();
     return StepStatus::kFinished;
   }
 
@@ -181,7 +224,21 @@ void IpFollowJointTrajectoryExecutor::ExecuteGoal(const GoalConstPtr& goal) {
     return;
   }
 
+  if (hw_ == nullptr || loop_mtx_ == nullptr) {
+    control_msgs::FollowJointTrajectoryResult result;
+    result.error_code =
+        control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+    result.error_string = "executor runtime not initialized";
+    server_->setAborted(result, result.error_string);
+    return;
+  }
+
   State actual;
+  {
+    std::lock_guard<std::mutex> loop_lock(*loop_mtx_);
+    actual.position = hw_->joint_position(config_.joint_index);
+    actual.velocity = hw_->joint_velocity(config_.joint_index);
+  }
   std::string start_error;
   if (!startGoal(*goal, actual, &start_error)) {
     control_msgs::FollowJointTrajectoryResult result;
@@ -193,12 +250,37 @@ void IpFollowJointTrajectoryExecutor::ExecuteGoal(const GoalConstPtr& goal) {
     return;
   }
 
-  control_msgs::FollowJointTrajectoryResult result;
-  result.error_code = control_msgs::FollowJointTrajectoryResult::SUCCESSFUL;
-  result.error_string = "IP executor goal accepted but node integration is pending";
   CANOPEN_LOG_INFO("IpFollowJointTrajectoryExecutor: accepted goal for {}",
                    config_.joint_name);
-  server_->setSucceeded(result, result.error_string);
+
+  std::unique_lock<std::mutex> lk(exec_mtx_);
+  while (!last_terminal_status_.has_value()) {
+    lk.unlock();
+    if (server_->isPreemptRequested()) {
+      cancelGoal();
+      control_msgs::FollowJointTrajectoryResult result;
+      result.error_code = control_msgs::FollowJointTrajectoryResult::SUCCESSFUL;
+      result.error_string = "goal preempted";
+      server_->setPreempted(result, result.error_string);
+      return;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    lk.lock();
+  }
+
+  control_msgs::FollowJointTrajectoryResult result;
+  if (*last_terminal_status_ == StepStatus::kFinished) {
+    result.error_code = control_msgs::FollowJointTrajectoryResult::SUCCESSFUL;
+    result.error_string = "goal completed";
+    server_->setSucceeded(result, result.error_string);
+  } else {
+    result.error_code =
+        control_msgs::FollowJointTrajectoryResult::PATH_TOLERANCE_VIOLATED;
+    result.error_string =
+        last_terminal_error_.empty() ? "goal execution failed"
+                                     : last_terminal_error_;
+    server_->setAborted(result, result.error_string);
+  }
 }
 
 }  // namespace canopen_hw

@@ -38,6 +38,7 @@ pkg_check_modules(LELY REQUIRED liblely-coapp liblely-io2 liblely-ev liblely-co)
 find_package(Threads REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(GTest REQUIRED)
+find_library(RUCKIG_LIBRARY NAMES ruckig PATHS /usr/local/lib REQUIRED)
 include(GoogleTest)
 
 option(CANOPEN_FETCH_SPDLOG
@@ -121,6 +122,7 @@ target_include_directories(canopen_ros_adapter
 target_link_libraries(canopen_ros_adapter
   PUBLIC
     canopen_core
+    ${RUCKIG_LIBRARY}
     ${catkin_LIBRARIES}
 )
 target_compile_options(canopen_ros_adapter
