@@ -53,6 +53,7 @@ void IpFollowJointTrajectoryExecutor::update(const ros::Time& /*now*/,
 
   if (status == StepStatus::kWorking || status == StepStatus::kFinished) {
     hw_->SetExternalPositionCommand(config_.joint_index, command.position);
+    publishFeedback(actual, command);
   }
 
   if (status == StepStatus::kFinished || status == StepStatus::kError) {
