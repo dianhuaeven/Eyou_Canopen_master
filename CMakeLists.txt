@@ -118,6 +118,7 @@ target_link_libraries(canopen_hw_node
 # ── ROS1 适配层 ───────────────────────────────────────
 add_library(canopen_ros_adapter
   src/canopen_robot_hw_ros.cpp
+  src/urdf_joint_limits.cpp
   src/controllers/ip_follow_joint_trajectory_executor_validation.cpp
   src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp
   src/controllers/ip_follow_joint_trajectory_executor_ros.cpp
@@ -223,6 +224,12 @@ add_executable(test_zero_soft_limit_executor
 )
 target_link_libraries(test_zero_soft_limit_executor PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_zero_soft_limit_executor)
+
+add_executable(test_urdf_joint_limits
+  test/test_urdf_joint_limits.cpp
+)
+target_link_libraries(test_urdf_joint_limits PRIVATE canopen_ros_adapter GTest::gtest_main)
+gtest_discover_tests(test_urdf_joint_limits)
 
 add_executable(test_canopen_master
   test/test_canopen_master.cpp
