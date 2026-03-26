@@ -81,6 +81,7 @@ add_library(canopen_core
   src/realtime_loop.cpp
   src/axis_logic.cpp
   src/boot_identity_diag.cpp
+  src/zero_soft_limit_executor.cpp
 )
 
 target_include_directories(canopen_core
@@ -216,6 +217,12 @@ add_executable(test_joints_config
 )
 target_link_libraries(test_joints_config PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_joints_config)
+
+add_executable(test_zero_soft_limit_executor
+  test/test_zero_soft_limit_executor.cpp
+)
+target_link_libraries(test_zero_soft_limit_executor PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_zero_soft_limit_executor)
 
 add_executable(test_canopen_master
   test/test_canopen_master.cpp
