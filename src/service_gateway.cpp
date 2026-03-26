@@ -1,5 +1,7 @@
 #include "canopen_hw/service_gateway.hpp"
 
+#include <utility>
+
 namespace canopen_hw {
 
 namespace {
@@ -41,6 +43,10 @@ ServiceGateway::ServiceGateway(ros::NodeHandle* pnh,
       pnh->advertiseService("shutdown", &ServiceGateway::OnShutdown, this);
 }
 
+void ServiceGateway::SetPostInitHook(std::function<bool(std::string*)> hook) {
+  post_init_hook_ = std::move(hook);
+}
+
 bool ServiceGateway::OnInit(std_srvs::Trigger::Request&,
                             std_srvs::Trigger::Response& res) {
   if (!EnsureGatewayReady(coordinator_, loop_mtx_, &res)) {
@@ -49,14 +55,28 @@ bool ServiceGateway::OnInit(std_srvs::Trigger::Request&,
 
   std::lock_guard<std::mutex> lk(*loop_mtx_);
   const auto r = coordinator_->RequestInit();
-  res.success = r.ok;
-  if (r.ok) {
-    res.message = (r.message.rfind("already ", 0) == 0)
-                      ? "already initialized"
-                      : "initialized (armed)";
-  } else {
+  if (!r.ok) {
+    res.success = false;
     res.message = r.message.empty() ? "init failed" : r.message;
+    return true;
   }
+
+  const bool already = (r.message.rfind("already ", 0) == 0);
+  if (!already && post_init_hook_) {
+    std::string hook_detail;
+    if (!post_init_hook_(&hook_detail)) {
+      const auto shutdown_r = coordinator_->RequestShutdown();
+      res.success = false;
+      res.message = hook_detail.empty() ? "post-init hook failed" : hook_detail;
+      if (!shutdown_r.ok) {
+        res.message += "; rollback shutdown failed: " + shutdown_r.message;
+      }
+      return true;
+    }
+  }
+
+  res.success = true;
+  res.message = already ? "already initialized" : "initialized (armed)";
   return true;
 }
 

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <functional>
 #include <mutex>
+#include <string>
 
 #include <ros/ros.h>
 #include <std_srvs/Trigger.h>
@@ -14,6 +16,7 @@ class ServiceGateway {
  public:
   ServiceGateway(ros::NodeHandle* pnh, OperationalCoordinator* coordinator,
                  std::mutex* loop_mtx);
+  void SetPostInitHook(std::function<bool(std::string*)> hook);
 
  private:
   bool OnInit(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res);
@@ -26,6 +29,7 @@ class ServiceGateway {
 
   OperationalCoordinator* coordinator_ = nullptr;
   std::mutex* loop_mtx_ = nullptr;
+  std::function<bool(std::string*)> post_init_hook_;
 
   ros::ServiceServer init_srv_;
   ros::ServiceServer enable_srv_;

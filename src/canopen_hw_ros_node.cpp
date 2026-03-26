@@ -1,6 +1,7 @@
 #include <chrono>
 #include <filesystem>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -12,6 +13,7 @@
 #include <diagnostic_updater/diagnostic_updater.h>
 
 #include "Eyou_Canopen_Master/SetMode.h"
+#include "Eyou_Canopen_Master/SetZero.h"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
 #include "canopen_hw/cia402_defs.hpp"
 #include "canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp"
@@ -19,6 +21,8 @@
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
 #include "canopen_hw/service_gateway.hpp"
+#include "canopen_hw/urdf_joint_limits.hpp"
+#include "canopen_hw/zero_soft_limit_executor.hpp"
 
 namespace {
 
@@ -92,6 +96,82 @@ int main(int argc, char** argv) {
       lifecycle.master(), lifecycle.shared_state(), master_cfg.joints.size());
   coordinator.SetConfigured();
   canopen_hw::ServiceGateway service_gateway(&pnh, &coordinator, &loop_mtx);
+  canopen_hw::ZeroSoftLimitExecutor zero_soft_limit_executor(lifecycle.master(),
+                                                             &master_cfg);
+  std::vector<canopen_hw::JointLimitRad> urdf_limits;
+  bool urdf_limits_ready = false;
+
+  auto ensure_urdf_limits = [&](std::string* detail) -> bool {
+    if (urdf_limits_ready) {
+      return true;
+    }
+    std::string urdf_xml;
+    if (!nh.getParam("robot_description", urdf_xml) || urdf_xml.empty()) {
+      if (detail) {
+        *detail = "robot_description is missing; cannot derive URDF soft limits";
+      }
+      return false;
+    }
+    std::string parse_error;
+    if (!canopen_hw::ParseUrdfJointLimits(urdf_xml, master_cfg.joints, &urdf_limits,
+                                          &parse_error)) {
+      if (detail) {
+        *detail = parse_error.empty() ? "failed to parse URDF joint limits"
+                                      : parse_error;
+      }
+      return false;
+    }
+    urdf_limits_ready = true;
+    return true;
+  };
+
+  auto apply_soft_limit_axis = [&](std::size_t axis_index,
+                                   std::string* detail) -> bool {
+    if (!ensure_urdf_limits(detail)) {
+      return false;
+    }
+    if (axis_index >= urdf_limits.size()) {
+      if (detail) {
+        std::ostringstream oss;
+        oss << "axis " << axis_index << " out of URDF limit range";
+        *detail = oss.str();
+      }
+      return false;
+    }
+    return zero_soft_limit_executor.ApplySoftLimitRadians(
+        axis_index, urdf_limits[axis_index].lower, urdf_limits[axis_index].upper,
+        detail);
+  };
+
+  auto apply_soft_limit_all = [&](std::string* detail) -> bool {
+    if (!master_cfg.auto_write_soft_limits_from_urdf) {
+      return true;
+    }
+    if (!ensure_urdf_limits(detail)) {
+      return false;
+    }
+    for (std::size_t i = 0; i < master_cfg.joints.size(); ++i) {
+      std::string axis_detail;
+      if (!apply_soft_limit_axis(i, &axis_detail)) {
+        if (detail) {
+          std::ostringstream oss;
+          oss << "apply soft limit failed at axis " << i;
+          if (!axis_detail.empty()) {
+            oss << ": " << axis_detail;
+          }
+          *detail = oss.str();
+        }
+        return false;
+      }
+    }
+    if (detail) {
+      *detail = "soft limits applied from URDF";
+    }
+    return true;
+  };
+
+  service_gateway.SetPostInitHook(
+      [&](std::string* detail) { return apply_soft_limit_all(detail); });
 
   bool auto_init = false;
   bool auto_enable = false;
@@ -183,6 +263,45 @@ int main(int argc, char** argv) {
         return true;
       });
 
+  auto set_zero_srv = pnh.advertiseService<Eyou_Canopen_Master::SetZero::Request,
+                                           Eyou_Canopen_Master::SetZero::Response>(
+      "set_zero", [&](Eyou_Canopen_Master::SetZero::Request& req,
+                      Eyou_Canopen_Master::SetZero::Response& res) {
+        std::lock_guard<std::mutex> lk(loop_mtx);
+        const auto mode = coordinator.mode();
+        if (mode != canopen_hw::SystemOpMode::Standby) {
+          res.success = false;
+          res.message = "set_zero only allowed in Standby; call ~/disable first";
+          return true;
+        }
+        if (req.axis_index >= master_cfg.joints.size()) {
+          res.success = false;
+          res.message = "axis_index out of range";
+          return true;
+        }
+
+        std::string detail;
+        if (!zero_soft_limit_executor.SetCurrentPositionAsZero(req.axis_index,
+                                                               &detail)) {
+          res.success = false;
+          res.message = detail.empty() ? "set_zero failed" : detail;
+          return true;
+        }
+
+        if (master_cfg.auto_write_soft_limits_from_urdf) {
+          if (!apply_soft_limit_axis(req.axis_index, &detail)) {
+            res.success = false;
+            res.message =
+                "zero set but soft limit rewrite failed: " + detail;
+            return true;
+          }
+        }
+
+        res.success = true;
+        res.message = detail.empty() ? "zero set" : detail;
+        return true;
+      });
+
   controller_manager::ControllerManager cm(&robot_hw_ros, nh);
 
   // Diagnostics。
@@ -225,6 +344,17 @@ int main(int argc, char** argv) {
     if (!init_result.ok) {
       CANOPEN_LOG_ERROR("auto_init enabled but init failed: {}",
                         init_result.message);
+      return 1;
+    }
+    std::string soft_limit_detail;
+    if (!apply_soft_limit_all(&soft_limit_detail)) {
+      const auto shutdown_result = coordinator.RequestShutdown();
+      CANOPEN_LOG_ERROR("auto_init post-init soft limit apply failed: {}",
+                        soft_limit_detail);
+      if (!shutdown_result.ok) {
+        CANOPEN_LOG_ERROR("rollback shutdown failed after post-init failure: {}",
+                          shutdown_result.message);
+      }
       return 1;
     }
     if (auto_enable) {
