@@ -68,6 +68,10 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
           config->loop_hz = hz;
         }
       }
+      if (top_canopen["auto_write_soft_limits_from_urdf"]) {
+        config->auto_write_soft_limits_from_urdf =
+            top_canopen["auto_write_soft_limits_from_urdf"].as<bool>();
+      }
     } catch (const YAML::Exception& e) {
       std::ostringstream oss;
       oss << "invalid field type at canopen: " << e.what();

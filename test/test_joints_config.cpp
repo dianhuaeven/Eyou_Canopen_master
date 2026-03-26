@@ -186,3 +186,47 @@ TEST(JointsConfig, InterpolationPeriodDefaultsFromLoopHzAndAllowsOverride) {
   EXPECT_EQ(master_cfg.joints[0].ip_interpolation_period_ms, 4u);
   EXPECT_EQ(master_cfg.joints[1].ip_interpolation_period_ms, 8u);
 }
+
+TEST(JointsConfig, AutoWriteSoftLimitsFromUrdfDefaultsFalse) {
+  const std::string path = "/tmp/joints_test_auto_soft_limit_default.yaml";
+  {
+    std::ofstream ofs(path);
+    ofs << "canopen:\n"
+           "  interface: can0\n"
+           "joints:\n"
+           "  - name: joint_1\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "    counts_per_rev: 1000\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 1000\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(path, &error, &master_cfg);
+  ASSERT_TRUE(ok) << error;
+  EXPECT_FALSE(master_cfg.auto_write_soft_limits_from_urdf);
+}
+
+TEST(JointsConfig, AutoWriteSoftLimitsFromUrdfCanBeEnabled) {
+  const std::string path = "/tmp/joints_test_auto_soft_limit_enabled.yaml";
+  {
+    std::ofstream ofs(path);
+    ofs << "canopen:\n"
+           "  auto_write_soft_limits_from_urdf: true\n"
+           "joints:\n"
+           "  - name: joint_1\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "    counts_per_rev: 1000\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 1000\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(path, &error, &master_cfg);
+  ASSERT_TRUE(ok) << error;
+  EXPECT_TRUE(master_cfg.auto_write_soft_limits_from_urdf);
+}
