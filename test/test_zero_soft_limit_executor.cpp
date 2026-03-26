@@ -71,6 +71,119 @@ TEST(ZeroSoftLimitExecutor, SetCurrentPositionAsZeroWritesExpectedSequence) {
   EXPECT_EQ(op_log, expected);
 }
 
+TEST(ZeroSoftLimitExecutor, ReadHomeOffsetReadsSignedValue) {
+  CanopenMasterConfig cfg;
+  CanopenMasterConfig::JointConfig joint;
+  joint.node_id = 5;
+  cfg.joints = {joint};
+  cfg.axis_count = 1;
+
+  ZeroSoftLimitExecutor::Ops ops;
+  ops.read = [&](uint8_t node_id, uint16_t index, uint8_t subindex,
+                 std::chrono::milliseconds, std::size_t expected_size) -> SdoResult {
+    EXPECT_EQ(node_id, 5);
+    EXPECT_EQ(index, ZeroSoftLimitExecutor::kObj_HomeOffset);
+    EXPECT_EQ(subindex, 0);
+    EXPECT_EQ(expected_size, 4u);
+    return SdoResult{true, PackLeI32(-321), {}};
+  };
+  ops.write_u32 = [](uint8_t, uint16_t, uint8_t, uint32_t,
+                     std::chrono::milliseconds) -> SdoResult {
+    return SdoResult{false, {}, "unused"};
+  };
+
+  ZeroSoftLimitExecutor executor(&cfg, ops);
+  int32_t home_offset = 0;
+  std::string detail;
+  ASSERT_TRUE(executor.ReadHomeOffset(0, &home_offset, &detail)) << detail;
+  EXPECT_EQ(home_offset, -321);
+}
+
+TEST(ZeroSoftLimitExecutor, RestoreHomeOffsetWritesOffsetAndSave) {
+  CanopenMasterConfig cfg;
+  CanopenMasterConfig::JointConfig joint;
+  joint.node_id = 5;
+  cfg.joints = {joint};
+  cfg.axis_count = 1;
+
+  std::vector<std::string> op_log;
+  ZeroSoftLimitExecutor::Ops ops;
+  ops.read = [](uint8_t, uint16_t, uint8_t, std::chrono::milliseconds,
+                std::size_t) -> SdoResult { return SdoResult{false, {}, "unused"}; };
+  ops.write_u32 = [&](uint8_t node_id, uint16_t index, uint8_t subindex, uint32_t value,
+                      std::chrono::milliseconds) -> SdoResult {
+    op_log.push_back("W " + std::to_string(node_id) + " " + std::to_string(index) +
+                     " " + std::to_string(subindex) + " " +
+                     std::to_string(value));
+    return SdoResult{true, {}, {}};
+  };
+
+  ZeroSoftLimitExecutor executor(&cfg, ops);
+  std::string detail;
+  ASSERT_TRUE(executor.RestoreHomeOffset(0, -123, &detail)) << detail;
+
+  const std::vector<std::string> expected = {
+      "W 5 " + std::to_string(ZeroSoftLimitExecutor::kObj_HomeOffset) + " 0 " +
+          std::to_string(static_cast<uint32_t>(-123)),
+      "W 5 " + std::to_string(ZeroSoftLimitExecutor::kObj_StoreParameters) +
+          " 1 " + std::to_string(ZeroSoftLimitExecutor::kStoreSaveSignature)};
+  EXPECT_EQ(op_log, expected);
+}
+
+TEST(ZeroSoftLimitExecutor, PrepareSoftLimitRadiansUsesCountsPerRev) {
+  CanopenMasterConfig cfg;
+  CanopenMasterConfig::JointConfig joint;
+  joint.node_id = 7;
+  joint.counts_per_rev = 360.0;
+  cfg.joints = {joint};
+  cfg.axis_count = 1;
+
+  ZeroSoftLimitExecutor::Ops ops;
+  ops.read = [](uint8_t, uint16_t, uint8_t, std::chrono::milliseconds,
+                std::size_t) -> SdoResult { return SdoResult{false, {}, "unused"}; };
+  ops.write_u32 = [](uint8_t, uint16_t, uint8_t, uint32_t,
+                     std::chrono::milliseconds) -> SdoResult {
+    return SdoResult{true, {}, {}};
+  };
+
+  ZeroSoftLimitExecutor executor(&cfg, ops);
+  int32_t min_counts = 0;
+  int32_t max_counts = 0;
+  std::string detail;
+  ASSERT_TRUE(executor.PrepareSoftLimitRadians(0, 0.0, M_PI, &min_counts,
+                                               &max_counts, &detail))
+      << detail;
+  EXPECT_EQ(min_counts, 0);
+  EXPECT_EQ(max_counts, 180);
+}
+
+TEST(ZeroSoftLimitExecutor, PrepareSoftLimitMetersUsesCountsPerMeter) {
+  CanopenMasterConfig cfg;
+  CanopenMasterConfig::JointConfig joint;
+  joint.node_id = 9;
+  joint.counts_per_meter = 10000.0;
+  cfg.joints = {joint};
+  cfg.axis_count = 1;
+
+  ZeroSoftLimitExecutor::Ops ops;
+  ops.read = [](uint8_t, uint16_t, uint8_t, std::chrono::milliseconds,
+                std::size_t) -> SdoResult { return SdoResult{false, {}, "unused"}; };
+  ops.write_u32 = [](uint8_t, uint16_t, uint8_t, uint32_t,
+                     std::chrono::milliseconds) -> SdoResult {
+    return SdoResult{true, {}, {}};
+  };
+
+  ZeroSoftLimitExecutor executor(&cfg, ops);
+  int32_t min_counts = 0;
+  int32_t max_counts = 0;
+  std::string detail;
+  ASSERT_TRUE(executor.PrepareSoftLimitMeters(0, -0.2, 0.3, &min_counts,
+                                              &max_counts, &detail))
+      << detail;
+  EXPECT_EQ(min_counts, -2000);
+  EXPECT_EQ(max_counts, 3000);
+}
+
 TEST(ZeroSoftLimitExecutor, ApplySoftLimitCountsWritesExpectedSequence) {
   CanopenMasterConfig cfg;
   CanopenMasterConfig::JointConfig joint;

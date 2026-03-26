@@ -153,6 +153,48 @@ int main(int argc, char** argv) {
     return false;
   };
 
+  struct PreparedSoftLimit {
+    int32_t min_counts = 0;
+    int32_t max_counts = 0;
+  };
+
+  auto prepare_soft_limit_axis = [&](std::size_t axis_index, PreparedSoftLimit* out,
+                                     std::string* detail) -> bool {
+    if (!out) {
+      if (detail) {
+        *detail = "prepared soft limit output is null";
+      }
+      return false;
+    }
+    if (!ensure_urdf_limits(detail)) {
+      return false;
+    }
+    if (axis_index >= urdf_limits.size() || axis_index >= master_cfg.joints.size()) {
+      if (detail) {
+        std::ostringstream oss;
+        oss << "axis " << axis_index << " out of URDF limit range";
+        *detail = oss.str();
+      }
+      return false;
+    }
+
+    const auto& limit = urdf_limits[axis_index];
+    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kRadians) {
+      return zero_soft_limit_executor.PrepareSoftLimitRadians(
+          axis_index, limit.lower, limit.upper, &out->min_counts, &out->max_counts,
+          detail);
+    }
+    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kMeters) {
+      return zero_soft_limit_executor.PrepareSoftLimitMeters(
+          axis_index, limit.lower, limit.upper, &out->min_counts, &out->max_counts,
+          detail);
+    }
+    if (detail) {
+      *detail = "unsupported URDF limit unit";
+    }
+    return false;
+  };
+
   auto apply_soft_limit_all = [&](std::string* detail) -> bool {
     if (!master_cfg.auto_write_soft_limits_from_urdf) {
       return true;
@@ -291,6 +333,23 @@ int main(int argc, char** argv) {
         }
 
         std::string detail;
+        PreparedSoftLimit prepared_soft_limit;
+        int32_t previous_home_offset = 0;
+        if (master_cfg.auto_write_soft_limits_from_urdf) {
+          if (!prepare_soft_limit_axis(req.axis_index, &prepared_soft_limit, &detail)) {
+            res.success = false;
+            res.message = detail.empty() ? "soft limit precheck failed" : detail;
+            return true;
+          }
+          if (!zero_soft_limit_executor.ReadHomeOffset(req.axis_index,
+                                                       &previous_home_offset,
+                                                       &detail)) {
+            res.success = false;
+            res.message = detail.empty() ? "read home offset failed" : detail;
+            return true;
+          }
+        }
+
         if (!zero_soft_limit_executor.SetCurrentPositionAsZero(req.axis_index,
                                                                &detail)) {
           res.success = false;
@@ -299,10 +358,27 @@ int main(int argc, char** argv) {
         }
 
         if (master_cfg.auto_write_soft_limits_from_urdf) {
-          if (!apply_soft_limit_axis(req.axis_index, &detail)) {
+          if (!zero_soft_limit_executor.ApplySoftLimitCounts(
+                  req.axis_index, prepared_soft_limit.min_counts,
+                  prepared_soft_limit.max_counts, &detail)) {
+            const std::string soft_limit_error =
+                detail.empty() ? "soft limit rewrite failed" : detail;
+            std::string rollback_detail;
+            if (!zero_soft_limit_executor.RestoreHomeOffset(
+                    req.axis_index, previous_home_offset, &rollback_detail)) {
+              res.success = false;
+              res.message =
+                  "zero set and soft limit rewrite failed; rollback failed: " +
+                  soft_limit_error;
+              if (!rollback_detail.empty()) {
+                res.message += "; " + rollback_detail;
+              }
+              return true;
+            }
             res.success = false;
             res.message =
-                "zero set but soft limit rewrite failed: " + detail;
+                "soft limit rewrite failed after zeroing; restored previous home offset: " +
+                soft_limit_error;
             return true;
           }
         }

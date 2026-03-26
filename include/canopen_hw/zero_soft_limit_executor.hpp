@@ -35,6 +35,16 @@ class ZeroSoftLimitExecutor {
   ZeroSoftLimitExecutor(const CanopenMasterConfig* config, Ops ops);
 
   bool SetCurrentPositionAsZero(std::size_t axis_index, std::string* detail = nullptr);
+  bool ReadHomeOffset(std::size_t axis_index, int32_t* out,
+                      std::string* detail = nullptr);
+  bool RestoreHomeOffset(std::size_t axis_index, int32_t home_offset,
+                         std::string* detail = nullptr);
+  bool PrepareSoftLimitRadians(std::size_t axis_index, double min_rad, double max_rad,
+                               int32_t* min_counts, int32_t* max_counts,
+                               std::string* detail = nullptr);
+  bool PrepareSoftLimitMeters(std::size_t axis_index, double min_meters,
+                              double max_meters, int32_t* min_counts,
+                              int32_t* max_counts, std::string* detail = nullptr);
 
   bool ApplySoftLimitCounts(std::size_t axis_index, int32_t min_counts,
                             int32_t max_counts, std::string* detail = nullptr);
@@ -50,6 +60,13 @@ class ZeroSoftLimitExecutor {
 
  private:
   bool ValidateAxis(std::size_t axis_index, std::string* detail) const;
+  bool ValidatePreparedSoftLimitOutput(int32_t* min_counts, int32_t* max_counts,
+                                       std::string* detail) const;
+  bool ValidatePreparedSoftLimitRange(std::size_t axis_index, int32_t min_counts,
+                                      int32_t max_counts, std::string* detail) const;
+  bool WriteHomeOffset(std::size_t axis_index, int32_t home_offset, const char* step,
+                       std::string* detail);
+  bool StoreParameters(std::size_t axis_index, const char* step, std::string* detail);
   bool WriteU32(std::size_t axis_index, uint16_t index, uint8_t subindex,
                 uint32_t value, const char* step, std::string* detail);
   bool ReadI32(std::size_t axis_index, uint16_t index, uint8_t subindex, int32_t* out,

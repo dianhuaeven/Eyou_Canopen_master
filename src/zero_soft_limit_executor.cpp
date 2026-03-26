@@ -35,7 +35,7 @@ bool ZeroSoftLimitExecutor::SetCurrentPositionAsZero(std::size_t axis_index,
     return false;
   }
 
-  if (!WriteU32(axis_index, kObj_HomeOffset, 0, 0u, "write 0x607C:00=0", detail)) {
+  if (!WriteHomeOffset(axis_index, 0, "write 0x607C:00=0", detail)) {
     return false;
   }
 
@@ -51,13 +51,12 @@ bool ZeroSoftLimitExecutor::SetCurrentPositionAsZero(std::size_t axis_index,
   }
 
   const int32_t home_offset = -actual_position;
-  if (!WriteU32(axis_index, kObj_HomeOffset, 0, static_cast<uint32_t>(home_offset),
-                "write 0x607C:00=-actual_position", detail)) {
+  if (!WriteHomeOffset(axis_index, home_offset, "write 0x607C:00=-actual_position",
+                       detail)) {
     return false;
   }
 
-  if (!WriteU32(axis_index, kObj_StoreParameters, 1, kStoreSaveSignature,
-                "write 0x1010:01='save'", detail)) {
+  if (!StoreParameters(axis_index, "write 0x1010:01='save'", detail)) {
     return false;
   }
 
@@ -67,6 +66,95 @@ bool ZeroSoftLimitExecutor::SetCurrentPositionAsZero(std::size_t axis_index,
     *detail = oss.str();
   }
   return true;
+}
+
+bool ZeroSoftLimitExecutor::ReadHomeOffset(std::size_t axis_index, int32_t* out,
+                                           std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+  return ReadI32(axis_index, kObj_HomeOffset, 0, out, "read 0x607C:00", detail);
+}
+
+bool ZeroSoftLimitExecutor::RestoreHomeOffset(std::size_t axis_index,
+                                              int32_t home_offset,
+                                              std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+  if (!WriteHomeOffset(axis_index, home_offset, "restore 0x607C:00", detail)) {
+    return false;
+  }
+  if (!StoreParameters(axis_index, "restore 0x1010:01='save'", detail)) {
+    return false;
+  }
+  if (detail) {
+    std::ostringstream oss;
+    oss << "axis " << axis_index << " home_offset restored to " << home_offset;
+    *detail = oss.str();
+  }
+  return true;
+}
+
+bool ZeroSoftLimitExecutor::PrepareSoftLimitRadians(std::size_t axis_index, double min_rad,
+                                                    double max_rad,
+                                                    int32_t* min_counts,
+                                                    int32_t* max_counts,
+                                                    std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+  if (!ValidatePreparedSoftLimitOutput(min_counts, max_counts, detail)) {
+    return false;
+  }
+
+  const auto& joint = config_->joints[axis_index];
+  if (!RadToCounts(min_rad, joint.counts_per_rev, min_counts, detail)) {
+    if (detail) {
+      *detail = "axis " + std::to_string(axis_index) + " min limit conversion failed: " +
+                *detail;
+    }
+    return false;
+  }
+  if (!RadToCounts(max_rad, joint.counts_per_rev, max_counts, detail)) {
+    if (detail) {
+      *detail = "axis " + std::to_string(axis_index) + " max limit conversion failed: " +
+                *detail;
+    }
+    return false;
+  }
+  return ValidatePreparedSoftLimitRange(axis_index, *min_counts, *max_counts, detail);
+}
+
+bool ZeroSoftLimitExecutor::PrepareSoftLimitMeters(std::size_t axis_index,
+                                                   double min_meters,
+                                                   double max_meters,
+                                                   int32_t* min_counts,
+                                                   int32_t* max_counts,
+                                                   std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+  if (!ValidatePreparedSoftLimitOutput(min_counts, max_counts, detail)) {
+    return false;
+  }
+
+  const auto& joint = config_->joints[axis_index];
+  if (!MetersToCounts(min_meters, joint.counts_per_meter, min_counts, detail)) {
+    if (detail) {
+      *detail = "axis " + std::to_string(axis_index) + " min limit conversion failed: " +
+                *detail;
+    }
+    return false;
+  }
+  if (!MetersToCounts(max_meters, joint.counts_per_meter, max_counts, detail)) {
+    if (detail) {
+      *detail = "axis " + std::to_string(axis_index) + " max limit conversion failed: " +
+                *detail;
+    }
+    return false;
+  }
+  return ValidatePreparedSoftLimitRange(axis_index, *min_counts, *max_counts, detail);
 }
 
 bool ZeroSoftLimitExecutor::ApplySoftLimitCounts(std::size_t axis_index, int32_t min_counts,
@@ -107,25 +195,10 @@ bool ZeroSoftLimitExecutor::ApplySoftLimitCounts(std::size_t axis_index, int32_t
 
 bool ZeroSoftLimitExecutor::ApplySoftLimitRadians(std::size_t axis_index, double min_rad,
                                                   double max_rad, std::string* detail) {
-  if (!ValidateAxis(axis_index, detail)) {
-    return false;
-  }
-
-  const auto& joint = config_->joints[axis_index];
   int32_t min_counts = 0;
-  if (!RadToCounts(min_rad, joint.counts_per_rev, &min_counts, detail)) {
-    if (detail) {
-      *detail = "axis " + std::to_string(axis_index) + " min limit conversion failed: " +
-                *detail;
-    }
-    return false;
-  }
   int32_t max_counts = 0;
-  if (!RadToCounts(max_rad, joint.counts_per_rev, &max_counts, detail)) {
-    if (detail) {
-      *detail = "axis " + std::to_string(axis_index) + " max limit conversion failed: " +
-                *detail;
-    }
+  if (!PrepareSoftLimitRadians(axis_index, min_rad, max_rad, &min_counts, &max_counts,
+                               detail)) {
     return false;
   }
   return ApplySoftLimitCounts(axis_index, min_counts, max_counts, detail);
@@ -135,25 +208,10 @@ bool ZeroSoftLimitExecutor::ApplySoftLimitMeters(std::size_t axis_index,
                                                  double min_meters,
                                                  double max_meters,
                                                  std::string* detail) {
-  if (!ValidateAxis(axis_index, detail)) {
-    return false;
-  }
-
-  const auto& joint = config_->joints[axis_index];
   int32_t min_counts = 0;
-  if (!MetersToCounts(min_meters, joint.counts_per_meter, &min_counts, detail)) {
-    if (detail) {
-      *detail = "axis " + std::to_string(axis_index) + " min limit conversion failed: " +
-                *detail;
-    }
-    return false;
-  }
   int32_t max_counts = 0;
-  if (!MetersToCounts(max_meters, joint.counts_per_meter, &max_counts, detail)) {
-    if (detail) {
-      *detail = "axis " + std::to_string(axis_index) + " max limit conversion failed: " +
-                *detail;
-    }
+  if (!PrepareSoftLimitMeters(axis_index, min_meters, max_meters, &min_counts,
+                              &max_counts, detail)) {
     return false;
   }
   return ApplySoftLimitCounts(axis_index, min_counts, max_counts, detail);
@@ -230,6 +288,40 @@ bool ZeroSoftLimitExecutor::ValidateAxis(std::size_t axis_index,
     return false;
   }
   return true;
+}
+
+bool ZeroSoftLimitExecutor::ValidatePreparedSoftLimitOutput(
+    int32_t* min_counts, int32_t* max_counts, std::string* detail) const {
+  if (!min_counts || !max_counts) {
+    SetError(detail, "soft limit count outputs are null");
+    return false;
+  }
+  return true;
+}
+
+bool ZeroSoftLimitExecutor::ValidatePreparedSoftLimitRange(
+    std::size_t axis_index, int32_t min_counts, int32_t max_counts,
+    std::string* detail) const {
+  if (min_counts > max_counts) {
+    std::ostringstream oss;
+    oss << "invalid limits for axis " << axis_index << ": min(" << min_counts
+        << ") > max(" << max_counts << ")";
+    SetError(detail, oss.str());
+    return false;
+  }
+  return true;
+}
+
+bool ZeroSoftLimitExecutor::WriteHomeOffset(std::size_t axis_index, int32_t home_offset,
+                                            const char* step, std::string* detail) {
+  return WriteU32(axis_index, kObj_HomeOffset, 0, static_cast<uint32_t>(home_offset),
+                  step, detail);
+}
+
+bool ZeroSoftLimitExecutor::StoreParameters(std::size_t axis_index, const char* step,
+                                            std::string* detail) {
+  return WriteU32(axis_index, kObj_StoreParameters, 1, kStoreSaveSignature, step,
+                  detail);
 }
 
 bool ZeroSoftLimitExecutor::WriteU32(std::size_t axis_index, uint16_t index,
