@@ -363,7 +363,12 @@ bool CanopenMaster::ResetAllFaults(std::string* detail) {
     return false;
   }
 
+  const auto is_fault_state = [](CiA402State st) {
+    return st == CiA402State::Fault || st == CiA402State::FaultReactionActive;
+  };
+
   std::vector<std::size_t> fault_axes;
+  std::vector<std::size_t> latched_fault_axes;
   SharedSnapshot initial_snapshot;
   if (shared_state_) {
     initial_snapshot = shared_state_->Snapshot();
@@ -375,22 +380,30 @@ bool CanopenMaster::ResetAllFaults(std::string* detail) {
       continue;
     }
 
-    bool is_fault = false;
-    if (shared_state_ && i < initial_snapshot.feedback.size()) {
-      is_fault = initial_snapshot.feedback[i].is_fault;
-    } else {
-      const CiA402State st = axis->feedback_state();
-      is_fault = (st == CiA402State::Fault ||
-                  st == CiA402State::FaultReactionActive);
-    }
-    if (is_fault) {
+    const CiA402State st = axis->feedback_state();
+    const bool state_fault = is_fault_state(st);
+    const bool latched_fault =
+        shared_state_ && i < initial_snapshot.feedback.size()
+            ? initial_snapshot.feedback[i].is_fault
+            : false;
+
+    if (state_fault) {
       fault_axes.emplace_back(i);
+    } else if (latched_fault) {
+      // 历史闩锁故障：实际状态已脱离 Fault/FRA，只需清缓存闩锁。
+      latched_fault_axes.emplace_back(i);
     }
   }
 
   if (fault_axes.empty()) {
+    for (const std::size_t axis_index : latched_fault_axes) {
+      if (axis_index < axis_drivers_.size() && axis_drivers_[axis_index]) {
+        axis_drivers_[axis_index]->ResetFault();
+      }
+    }
     if (detail) {
-      *detail = "no faulted axis";
+      *detail =
+          latched_fault_axes.empty() ? "no faulted axis" : "fault latch cleared";
     }
     return true;
   }
@@ -427,20 +440,12 @@ bool CanopenMaster::ResetAllFaults(std::string* detail) {
   std::vector<std::size_t> pending;
   while (std::chrono::steady_clock::now() < deadline) {
     pending.clear();
-    SharedSnapshot snap;
-    if (shared_state_) {
-      snap = shared_state_->Snapshot();
-    }
 
     for (const std::size_t axis_index : fault_axes) {
       bool still_fault = false;
-      if (shared_state_ && axis_index < snap.feedback.size()) {
-        still_fault = snap.feedback[axis_index].is_fault;
-      } else if (axis_index < axis_drivers_.size() &&
-                 axis_drivers_[axis_index]) {
+      if (axis_index < axis_drivers_.size() && axis_drivers_[axis_index]) {
         const CiA402State st = axis_drivers_[axis_index]->feedback_state();
-        still_fault = (st == CiA402State::Fault ||
-                       st == CiA402State::FaultReactionActive);
+        still_fault = is_fault_state(st);
       }
       if (still_fault) {
         pending.emplace_back(axis_index);
@@ -449,6 +454,11 @@ bool CanopenMaster::ResetAllFaults(std::string* detail) {
 
     if (pending.empty()) {
       for (const std::size_t axis_index : fault_axes) {
+        if (axis_index < axis_drivers_.size() && axis_drivers_[axis_index]) {
+          axis_drivers_[axis_index]->ResetFault();
+        }
+      }
+      for (const std::size_t axis_index : latched_fault_axes) {
         if (axis_index < axis_drivers_.size() && axis_drivers_[axis_index]) {
           axis_drivers_[axis_index]->ResetFault();
         }
@@ -479,7 +489,7 @@ bool CanopenMaster::ResetAllFaults(std::string* detail) {
             << ")";
       }
     }
-    oss << "; try /init to reinitialize";
+    oss << "; try /shutdown then /init to reinitialize";
     *detail = oss.str();
   }
   return false;
