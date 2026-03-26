@@ -40,15 +40,17 @@ TEST(UrdfJointLimits, ParseSuccessForRevoluteAndPrismatic) {
 
   std::vector<CanopenMasterConfig::JointConfig> joints = {
       MakeJoint("joint_1", 5), MakeJoint("joint_2", 6)};
-  std::vector<JointLimitRad> limits;
+  std::vector<JointLimitSpec> limits;
   std::string error;
 
   ASSERT_TRUE(ParseUrdfJointLimits(urdf, joints, &limits, &error)) << error;
   ASSERT_EQ(limits.size(), 2u);
   EXPECT_DOUBLE_EQ(limits[0].lower, -1.0);
   EXPECT_DOUBLE_EQ(limits[0].upper, 1.5);
+  EXPECT_EQ(limits[0].unit, UrdfJointLimitUnit::kRadians);
   EXPECT_DOUBLE_EQ(limits[1].lower, -0.2);
   EXPECT_DOUBLE_EQ(limits[1].upper, 0.3);
+  EXPECT_EQ(limits[1].unit, UrdfJointLimitUnit::kMeters);
 }
 
 TEST(UrdfJointLimits, MissingJointReturnsError) {
@@ -68,7 +70,7 @@ TEST(UrdfJointLimits, MissingJointReturnsError) {
 
   std::vector<CanopenMasterConfig::JointConfig> joints = {
       MakeJoint("joint_missing", 5)};
-  std::vector<JointLimitRad> limits;
+  std::vector<JointLimitSpec> limits;
   std::string error;
 
   EXPECT_FALSE(ParseUrdfJointLimits(urdf, joints, &limits, &error));
@@ -92,14 +94,14 @@ TEST(UrdfJointLimits, ContinuousJointRejected) {
 
   std::vector<CanopenMasterConfig::JointConfig> joints = {
       MakeJoint("joint_1", 5)};
-  std::vector<JointLimitRad> limits;
+  std::vector<JointLimitSpec> limits;
   std::string error;
 
   EXPECT_FALSE(ParseUrdfJointLimits(urdf, joints, &limits, &error));
   EXPECT_NE(error.find("not limited revolute/prismatic"), std::string::npos);
 }
 
-TEST(UrdfJointLimits, JointWithoutLimitsRejected) {
+TEST(UrdfJointLimits, InvalidUrdfRejected) {
   const std::string urdf = R"(
 <robot name="r">
   <link name="l0"/>
@@ -115,11 +117,11 @@ TEST(UrdfJointLimits, JointWithoutLimitsRejected) {
 
   std::vector<CanopenMasterConfig::JointConfig> joints = {
       MakeJoint("joint_1", 5)};
-  std::vector<JointLimitRad> limits;
+  std::vector<JointLimitSpec> limits;
   std::string error;
 
   EXPECT_FALSE(ParseUrdfJointLimits(urdf, joints, &limits, &error));
-  EXPECT_NE(error.find("has no position limits"), std::string::npos);
+  EXPECT_NE(error.find("failed to parse robot_description"), std::string::npos);
 }
 
 }  // namespace

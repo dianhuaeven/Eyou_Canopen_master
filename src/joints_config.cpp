@@ -93,6 +93,7 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
     }
     const YAML::Node canopen = joint["canopen"];
     CanopenMasterConfig::JointConfig jcfg;
+    const bool has_counts_per_meter = static_cast<bool>(joint["counts_per_meter"]);
     jcfg.ip_interpolation_period_ms =
         static_cast<uint8_t>(inferred_ip_period_ms);
     if (joint["name"]) {
@@ -170,6 +171,9 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
       if (joint["counts_per_rev"]) {
         jcfg.counts_per_rev = joint["counts_per_rev"].as<double>();
       }
+      if (has_counts_per_meter) {
+        jcfg.counts_per_meter = joint["counts_per_meter"].as<double>();
+      }
       if (joint["rated_torque_nm"]) {
         jcfg.rated_torque_nm = joint["rated_torque_nm"].as<double>();
       }
@@ -199,21 +203,30 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
     }
 
     // 参数合法性校验: counts_per_rev 和 rated_torque_nm 必须为正值。
-    if (jcfg.counts_per_rev <= 0) {
+    if (!std::isfinite(jcfg.counts_per_rev) || jcfg.counts_per_rev <= 0) {
       std::ostringstream oss;
       oss << "invalid counts_per_rev at joints[" << axis_index
           << "]: expected > 0, got " << jcfg.counts_per_rev;
       SetError(error, oss.str());
       return false;
     }
-    if (jcfg.rated_torque_nm <= 0) {
+    if (has_counts_per_meter &&
+        (!std::isfinite(jcfg.counts_per_meter) || jcfg.counts_per_meter <= 0)) {
+      std::ostringstream oss;
+      oss << "invalid counts_per_meter at joints[" << axis_index
+          << "]: expected > 0, got " << jcfg.counts_per_meter;
+      SetError(error, oss.str());
+      return false;
+    }
+    if (!std::isfinite(jcfg.rated_torque_nm) || jcfg.rated_torque_nm <= 0) {
       std::ostringstream oss;
       oss << "invalid rated_torque_nm at joints[" << axis_index
           << "]: expected > 0, got " << jcfg.rated_torque_nm;
       SetError(error, oss.str());
       return false;
     }
-    if (jcfg.max_velocity_for_clamp <= 0) {
+    if (!std::isfinite(jcfg.max_velocity_for_clamp) ||
+        jcfg.max_velocity_for_clamp <= 0) {
       std::ostringstream oss;
       oss << "invalid max_velocity_for_clamp at joints[" << axis_index
           << "]: expected > 0, got " << jcfg.max_velocity_for_clamp;

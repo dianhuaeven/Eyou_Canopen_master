@@ -138,6 +138,7 @@ joints:
 
 - `name`：关节名称（仅标识）。
 - `counts_per_rev`：每圈计数，用于位置换算。
+- `counts_per_meter`：每米计数，仅用于 `prismatic` 关节软限位换算（可选；配置后必须 > 0）。
 - `rated_torque_nm`：额定扭矩，Nm。
 - `position_lock_threshold`：CSP 解锁阈值（ticks）。
 - `ip_interpolation_period_ms`：IP 模式插补周期（ms，对应 SDO `0x60C2:01`，范围 1..255）。
@@ -160,9 +161,10 @@ joints:
 - `verify_pdo_mapping` 仅影响启动校验，不写入设备。
 - `auto_write_soft_limits_from_urdf=true` 时，`init` 后会自动执行：
   - `SoftLimitState(0x2003:00)=0x4C494D54`
-  - `Software_position_limit_Maxima(0x607D:02)=round(upper_rad/(2π)*counts_per_rev)`
-  - `Software_position_limit_Minima(0x607D:01)=round(lower_rad/(2π)*counts_per_rev)`
+  - 若关节类型为 `revolute`：`0x607D:02/01=round(limit_rad/(2π)*counts_per_rev)`
+  - 若关节类型为 `prismatic`：`0x607D:02/01=round(limit_meter*counts_per_meter)`
   若 URDF 缺少对应关节或缺少位置上下限，则本次 `init` 失败。
+  若关节为 `prismatic` 但未配置 `counts_per_meter`，本次 `init` 失败。
 - `ip_interpolation_period_ms` 未配置时，默认由 `loop_hz` 推导：
   `period_ms = round(1000 / loop_hz)`，并限制到 `1..255`。
 - `max_velocity_for_clamp` 缺省时使用默认值 `500000.0`（ticks/s），

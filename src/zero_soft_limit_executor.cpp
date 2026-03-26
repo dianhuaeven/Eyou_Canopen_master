@@ -131,6 +131,34 @@ bool ZeroSoftLimitExecutor::ApplySoftLimitRadians(std::size_t axis_index, double
   return ApplySoftLimitCounts(axis_index, min_counts, max_counts, detail);
 }
 
+bool ZeroSoftLimitExecutor::ApplySoftLimitMeters(std::size_t axis_index,
+                                                 double min_meters,
+                                                 double max_meters,
+                                                 std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+
+  const auto& joint = config_->joints[axis_index];
+  int32_t min_counts = 0;
+  if (!MetersToCounts(min_meters, joint.counts_per_meter, &min_counts, detail)) {
+    if (detail) {
+      *detail = "axis " + std::to_string(axis_index) + " min limit conversion failed: " +
+                *detail;
+    }
+    return false;
+  }
+  int32_t max_counts = 0;
+  if (!MetersToCounts(max_meters, joint.counts_per_meter, &max_counts, detail)) {
+    if (detail) {
+      *detail = "axis " + std::to_string(axis_index) + " max limit conversion failed: " +
+                *detail;
+    }
+    return false;
+  }
+  return ApplySoftLimitCounts(axis_index, min_counts, max_counts, detail);
+}
+
 bool ZeroSoftLimitExecutor::RadToCounts(double rad, double counts_per_rev, int32_t* out,
                                         std::string* error) {
   if (!out) {
@@ -147,6 +175,31 @@ bool ZeroSoftLimitExecutor::RadToCounts(double rad, double counts_per_rev, int32
   }
 
   const double raw = rad * counts_per_rev / (2.0 * kPi);
+  if (raw < static_cast<double>(std::numeric_limits<int32_t>::min()) ||
+      raw > static_cast<double>(std::numeric_limits<int32_t>::max())) {
+    SetError(error, "converted counts out of int32 range");
+    return false;
+  }
+  *out = static_cast<int32_t>(std::llround(raw));
+  return true;
+}
+
+bool ZeroSoftLimitExecutor::MetersToCounts(double meters, double counts_per_meter,
+                                           int32_t* out, std::string* error) {
+  if (!out) {
+    SetError(error, "out is null");
+    return false;
+  }
+  if (!std::isfinite(meters)) {
+    SetError(error, "meters is not finite");
+    return false;
+  }
+  if (!std::isfinite(counts_per_meter) || counts_per_meter <= 0.0) {
+    SetError(error, "counts_per_meter must be > 0");
+    return false;
+  }
+
+  const double raw = meters * counts_per_meter;
   if (raw < static_cast<double>(std::numeric_limits<int32_t>::min()) ||
       raw > static_cast<double>(std::numeric_limits<int32_t>::max())) {
     SetError(error, "converted counts out of int32 range");

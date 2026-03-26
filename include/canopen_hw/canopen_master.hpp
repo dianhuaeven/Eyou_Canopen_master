@@ -48,6 +48,9 @@ struct CanopenMasterConfig {
     uint8_t ip_interpolation_period_ms = 5;
     double max_velocity_for_clamp = 500000.0;
     double counts_per_rev = 5308416.0;
+    // 线性关节换算系数（counts/m）。仅在 URDF 关节类型为 prismatic 且写软限位时使用。
+    // <=0 表示未配置。
+    double counts_per_meter = 0.0;
     double rated_torque_nm = 6.0;
     double velocity_scale = 1.0;
     double torque_scale = 1.0;

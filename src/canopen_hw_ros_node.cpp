@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
   canopen_hw::ServiceGateway service_gateway(&pnh, &coordinator, &loop_mtx);
   canopen_hw::ZeroSoftLimitExecutor zero_soft_limit_executor(lifecycle.master(),
                                                              &master_cfg);
-  std::vector<canopen_hw::JointLimitRad> urdf_limits;
+  std::vector<canopen_hw::JointLimitSpec> urdf_limits;
   bool urdf_limits_ready = false;
 
   auto ensure_urdf_limits = [&](std::string* detail) -> bool {
@@ -138,9 +138,19 @@ int main(int argc, char** argv) {
       }
       return false;
     }
-    return zero_soft_limit_executor.ApplySoftLimitRadians(
-        axis_index, urdf_limits[axis_index].lower, urdf_limits[axis_index].upper,
-        detail);
+    const auto& limit = urdf_limits[axis_index];
+    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kRadians) {
+      return zero_soft_limit_executor.ApplySoftLimitRadians(
+          axis_index, limit.lower, limit.upper, detail);
+    }
+    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kMeters) {
+      return zero_soft_limit_executor.ApplySoftLimitMeters(
+          axis_index, limit.lower, limit.upper, detail);
+    }
+    if (detail) {
+      *detail = "unsupported URDF limit unit";
+    }
+    return false;
   };
 
   auto apply_soft_limit_all = [&](std::string* detail) -> bool {

@@ -40,9 +40,13 @@ class ZeroSoftLimitExecutor {
                             int32_t max_counts, std::string* detail = nullptr);
   bool ApplySoftLimitRadians(std::size_t axis_index, double min_rad, double max_rad,
                              std::string* detail = nullptr);
+  bool ApplySoftLimitMeters(std::size_t axis_index, double min_meters,
+                            double max_meters, std::string* detail = nullptr);
 
   static bool RadToCounts(double rad, double counts_per_rev, int32_t* out,
                           std::string* error = nullptr);
+  static bool MetersToCounts(double meters, double counts_per_meter, int32_t* out,
+                             std::string* error = nullptr);
 
  private:
   bool ValidateAxis(std::size_t axis_index, std::string* detail) const;

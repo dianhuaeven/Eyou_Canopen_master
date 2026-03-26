@@ -63,9 +63,10 @@ TEST(ZeroSoftLimitExecutor, SetCurrentPositionAsZeroWritesExpectedSequence) {
 
   const uint32_t expected_offset = static_cast<uint32_t>(-12345);
   std::vector<std::string> expected = {
-      "W 5 24636 0 0",
+      "W 5 " + std::to_string(ZeroSoftLimitExecutor::kObj_HomeOffset) + " 0 0",
       "R 5 24676 0 4",
-      "W 5 24636 0 " + std::to_string(expected_offset),
+      "W 5 " + std::to_string(ZeroSoftLimitExecutor::kObj_HomeOffset) + " 0 " +
+          std::to_string(expected_offset),
       "W 5 4112 1 1702257011"};
   EXPECT_EQ(op_log, expected);
 }
@@ -138,6 +139,61 @@ TEST(ZeroSoftLimitExecutor, ApplySoftLimitRadiansUsesCountsPerRev) {
       static_cast<uint32_t>(0));
   EXPECT_EQ(writes[1], expected1);
   EXPECT_EQ(writes[2], expected2);
+}
+
+TEST(ZeroSoftLimitExecutor, ApplySoftLimitMetersUsesCountsPerMeter) {
+  CanopenMasterConfig cfg;
+  CanopenMasterConfig::JointConfig joint;
+  joint.node_id = 9;
+  joint.counts_per_meter = 10000.0;
+  cfg.joints = {joint};
+  cfg.axis_count = 1;
+
+  std::vector<std::tuple<uint16_t, uint8_t, uint32_t>> writes;
+  ZeroSoftLimitExecutor::Ops ops;
+  ops.read = [](uint8_t, uint16_t, uint8_t, std::chrono::milliseconds,
+                std::size_t) -> SdoResult { return SdoResult{false, {}, "unused"}; };
+  ops.write_u32 = [&](uint8_t, uint16_t index, uint8_t subindex, uint32_t value,
+                      std::chrono::milliseconds) -> SdoResult {
+    writes.emplace_back(index, subindex, value);
+    return SdoResult{true, {}, {}};
+  };
+
+  ZeroSoftLimitExecutor executor(&cfg, ops);
+  std::string detail;
+  ASSERT_TRUE(executor.ApplySoftLimitMeters(0, -0.2, 0.3, &detail)) << detail;
+
+  ASSERT_EQ(writes.size(), 3u);
+  const auto expected1 = std::make_tuple(
+      ZeroSoftLimitExecutor::kObj_SoftwarePositionLimit, static_cast<uint8_t>(2),
+      static_cast<uint32_t>(3000));
+  const auto expected2 = std::make_tuple(
+      ZeroSoftLimitExecutor::kObj_SoftwarePositionLimit, static_cast<uint8_t>(1),
+      static_cast<uint32_t>(-2000));
+  EXPECT_EQ(writes[1], expected1);
+  EXPECT_EQ(writes[2], expected2);
+}
+
+TEST(ZeroSoftLimitExecutor, ApplySoftLimitMetersRejectsMissingScale) {
+  CanopenMasterConfig cfg;
+  CanopenMasterConfig::JointConfig joint;
+  joint.node_id = 9;
+  joint.counts_per_meter = 0.0;
+  cfg.joints = {joint};
+  cfg.axis_count = 1;
+
+  ZeroSoftLimitExecutor::Ops ops;
+  ops.read = [](uint8_t, uint16_t, uint8_t, std::chrono::milliseconds,
+                std::size_t) -> SdoResult { return SdoResult{false, {}, "unused"}; };
+  ops.write_u32 = [](uint8_t, uint16_t, uint8_t, uint32_t,
+                     std::chrono::milliseconds) -> SdoResult {
+    return SdoResult{true, {}, {}};
+  };
+
+  ZeroSoftLimitExecutor executor(&cfg, ops);
+  std::string detail;
+  EXPECT_FALSE(executor.ApplySoftLimitMeters(0, -0.2, 0.3, &detail));
+  EXPECT_NE(detail.find("counts_per_meter"), std::string::npos);
 }
 
 }  // namespace

@@ -230,3 +230,46 @@ TEST(JointsConfig, AutoWriteSoftLimitsFromUrdfCanBeEnabled) {
   ASSERT_TRUE(ok) << error;
   EXPECT_TRUE(master_cfg.auto_write_soft_limits_from_urdf);
 }
+
+TEST(JointsConfig, CountsPerMeterCanBeConfigured) {
+  const std::string path = "/tmp/joints_test_counts_per_meter_valid.yaml";
+  {
+    std::ofstream ofs(path);
+    ofs << "joints:\n"
+           "  - name: joint_1\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "    counts_per_rev: 1000\n"
+           "    counts_per_meter: 20000\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 1000\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(path, &error, &master_cfg);
+  ASSERT_TRUE(ok) << error;
+  ASSERT_EQ(master_cfg.joints.size(), 1u);
+  EXPECT_DOUBLE_EQ(master_cfg.joints[0].counts_per_meter, 20000.0);
+}
+
+TEST(JointsConfig, InvalidCountsPerMeterRejected) {
+  const std::string path = "/tmp/joints_test_counts_per_meter_invalid.yaml";
+  {
+    std::ofstream ofs(path);
+    ofs << "joints:\n"
+           "  - name: joint_1\n"
+           "    canopen:\n"
+           "      node_id: 1\n"
+           "    counts_per_rev: 1000\n"
+           "    counts_per_meter: 0\n"
+           "    rated_torque_nm: 6\n"
+           "    max_velocity_for_clamp: 1000\n";
+  }
+
+  std::string error;
+  canopen_hw::CanopenMasterConfig master_cfg;
+  const bool ok = canopen_hw::LoadJointsYaml(path, &error, &master_cfg);
+  EXPECT_FALSE(ok);
+  EXPECT_NE(error.find("invalid counts_per_meter"), std::string::npos);
+}

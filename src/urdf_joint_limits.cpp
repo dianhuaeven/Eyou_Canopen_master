@@ -24,7 +24,7 @@ bool IsSupportedLimitedType(int joint_type) {
 bool ParseUrdfJointLimits(
     const std::string& urdf_xml,
     const std::vector<CanopenMasterConfig::JointConfig>& joints,
-    std::vector<JointLimitRad>* out_limits, std::string* error) {
+    std::vector<JointLimitSpec>* out_limits, std::string* error) {
   if (!out_limits) {
     SetError(error, "out_limits is null");
     return false;
@@ -80,7 +80,12 @@ bool ParseUrdfJointLimits(
       return false;
     }
 
-    out_limits->push_back(JointLimitRad{lower, upper});
+    UrdfJointLimitUnit unit = UrdfJointLimitUnit::kRadians;
+    if (joint->type == urdf::Joint::PRISMATIC) {
+      unit = UrdfJointLimitUnit::kMeters;
+    }
+
+    out_limits->push_back(JointLimitSpec{lower, upper, unit});
   }
 
   return true;
