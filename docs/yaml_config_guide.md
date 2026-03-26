@@ -130,6 +130,7 @@ joints:
 - `interface`：CAN 接口名（例如 `can0`）。
 - `master_node_id`：主站节点号。
 - `loop_hz`：ROS 控制循环频率（Hz）。
+- `auto_write_soft_limits_from_urdf`：是否在每次 `init` 成功后自动按 URDF 限位写入 `0x2003/0x607D`（默认 `false`）。
 
 说明：
 - `bitrate` / `sync_period_us` 不属于运行时 `joints.yaml` 生效字段。
@@ -157,6 +158,11 @@ joints:
 - `joints` 为数组，顺序对应轴索引（0 开始，长度由 `joints` 数组决定）。
 - 若 `canopen.node_id` 未设置，则按顺序分配 node_id = index + 1。
 - `verify_pdo_mapping` 仅影响启动校验，不写入设备。
+- `auto_write_soft_limits_from_urdf=true` 时，`init` 后会自动执行：
+  - `SoftLimitState(0x2003:00)=0x4C494D54`
+  - `Software_position_limit_Maxima(0x607D:02)=round(upper_rad/(2π)*counts_per_rev)`
+  - `Software_position_limit_Minima(0x607D:01)=round(lower_rad/(2π)*counts_per_rev)`
+  若 URDF 缺少对应关节或缺少位置上下限，则本次 `init` 失败。
 - `ip_interpolation_period_ms` 未配置时，默认由 `loop_hz` 推导：
   `period_ms = round(1000 / loop_hz)`，并限制到 `1..255`。
 - `max_velocity_for_clamp` 缺省时使用默认值 `500000.0`（ticks/s），

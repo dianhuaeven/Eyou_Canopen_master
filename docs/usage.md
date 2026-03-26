@@ -165,6 +165,7 @@ rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 | `~recover` | `std_srvs/Trigger` | `Faulted -> Standby`（等待 fault 与 heartbeat 全清后才成功，不自动上电） |
 | `~shutdown` | `std_srvs/Trigger` | 停通信并回 `Configured`，节点不退出（随后需 `~init`；成功后触发一次命令重同步） |
 | `~set_mode` | `Eyou_Canopen_Master/SetMode` | 仅在 `Standby` 允许（典型：`~disable` 后） |
+| `~set_zero` | `Eyou_Canopen_Master/SetZero` | 仅在 `Standby` 允许；将当前轴位置设为零点（`0x607C`），并持久化到设备（`0x1010:01='save'`） |
 
 ### 6.1.2 命令协议（epoch-ready + command_sync_sequence）
 
@@ -187,11 +188,12 @@ rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 
 - `~shutdown`：停通信并回到 `Configured`，节点进程不退出。
 - `~recover`：仅在全部轴 `fault=false` 且 `heartbeat_lost=false` 后才返回成功；成功后回到 `Standby`，不自动上电。
-- `~init`：`~shutdown` 后重新建立通信并进入 `Armed`；成功后会触发一次命令重同步。
+- `~init`：`~shutdown` 后重新建立通信并进入 `Armed`；成功后会触发一次命令重同步。若 `canopen.auto_write_soft_limits_from_urdf=true`，会在 `init` 成功后按 URDF 关节限位写入 `0x2003/0x607D`；写入失败则本次 `init` 返回失败并回滚到 `Configured`。
 - `~enable`：将 `Standby` 推到 `Armed`；若快照仍有 fault / heartbeat_lost / global fault，则拒绝。
 - `~disable`：将 `Running/Armed` 回到 `Standby`，但保持通信在线。
 - `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。
 - `~resume`：仅在健康快照下允许进入 `Running`；若存在 fault、heartbeat 丢失或 `global_fault` 闩锁，则会被拒绝。
+- `~set_zero`：仅允许 `Standby`；执行序列为 `0x607C=0 -> 读0x6064 -> 0x607C=-actual_position -> 0x1010:01='save'`。若启用自动软限位，会在成功后立即重写该轴 `0x2003/0x607D`。
 - 故障恢复标准顺序为：`~recover -> ~enable -> ~resume`。
 
 ### 6.2 模式切换流程
