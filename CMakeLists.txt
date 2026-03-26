@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   hardware_interface
   controller_manager
   std_srvs
+  urdf
   message_generation
   diagnostic_updater
   trajectory_msgs
@@ -23,6 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_service_files(FILES
   SetMode.srv
+  SetZero.srv
 )
 
 generate_messages(DEPENDENCIES
@@ -32,7 +34,7 @@ generate_messages(DEPENDENCIES
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES canopen_core canopen_ros_adapter
-  CATKIN_DEPENDS roscpp rospy actionlib control_msgs sensor_msgs diagnostic_msgs hardware_interface controller_manager std_srvs message_runtime diagnostic_updater trajectory_msgs
+  CATKIN_DEPENDS roscpp rospy actionlib control_msgs sensor_msgs diagnostic_msgs hardware_interface controller_manager std_srvs urdf message_runtime diagnostic_updater trajectory_msgs
 )
 
 # ── 第三方依赖 ─────────────────────────────────────────
