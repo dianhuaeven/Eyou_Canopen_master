@@ -119,6 +119,7 @@ target_link_libraries(canopen_hw_node
 add_library(canopen_ros_adapter
   src/canopen_robot_hw_ros.cpp
   src/urdf_joint_limits.cpp
+  src/canopen_aux_services.cpp
   src/controllers/ip_follow_joint_trajectory_executor_validation.cpp
   src/controllers/ip_follow_joint_trajectory_executor_runtime.cpp
   src/controllers/ip_follow_joint_trajectory_executor_ros.cpp

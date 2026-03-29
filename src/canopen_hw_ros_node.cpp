@@ -1,28 +1,22 @@
 #include <chrono>
 #include <filesystem>
 #include <mutex>
-#include <sstream>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include <ros/ros.h>
 #include <ros/spinner.h>
 #include <controller_manager/controller_manager.h>
-#include <std_srvs/Trigger.h>
 #include <diagnostic_updater/diagnostic_updater.h>
 
-#include "Eyou_Canopen_Master/SetMode.h"
-#include "Eyou_Canopen_Master/SetZero.h"
+#include "canopen_hw/canopen_aux_services.hpp"
 #include "canopen_hw/canopen_robot_hw_ros.hpp"
-#include "canopen_hw/cia402_defs.hpp"
+#include "canopen_hw/canopen_startup_sequence.hpp"
 #include "canopen_hw/controllers/ip_follow_joint_trajectory_executor.hpp"
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
 #include "canopen_hw/logging.hpp"
 #include "canopen_hw/service_gateway.hpp"
-#include "canopen_hw/urdf_joint_limits.hpp"
-#include "canopen_hw/zero_soft_limit_executor.hpp"
 
 namespace {
 
@@ -34,11 +28,6 @@ std::string MakeAbsolutePath(const std::string& path) {
 
 bool FileExists(const std::string& path) {
   return !path.empty() && std::filesystem::exists(path);
-}
-
-bool IsAllowedMode(int8_t mode) {
-  return mode == canopen_hw::kMode_IP || mode == canopen_hw::kMode_CSP ||
-         mode == canopen_hw::kMode_CSV || mode == canopen_hw::kMode_CST;
 }
 
 }  // namespace
@@ -96,145 +85,19 @@ int main(int argc, char** argv) {
       lifecycle.master(), lifecycle.shared_state(), master_cfg.joints.size());
   coordinator.SetConfigured();
   canopen_hw::ServiceGateway service_gateway(&pnh, &coordinator, &loop_mtx);
-  canopen_hw::ZeroSoftLimitExecutor zero_soft_limit_executor(lifecycle.master(),
-                                                             &master_cfg);
-  std::vector<canopen_hw::JointLimitSpec> urdf_limits;
-  bool urdf_limits_ready = false;
 
-  auto ensure_urdf_limits = [&](std::string* detail) -> bool {
-    if (urdf_limits_ready) {
-      return true;
-    }
-    std::string urdf_xml;
-    if (!nh.getParam("robot_description", urdf_xml) || urdf_xml.empty()) {
-      if (detail) {
-        *detail = "robot_description is missing; cannot derive URDF soft limits";
-      }
-      return false;
-    }
-    std::string parse_error;
-    if (!canopen_hw::ParseUrdfJointLimits(urdf_xml, master_cfg.joints, &urdf_limits,
-                                          &parse_error)) {
-      if (detail) {
-        *detail = parse_error.empty() ? "failed to parse URDF joint limits"
-                                      : parse_error;
-      }
-      return false;
-    }
-    urdf_limits_ready = true;
-    return true;
-  };
-
-  auto apply_soft_limit_axis = [&](std::size_t axis_index,
-                                   std::string* detail) -> bool {
-    if (!ensure_urdf_limits(detail)) {
-      return false;
-    }
-    if (axis_index >= urdf_limits.size()) {
-      if (detail) {
-        std::ostringstream oss;
-        oss << "axis " << axis_index << " out of URDF limit range";
-        *detail = oss.str();
-      }
-      return false;
-    }
-    const auto& limit = urdf_limits[axis_index];
-    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kRadians) {
-      return zero_soft_limit_executor.ApplySoftLimitRadians(
-          axis_index, limit.lower, limit.upper, detail);
-    }
-    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kMeters) {
-      return zero_soft_limit_executor.ApplySoftLimitMeters(
-          axis_index, limit.lower, limit.upper, detail);
-    }
-    if (detail) {
-      *detail = "unsupported URDF limit unit";
-    }
-    return false;
-  };
-
-  struct PreparedSoftLimit {
-    int32_t min_counts = 0;
-    int32_t max_counts = 0;
-  };
-
-  auto prepare_soft_limit_axis = [&](std::size_t axis_index, PreparedSoftLimit* out,
-                                     std::string* detail) -> bool {
-    if (!out) {
-      if (detail) {
-        *detail = "prepared soft limit output is null";
-      }
-      return false;
-    }
-    if (!ensure_urdf_limits(detail)) {
-      return false;
-    }
-    if (axis_index >= urdf_limits.size() || axis_index >= master_cfg.joints.size()) {
-      if (detail) {
-        std::ostringstream oss;
-        oss << "axis " << axis_index << " out of URDF limit range";
-        *detail = oss.str();
-      }
-      return false;
-    }
-
-    const auto& limit = urdf_limits[axis_index];
-    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kRadians) {
-      return zero_soft_limit_executor.PrepareSoftLimitRadians(
-          axis_index, limit.lower, limit.upper, &out->min_counts, &out->max_counts,
-          detail);
-    }
-    if (limit.unit == canopen_hw::UrdfJointLimitUnit::kMeters) {
-      return zero_soft_limit_executor.PrepareSoftLimitMeters(
-          axis_index, limit.lower, limit.upper, &out->min_counts, &out->max_counts,
-          detail);
-    }
-    if (detail) {
-      *detail = "unsupported URDF limit unit";
-    }
-    return false;
-  };
-
-  auto apply_soft_limit_all = [&](std::string* detail) -> bool {
-    if (!master_cfg.auto_write_soft_limits_from_urdf) {
-      return true;
-    }
-    if (!ensure_urdf_limits(detail)) {
-      return false;
-    }
-    for (std::size_t i = 0; i < master_cfg.joints.size(); ++i) {
-      std::string axis_detail;
-      if (!apply_soft_limit_axis(i, &axis_detail)) {
-        if (detail) {
-          std::ostringstream oss;
-          oss << "apply soft limit failed at axis " << i;
-          if (!axis_detail.empty()) {
-            oss << ": " << axis_detail;
-          }
-          *detail = oss.str();
-        }
-        return false;
-      }
-    }
-    if (detail) {
-      *detail = "soft limits applied from URDF";
-    }
-    return true;
-  };
-
+  // 辅助服务（set_mode、set_zero、软限位）。
+  canopen_hw::CanopenAuxServices aux_services(
+      &pnh, &robot_hw_ros, &coordinator, &master_cfg,
+      lifecycle.master(), &loop_mtx);
   service_gateway.SetPostInitHook(
-      [&](std::string* detail) { return apply_soft_limit_all(detail); });
+      [&](std::string* detail) { return aux_services.ApplySoftLimitAll(detail); });
 
-  bool auto_init = false;
-  bool auto_enable = false;
-  bool auto_release = false;
+  // IP 轨迹执行器（可选）。
   bool use_ip_executor = false;
   double ip_executor_rate_hz = master_cfg.loop_hz;
   std::string ip_executor_action_ns =
       "arm_position_controller/follow_joint_trajectory";
-  pnh.param("auto_init", auto_init, false);
-  pnh.param("auto_enable", auto_enable, false);
-  pnh.param("auto_release", auto_release, false);
   pnh.param("use_ip_executor", use_ip_executor, false);
   pnh.param("ip_executor_rate_hz", ip_executor_rate_hz, ip_executor_rate_hz);
   pnh.param("ip_executor_action_ns", ip_executor_action_ns,
@@ -272,121 +135,13 @@ int main(int argc, char** argv) {
         &pnh, &robot_hw_ros, &loop_mtx, std::move(exec_cfg));
   }
 
-  if ((auto_enable || auto_release) && !auto_init) {
-    CANOPEN_LOG_ERROR(
-        "auto_enable/auto_release require auto_init=true for strict transition path");
-    return 1;
+  // 启动序列（auto_init / auto_enable / auto_release）。
+  {
+    std::lock_guard<std::mutex> lk(loop_mtx);
+    if (!canopen_hw::CanopenStartupSequence::Run(coordinator, aux_services, pnh)) {
+      return 1;
+    }
   }
-  if (auto_release && !auto_enable) {
-    CANOPEN_LOG_ERROR("auto_release requires auto_enable=true");
-    return 1;
-  }
-
-  auto set_mode_srv = pnh.advertiseService<Eyou_Canopen_Master::SetMode::Request,
-                                           Eyou_Canopen_Master::SetMode::Response>(
-      "set_mode", [&](Eyou_Canopen_Master::SetMode::Request& req,
-                      Eyou_Canopen_Master::SetMode::Response& res) {
-        {
-          std::lock_guard<std::mutex> lk(loop_mtx);
-          const auto mode = coordinator.mode();
-          if (mode != canopen_hw::SystemOpMode::Standby) {
-            res.success = false;
-            res.message = "set_mode only allowed in Standby; call ~/disable first";
-            return true;
-          }
-          if (req.axis_index >= robot_hw_ros.axis_count()) {
-            res.success = false;
-            res.message = "axis_index out of range";
-            return true;
-          }
-          if (!IsAllowedMode(req.mode)) {
-            res.success = false;
-            res.message =
-                "unsupported mode: " + std::to_string(req.mode) +
-                ", allowed: 7(IP),8(CSP),9(CSV),10(CST)";
-            return true;
-          }
-
-          robot_hw_ros.SetMode(req.axis_index, req.mode);
-        }
-
-        res.success = true;
-        res.message = "mode set";
-        return true;
-      });
-
-  auto set_zero_srv = pnh.advertiseService<Eyou_Canopen_Master::SetZero::Request,
-                                           Eyou_Canopen_Master::SetZero::Response>(
-      "set_zero", [&](Eyou_Canopen_Master::SetZero::Request& req,
-                      Eyou_Canopen_Master::SetZero::Response& res) {
-        std::lock_guard<std::mutex> lk(loop_mtx);
-        const auto mode = coordinator.mode();
-        if (mode != canopen_hw::SystemOpMode::Standby) {
-          res.success = false;
-          res.message = "set_zero only allowed in Standby; call ~/disable first";
-          return true;
-        }
-        if (req.axis_index >= master_cfg.joints.size()) {
-          res.success = false;
-          res.message = "axis_index out of range";
-          return true;
-        }
-
-        std::string detail;
-        PreparedSoftLimit prepared_soft_limit;
-        int32_t previous_home_offset = 0;
-        if (master_cfg.auto_write_soft_limits_from_urdf) {
-          if (!prepare_soft_limit_axis(req.axis_index, &prepared_soft_limit, &detail)) {
-            res.success = false;
-            res.message = detail.empty() ? "soft limit precheck failed" : detail;
-            return true;
-          }
-          if (!zero_soft_limit_executor.ReadHomeOffset(req.axis_index,
-                                                       &previous_home_offset,
-                                                       &detail)) {
-            res.success = false;
-            res.message = detail.empty() ? "read home offset failed" : detail;
-            return true;
-          }
-        }
-
-        if (!zero_soft_limit_executor.SetCurrentPositionAsZero(req.axis_index,
-                                                               &detail)) {
-          res.success = false;
-          res.message = detail.empty() ? "set_zero failed" : detail;
-          return true;
-        }
-
-        if (master_cfg.auto_write_soft_limits_from_urdf) {
-          if (!zero_soft_limit_executor.ApplySoftLimitCounts(
-                  req.axis_index, prepared_soft_limit.min_counts,
-                  prepared_soft_limit.max_counts, &detail)) {
-            const std::string soft_limit_error =
-                detail.empty() ? "soft limit rewrite failed" : detail;
-            std::string rollback_detail;
-            if (!zero_soft_limit_executor.RestoreHomeOffset(
-                    req.axis_index, previous_home_offset, &rollback_detail)) {
-              res.success = false;
-              res.message =
-                  "zero set and soft limit rewrite failed; rollback failed: " +
-                  soft_limit_error;
-              if (!rollback_detail.empty()) {
-                res.message += "; " + rollback_detail;
-              }
-              return true;
-            }
-            res.success = false;
-            res.message =
-                "soft limit rewrite failed after zeroing; restored previous home offset: " +
-                soft_limit_error;
-            return true;
-          }
-        }
-
-        res.success = true;
-        res.message = detail.empty() ? "zero set" : detail;
-        return true;
-      });
 
   controller_manager::ControllerManager cm(&robot_hw_ros, nh);
 
@@ -422,43 +177,6 @@ int main(int argc, char** argv) {
         stat.summary(diagnostic_msgs::DiagnosticStatus::OK, "operational");
       }
     });
-  }
-
-  if (auto_init) {
-    std::lock_guard<std::mutex> lk(loop_mtx);
-    const auto init_result = coordinator.RequestInit();
-    if (!init_result.ok) {
-      CANOPEN_LOG_ERROR("auto_init enabled but init failed: {}",
-                        init_result.message);
-      return 1;
-    }
-    std::string soft_limit_detail;
-    if (!apply_soft_limit_all(&soft_limit_detail)) {
-      const auto shutdown_result = coordinator.RequestShutdown();
-      CANOPEN_LOG_ERROR("auto_init post-init soft limit apply failed: {}",
-                        soft_limit_detail);
-      if (!shutdown_result.ok) {
-        CANOPEN_LOG_ERROR("rollback shutdown failed after post-init failure: {}",
-                          shutdown_result.message);
-      }
-      return 1;
-    }
-    if (auto_enable) {
-      const auto enable_result = coordinator.RequestEnable();
-      if (!enable_result.ok) {
-        CANOPEN_LOG_ERROR("auto_enable enabled but enable failed: {}",
-                          enable_result.message);
-        return 1;
-      }
-    }
-    if (auto_release) {
-      const auto release_result = coordinator.RequestRelease();
-      if (!release_result.ok) {
-        CANOPEN_LOG_ERROR("auto_release enabled but release failed: {}",
-                          release_result.message);
-        return 1;
-      }
-    }
   }
 
   double loop_hz = master_cfg.loop_hz;
