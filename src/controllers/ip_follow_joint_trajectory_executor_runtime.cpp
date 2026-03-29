@@ -10,13 +10,13 @@ namespace canopen_hw {
 using namespace ip_follow_joint_trajectory_executor_internal;
 
 IpFollowJointTrajectoryExecutor::IpFollowJointTrajectoryExecutor(
-    ros::NodeHandle* pnh, CanopenRobotHwRos* hw, std::mutex* loop_mtx)
+    ros::NodeHandle* pnh, hardware_interface::RobotHW* hw, std::mutex* loop_mtx)
     : IpFollowJointTrajectoryExecutor(pnh, hw, loop_mtx, Config{}) {}
 
 IpFollowJointTrajectoryExecutor::IpFollowJointTrajectoryExecutor(
-    ros::NodeHandle* pnh, CanopenRobotHwRos* hw, std::mutex* loop_mtx,
+    ros::NodeHandle* pnh, hardware_interface::RobotHW* hw, std::mutex* loop_mtx,
     Config config)
-    : hw_(hw),
+    : hw_raw_(hw),
       loop_mtx_(loop_mtx),
       config_(std::move(config)),
       otg_(config_.joint_names.size(),
@@ -28,6 +28,34 @@ IpFollowJointTrajectoryExecutor::IpFollowJointTrajectoryExecutor(
     CANOPEN_LOG_ERROR("IpFollowJointTrajectoryExecutor: invalid config: {}",
                       config_error_);
     return;
+  }
+
+  // 从 RobotHW 获取 handle 并缓存。
+  if (hw_raw_ != nullptr) {
+    auto* state_iface = hw_raw_->get<hardware_interface::JointStateInterface>();
+    auto* pos_iface = hw_raw_->get<hardware_interface::PositionJointInterface>();
+    if (state_iface == nullptr || pos_iface == nullptr) {
+      config_valid_ = false;
+      config_error_ = "RobotHW missing JointStateInterface or PositionJointInterface";
+      CANOPEN_LOG_ERROR("IpFollowJointTrajectoryExecutor: {}", config_error_);
+      return;
+    }
+
+    state_handles_.reserve(config_.joint_names.size());
+    pos_cmd_handles_.reserve(config_.joint_names.size());
+    for (const auto& name : config_.joint_names) {
+      try {
+        state_handles_.push_back(state_iface->getHandle(name));
+        pos_cmd_handles_.push_back(pos_iface->getHandle(name));
+      } catch (const hardware_interface::HardwareInterfaceException& e) {
+        config_valid_ = false;
+        config_error_ = "failed to get handle for joint '" + name + "': " + e.what();
+        CANOPEN_LOG_ERROR("IpFollowJointTrajectoryExecutor: {}", config_error_);
+        state_handles_.clear();
+        pos_cmd_handles_.clear();
+        return;
+      }
+    }
   }
 
   if (pnh == nullptr) {

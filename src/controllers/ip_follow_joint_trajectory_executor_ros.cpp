@@ -12,7 +12,7 @@ using namespace ip_follow_joint_trajectory_executor_internal;
 
 void IpFollowJointTrajectoryExecutor::update(const ros::Time& /*now*/,
                                              const ros::Duration& period) {
-  if (!config_valid_ || hw_ == nullptr) {
+  if (!config_valid_ || state_handles_.empty()) {
     return;
   }
 
@@ -23,12 +23,12 @@ void IpFollowJointTrajectoryExecutor::update(const ros::Time& /*now*/,
   }
   cycle_remainder_sec_ = std::fmod(cycle_remainder_sec_, cycle);
 
-  const std::size_t dofs = config_.joint_indices.size();
+  const std::size_t dofs = config_.joint_names.size();
   State actual;
   EnsureStateArrays(&actual, dofs);
   for (std::size_t i = 0; i < dofs; ++i) {
-    actual.positions[i] = hw_->joint_position(config_.joint_indices[i]);
-    actual.velocities[i] = hw_->joint_velocity(config_.joint_indices[i]);
+    actual.positions[i] = state_handles_[i].getPosition();
+    actual.velocities[i] = state_handles_[i].getVelocity();
   }
 
   State command;
@@ -37,8 +37,7 @@ void IpFollowJointTrajectoryExecutor::update(const ros::Time& /*now*/,
 
   if (status == StepStatus::kWorking || status == StepStatus::kFinished) {
     for (std::size_t i = 0; i < dofs; ++i) {
-      hw_->SetExternalPositionCommand(config_.joint_indices[i],
-                                      command.positions[i]);
+      pos_cmd_handles_[i].setCommand(command.positions[i]);
     }
     publishFeedback(actual, command);
   }
@@ -84,16 +83,16 @@ void IpFollowJointTrajectoryExecutor::publishFeedback(
 }
 
 void IpFollowJointTrajectoryExecutor::holdCurrentPosition() {
-  if (hw_ == nullptr || loop_mtx_ == nullptr) {
+  if (state_handles_.empty() || loop_mtx_ == nullptr) {
     return;
   }
 
   // ExecuteGoal runs in actionlib callback thread; guard shared hw buffers
   // against concurrent access from the realtime control loop.
   std::lock_guard<std::mutex> lk(*loop_mtx_);
-  for (std::size_t i = 0; i < config_.joint_indices.size(); ++i) {
-    const double pos = hw_->joint_position(config_.joint_indices[i]);
-    hw_->SetExternalPositionCommand(config_.joint_indices[i], pos);
+  for (std::size_t i = 0; i < state_handles_.size(); ++i) {
+    const double pos = state_handles_[i].getPosition();
+    pos_cmd_handles_[i].setCommand(pos);
   }
 }
 
@@ -111,7 +110,7 @@ void IpFollowJointTrajectoryExecutor::ExecuteGoal(
     return;
   }
 
-  if (hw_ == nullptr || loop_mtx_ == nullptr) {
+  if (state_handles_.empty() || loop_mtx_ == nullptr) {
     control_msgs::FollowJointTrajectoryResult result;
     result.error_code = control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
     result.error_string = "executor runtime not initialized";
@@ -119,14 +118,14 @@ void IpFollowJointTrajectoryExecutor::ExecuteGoal(
     return;
   }
 
-  const std::size_t dofs = config_.joint_indices.size();
+  const std::size_t dofs = config_.joint_names.size();
   State actual;
   EnsureStateArrays(&actual, dofs);
   {
     std::lock_guard<std::mutex> lk(*loop_mtx_);
     for (std::size_t i = 0; i < dofs; ++i) {
-      actual.positions[i] = hw_->joint_position(config_.joint_indices[i]);
-      actual.velocities[i] = hw_->joint_velocity(config_.joint_indices[i]);
+      actual.positions[i] = state_handles_[i].getPosition();
+      actual.velocities[i] = state_handles_[i].getVelocity();
     }
   }
 
