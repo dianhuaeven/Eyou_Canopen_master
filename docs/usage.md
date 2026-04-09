@@ -123,6 +123,7 @@ rosservice call /canopen_hw_node/init "{}"
 可选参数：
 - `dcf_path:=<path>` — DCF 文件路径
 - `joints_path:=<path>` — joints.yaml 路径
+- `robot_urdf:=<path>` — URDF 文件路径；默认使用 `car_urdf/urdf/car_urdf.urdf`
 - `loop_hz:=200.0` — 控制循环频率
 - `auto_init:=false|true` — 是否启动后自动 `~/init`（默认 `false`）
 - `auto_enable:=false|true` — 是否在 `auto_init` 后自动 `~/enable`（默认 `false`）
@@ -132,6 +133,10 @@ rosservice call /canopen_hw_node/init "{}"
 
 节点私有参数（通过 ROS 参数服务器覆盖）：
 - `/canopen_hw_node/ip_executor_rate_hz` — 执行器更新频率（默认跟随 `loop_hz`）
+
+说明：
+- `bringup.launch` / `canopen_hw.launch` 现在默认从 `car_urdf` 加载正式 `robot_description`。
+- 包内 `urdf/robot.urdf` 已弃用，仅保留作历史参考与轻量测试，不再建议作为运行时默认模型。
 
 ### 5.3 启用 IP 轨迹执行器（多轴）
 

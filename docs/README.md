@@ -64,6 +64,11 @@
 
 - `../../Eyou_ROS1_Master/docs/实施计划.md`：统一外观层 `Eyou_ROS1_Master` 包的分阶段实施计划（同时托管 `can_driver` 和 `Eyou_Canopen_Master` 两套后端）
 
+## 当前模型来源说明
+
+- 运行时默认 `robot_description` 现已统一使用 `../../car_urdf/urdf/car_urdf.urdf`
+- `urdf/robot.urdf` 保留但已弃用，仅作历史参考与局部测试使用
+
 ## 历史归档目录
 
 - `docs/archive/`：历史设计、阶段性计划、旧版排障记录、一次性评审产物。

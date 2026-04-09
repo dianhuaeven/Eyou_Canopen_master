@@ -1,4 +1,11 @@
 <?xml version="1.0"?>
+<!--
+  Deprecated runtime URDF.
+
+  This file is kept only for historical reference and lightweight local tests.
+  Runtime launch defaults should use car_urdf/urdf/car_urdf.urdf so the whole
+  system shares one canonical robot_description and joint naming set.
+-->
 <robot name="canopen_robot">
   <link name="base_link"/>
   <link name="joint_1_link"/>
