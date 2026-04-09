@@ -39,7 +39,7 @@ class IpFollowJointTrajectoryExecutor {
     Config() = default;
 
     std::string action_ns{"ip_follow_joint_trajectory"};
-    std::vector<std::string> joint_names{"joint_1"};
+    std::vector<std::string> joint_names{"shoulder_yaw_joint"};
     // joint_indices 仅在内部 State 向量中使用，不再关联特定 HW 子类。
     std::vector<std::size_t> joint_indices{0};
     double command_rate_hz{100.0};

@@ -7,7 +7,7 @@ canopen:
   auto_write_soft_limits_from_urdf: false  # 每次 init 后按 URDF 自动写 0x2003/0x607D
 
 joints:
-  - name: joint_1
+  - name: shoulder_yaw_joint
     canopen:
       node_id: 5              # 从站 CANopen 节点 ID
       verify_pdo_mapping: false  # 启动时是否校验 PDO 映射
@@ -27,7 +27,7 @@ joints:
     ip_max_acceleration: 2.0  # 最大加速度（rad/s²）
     ip_max_jerk: 10.0         # 最大加加速度/jerk（rad/s³）
     ip_goal_tolerance: 0.001  # 终点到位判定误差（rad）
-  - name: joint_2
+  - name: shoulder_pitch_joint
     canopen:
       node_id: 6              # 从站 CANopen 节点 ID
       verify_pdo_mapping: false  # 启动时是否校验 PDO 映射

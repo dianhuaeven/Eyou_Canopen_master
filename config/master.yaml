@@ -8,7 +8,7 @@ master:
   sync_period: 5000
   sync_overflow: 0
 
-joint_1:
+shoulder_yaw_joint:
   node_id: 5
   dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
@@ -58,7 +58,7 @@ joint_1:
   sdo:
     - {index: 0x6060, sub_index: 0, value: 7}
 
-joint_2:
+shoulder_pitch_joint:
   node_id: 6
   dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500

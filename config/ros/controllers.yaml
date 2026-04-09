@@ -8,7 +8,8 @@ joint_state_controller:
 arm_position_controller:
   type: position_controllers/JointTrajectoryController
   joints:
-    - joint_1
+    - shoulder_yaw_joint
+    - shoulder_pitch_joint
 
 
 # CSV 模式: 速度前馈轨迹控制器。
@@ -16,9 +17,15 @@ arm_position_controller:
 arm_velocity_controller:
   type: velocity_controllers/JointTrajectoryController
   joints:
-    - joint_1
+    - shoulder_yaw_joint
+    - shoulder_pitch_joint
   gains:
-    joint_1:
+    shoulder_yaw_joint:
+      p: 1.0
+      i: 0.0
+      d: 0.0
+      i_clamp: 1.0
+    shoulder_pitch_joint:
       p: 1.0
       i: 0.0
       d: 0.0
