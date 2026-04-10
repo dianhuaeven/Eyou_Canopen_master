@@ -1,5 +1,5 @@
 <launch>
-  <param name="robot_description" textfile="$(find Eyou_Canopen_Master)/urdf/robot.urdf"/>
+  <param name="robot_description" textfile="$(find car_urdf)/urdf/car_urdf.urdf"/>
 
   <!-- 配置文件路径 -->
   <arg name="dcf_path" default="$(find Eyou_Canopen_Master)/config/master.dcf"/>
