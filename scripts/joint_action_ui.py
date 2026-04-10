@@ -12,6 +12,7 @@ import actionlib
 import rospy
 import yaml
 from Eyou_Canopen_Master.srv import SetMode
+from Eyou_Canopen_Master.srv import SetZero
 from control_msgs.msg import (
     FollowJointTrajectoryAction,
     FollowJointTrajectoryActionFeedback,
@@ -134,6 +135,7 @@ class JointActionUi:
         self.duration_var = tk.StringVar(value=f"{self.goal_duration_default:.3f}")
         self.mode_joint_var = tk.StringVar(value=self.joint_names[0])
         self.mode_value_var = tk.StringVar(value="7")
+        self.zero_joint_var = tk.StringVar(value=self.joint_names[0])
         self.action_candidates: List[str] = []
 
         self.client = None
@@ -213,9 +215,30 @@ class JointActionUi:
         ).grid(row=0, column=10, padx=2)
         ttk.Button(srv, text="set_mode", command=self.call_set_mode_service).grid(row=0, column=11, padx=(4, 0))
 
+        zero = ttk.Frame(self.root, padding=8)
+        zero.grid(row=3, column=0, sticky="ew")
+        zero.columnconfigure(4, weight=1)
+        ttk.Label(zero, text="zero joint").grid(row=0, column=0, sticky="w")
+        ttk.Combobox(
+            zero,
+            width=18,
+            textvariable=self.zero_joint_var,
+            values=self.joint_names,
+            state="readonly",
+        ).grid(row=0, column=1, padx=2, sticky="w")
+        ttk.Button(
+            zero,
+            text="当前点设零+限位",
+            command=self.call_set_zero_service,
+        ).grid(row=0, column=2, padx=(6, 2), sticky="w")
+        ttk.Label(
+            zero,
+            text="调用 canopen set_zero；要求当前系统处于 Standby。",
+        ).grid(row=0, column=3, padx=(8, 0), sticky="w")
+
         table = ttk.Frame(self.root, padding=8)
-        table.grid(row=3, column=0, sticky="nsew")
-        self.root.rowconfigure(3, weight=1)
+        table.grid(row=4, column=0, sticky="nsew")
+        self.root.rowconfigure(4, weight=1)
         self.root.columnconfigure(0, weight=1)
 
         headers = [
@@ -517,6 +540,31 @@ class JointActionUi:
         threading.Thread(
             target=self._call_set_mode_service_worker,
             args=(axis_index, mode),
+            daemon=True,
+        ).start()
+
+    def _call_set_zero_service_worker(self, axis_index: int, joint_name: str) -> None:
+        full_name = f"{self.service_ns}/set_zero"
+        try:
+            rospy.wait_for_service(full_name, timeout=2.0)
+            proxy = rospy.ServiceProxy(full_name, SetZero)
+            res = proxy(axis_index=axis_index)
+            prefix = "OK" if res.success else "FAIL"
+            self.set_service_status(
+                f"set_zero[{joint_name}/axis={axis_index}]: {prefix} {res.message}"
+            )
+        except Exception as e:
+            self.set_service_status(f"set_zero[{joint_name}]: ERROR {e}")
+
+    def call_set_zero_service(self) -> None:
+        joint = self.zero_joint_var.get().strip()
+        if joint not in self.joint_set:
+            messagebox.showerror("set_zero", f"invalid joint: {joint}")
+            return
+        axis_index = self.joint_names.index(joint)
+        threading.Thread(
+            target=self._call_set_zero_service_worker,
+            args=(axis_index, joint),
             daemon=True,
         ).start()
 
