@@ -111,6 +111,12 @@ class CanopenMaster {
 
   // 按 node_id 查找 AxisDriver（供 SdoAccessor 使用）。未找到返回 nullptr。
   AxisDriver* FindDriverByNodeId(uint8_t node_id);
+  bool WaitForSdoIdle(
+      std::size_t axis_index,
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000)) const;
+  bool WaitForAllSdoIdle(
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000),
+      std::vector<std::size_t>* pending_axes = nullptr) const;
 
  private:
   // 供后续真实 master 初始化后调用:

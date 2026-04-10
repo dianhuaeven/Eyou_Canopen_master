@@ -7,7 +7,6 @@
 
 #include <lely/co/dcf.h>
 #include <lely/co/dev.h>
-#include <lely/coapp/driver.hpp>
 
 namespace canopen_hw {
 
@@ -210,8 +209,7 @@ PdoMappingReader::~PdoMappingReader() {
   }
 }
 
-void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
-                             DoneCallback cb,
+void PdoMappingReader::Start(AsyncReadFn read_fn, DoneCallback cb,
                              std::chrono::milliseconds timeout) {
   {
     std::lock_guard<std::mutex> lk(finish_mtx_);
@@ -219,7 +217,7 @@ void PdoMappingReader::Start(lely::canopen::BasicDriver& driver,
       return;
     }
   }
-  driver_ = &driver;
+  read_fn_ = std::move(read_fn);
   done_cb_ = std::move(cb);
   BuildHeaderSteps();
   ScheduleNext();
@@ -338,15 +336,22 @@ void PdoMappingReader::ScheduleNext() {
   }
 
   const ReadStep step = steps_[step_index_];
-  if (step.is_u8) {
-    driver_->SubmitRead<uint8_t>(
-        step.idx, step.sub,
-        [this, step](uint8_t, uint16_t, uint8_t, std::error_code ec,
-                     uint8_t value) {
-          if (ec) {
+  if (!read_fn_) {
+    Finish(false, "PDO reader not initialized");
+    return;
+  }
+
+  try {
+    read_fn_(
+        step.idx, step.sub, step.is_u8,
+        [this, step](bool ok, uint32_t value, const std::string& error) {
+          if (!ok) {
             std::ostringstream oss;
             oss << "SDO read failed at 0x" << std::hex << step.idx << ":"
                 << std::dec << static_cast<int>(step.sub);
+            if (!error.empty()) {
+              oss << ": " << error;
+            }
             Finish(false, oss.str());
             return;
           }
@@ -356,24 +361,16 @@ void PdoMappingReader::ScheduleNext() {
           ++step_index_;
           ScheduleNext();
         });
-  } else {
-    driver_->SubmitRead<uint32_t>(
-        step.idx, step.sub,
-        [this, step](uint8_t, uint16_t, uint8_t, std::error_code ec,
-                     uint32_t value) {
-          if (ec) {
-            std::ostringstream oss;
-            oss << "SDO read failed at 0x" << std::hex << step.idx << ":"
-                << std::dec << static_cast<int>(step.sub);
-            Finish(false, oss.str());
-            return;
-          }
-          if (step.on_value) {
-            step.on_value(value);
-          }
-          ++step_index_;
-          ScheduleNext();
-        });
+  } catch (const std::exception& e) {
+    std::ostringstream oss;
+    oss << "SDO read dispatch failed at 0x" << std::hex << step.idx << ":"
+        << std::dec << static_cast<int>(step.sub) << ": " << e.what();
+    Finish(false, oss.str());
+  } catch (...) {
+    std::ostringstream oss;
+    oss << "SDO read dispatch failed at 0x" << std::hex << step.idx << ":"
+        << std::dec << static_cast<int>(step.sub) << ": unknown exception";
+    Finish(false, oss.str());
   }
 }
 

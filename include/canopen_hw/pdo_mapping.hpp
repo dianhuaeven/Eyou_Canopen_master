@@ -12,12 +12,6 @@
 #include <vector>
 #include <condition_variable>
 
-namespace lely {
-namespace canopen {
-class BasicDriver;
-}  // namespace canopen
-}  // namespace lely
-
 namespace canopen_hw {
 
 struct PdoChannelMapping {
@@ -46,12 +40,16 @@ bool DiffPdoMapping(const PdoMapping& expected, const PdoMapping& actual,
 //   应在回调外部安全时机释放
 class PdoMappingReader : public std::enable_shared_from_this<PdoMappingReader> {
  public:
+  using ReadValueCallback =
+      std::function<void(bool, uint32_t, const std::string&)>;
+  using AsyncReadFn =
+      std::function<void(uint16_t, uint8_t, bool, ReadValueCallback)>;
   using DoneCallback =
       std::function<void(bool, const std::string&, const PdoMapping&)>;
 
   ~PdoMappingReader();
 
-  void Start(lely::canopen::BasicDriver& driver, DoneCallback cb,
+  void Start(AsyncReadFn read_fn, DoneCallback cb,
              std::chrono::milliseconds timeout);
 
  private:
@@ -67,7 +65,7 @@ class PdoMappingReader : public std::enable_shared_from_this<PdoMappingReader> {
   void ScheduleNext();
   void Finish(bool ok, const std::string& error);
 
-  lely::canopen::BasicDriver* driver_ = nullptr;
+  AsyncReadFn read_fn_;
   DoneCallback done_cb_;
   std::vector<ReadStep> steps_;
   std::array<uint8_t, 4> rpdo_counts_{};

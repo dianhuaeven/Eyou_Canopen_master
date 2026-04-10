@@ -525,6 +525,53 @@ const HealthCounters* CanopenMaster::GetHealthCounters(
   return &axis_drivers_[axis_index]->health();
 }
 
+bool CanopenMaster::WaitForSdoIdle(std::size_t axis_index,
+                                   std::chrono::milliseconds timeout) const {
+  if (axis_index >= axis_drivers_.size() || !axis_drivers_[axis_index]) {
+    return false;
+  }
+  return axis_drivers_[axis_index]->WaitForSdoIdle(timeout);
+}
+
+bool CanopenMaster::WaitForAllSdoIdle(
+    std::chrono::milliseconds timeout,
+    std::vector<std::size_t>* pending_axes) const {
+  auto collect_pending = [this, pending_axes]() {
+    if (pending_axes) {
+      pending_axes->clear();
+    }
+
+    bool all_idle = true;
+    for (std::size_t i = 0; i < axis_drivers_.size(); ++i) {
+      const auto& axis = axis_drivers_[i];
+      if (!axis) {
+        continue;
+      }
+      if (!axis->sdo_idle()) {
+        all_idle = false;
+        if (pending_axes) {
+          pending_axes->push_back(i);
+        }
+      }
+    }
+    return all_idle;
+  };
+
+  if (collect_pending()) {
+    return true;
+  }
+
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (std::chrono::steady_clock::now() < deadline) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (collect_pending()) {
+      return true;
+    }
+  }
+
+  return collect_pending();
+}
+
 AxisDriver* CanopenMaster::FindDriverByNodeId(uint8_t node_id) {
   for (std::size_t i = 0; i < config_.joints.size() && i < axis_drivers_.size();
        ++i) {

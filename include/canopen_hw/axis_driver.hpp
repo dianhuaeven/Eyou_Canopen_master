@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
@@ -13,6 +14,7 @@
 
 #include "canopen_hw/axis_logic.hpp"
 #include "canopen_hw/bus_io.hpp"
+#include "canopen_hw/sdo_single_flight.hpp"
 #include "canopen_hw/shared_state.hpp"
 
 namespace canopen_hw {
@@ -76,6 +78,9 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
                     std::size_t expected_size = 4);
   void AsyncSdoWrite(uint16_t index, uint8_t subindex,
                      const std::vector<uint8_t>& data, SdoWriteCallback cb);
+  bool WaitForSdoIdle(
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000)) const;
+  bool sdo_idle() const { return sdo_queue_.IsIdle(); }
 
  private:
   void OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept override;
@@ -97,6 +102,7 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   std::shared_ptr<PdoMapping> expected_pdo_;
   bool expected_pdo_loaded_ = false;
   std::shared_ptr<PdoMappingReader> pdo_reader_;
+  SdoSingleFlightQueue sdo_queue_;
   std::atomic<int> boot_retry_count_{0};
   std::atomic<bool> ip_target_fallback_warned_{false};
   int max_boot_retries_ = 3;

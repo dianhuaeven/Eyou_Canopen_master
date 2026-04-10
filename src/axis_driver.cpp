@@ -222,42 +222,69 @@ void AxisDriver::AsyncSdoRead(uint16_t index, uint8_t subindex,
     return;
   }
 
-  if (expected_size == 1) {
-    SubmitRead<uint8_t>(
-        index, subindex,
-        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec, uint8_t value) {
-          if (ec) {
-            if (cb) cb(false, {}, ec.message());
+  sdo_queue_.Enqueue(
+      [this, index, subindex, expected_size,
+       cb = std::move(cb)](SdoSingleFlightQueue::Completion done) mutable {
+        try {
+          if (expected_size == 1) {
+            SubmitRead<uint8_t>(
+                index, subindex,
+                [cb, done](
+                    uint8_t, uint16_t, uint8_t, std::error_code ec,
+                    uint8_t value) mutable {
+                  if (ec) {
+                    if (cb) cb(false, {}, ec.message());
+                    done();
+                    return;
+                  }
+                  if (cb) cb(true, {value}, std::string());
+                  done();
+                });
             return;
           }
-          if (cb) cb(true, {value}, std::string());
-        });
-    return;
-  }
 
-  if (expected_size == 2) {
-    SubmitRead<uint16_t>(
-        index, subindex,
-        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec, uint16_t value) {
-          if (ec) {
-            if (cb) cb(false, {}, ec.message());
+          if (expected_size == 2) {
+            SubmitRead<uint16_t>(
+                index, subindex,
+                [cb, done](
+                    uint8_t, uint16_t, uint8_t, std::error_code ec,
+                    uint16_t value) mutable {
+                  if (ec) {
+                    if (cb) cb(false, {}, ec.message());
+                    done();
+                    return;
+                  }
+                  if (cb) cb(true, PackLe(value, 2), std::string());
+                  done();
+                });
             return;
           }
-          if (cb) cb(true, PackLe(value, 2), std::string());
-        });
-    return;
-  }
 
-  // 3/4 字节统一按 u32 读取，再按请求长度裁剪。
-  SubmitRead<uint32_t>(
-      index, subindex,
-      [cb, expected_size](uint8_t, uint16_t, uint8_t, std::error_code ec,
-                          uint32_t value) {
-        if (ec) {
-          if (cb) cb(false, {}, ec.message());
-          return;
+          // 3/4 字节统一按 u32 读取，再按请求长度裁剪。
+          SubmitRead<uint32_t>(
+              index, subindex,
+              [cb, done, expected_size](
+                  uint8_t, uint16_t, uint8_t, std::error_code ec,
+                  uint32_t value) mutable {
+                if (ec) {
+                  if (cb) cb(false, {}, ec.message());
+                  done();
+                  return;
+                }
+                if (cb) cb(true, PackLe(value, expected_size), std::string());
+                done();
+              });
+        } catch (const std::exception& e) {
+          if (cb) {
+            cb(false, {}, e.what());
+          }
+          done();
+        } catch (...) {
+          if (cb) {
+            cb(false, {}, "unknown exception during SubmitRead");
+          }
+          done();
         }
-        if (cb) cb(true, PackLe(value, expected_size), std::string());
       });
 }
 
@@ -279,29 +306,55 @@ void AxisDriver::AsyncSdoWrite(uint16_t index, uint8_t subindex,
   if (data.size() >= 3) value |= static_cast<uint32_t>(data[2]) << 16;
   if (data.size() >= 4) value |= static_cast<uint32_t>(data[3]) << 24;
 
-  if (data.size() == 1) {
-    SubmitWrite(
-        index, subindex, static_cast<uint8_t>(value),
-        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec) {
-          if (cb) cb(!ec, ec ? ec.message() : std::string());
-        });
-    return;
-  }
+  sdo_queue_.Enqueue(
+      [this, index, subindex, value, size = data.size(),
+       cb = std::move(cb)](SdoSingleFlightQueue::Completion done) mutable {
+        try {
+          if (size == 1) {
+            SubmitWrite(
+                index, subindex, static_cast<uint8_t>(value),
+                [cb, done](
+                    uint8_t, uint16_t, uint8_t, std::error_code ec) mutable {
+                  if (cb) cb(!ec, ec ? ec.message() : std::string());
+                  done();
+                });
+            return;
+          }
 
-  if (data.size() == 2) {
-    SubmitWrite(
-        index, subindex, static_cast<uint16_t>(value),
-        [cb](uint8_t, uint16_t, uint8_t, std::error_code ec) {
-          if (cb) cb(!ec, ec ? ec.message() : std::string());
-        });
-    return;
-  }
+          if (size == 2) {
+            SubmitWrite(
+                index, subindex, static_cast<uint16_t>(value),
+                [cb, done](
+                    uint8_t, uint16_t, uint8_t, std::error_code ec) mutable {
+                  if (cb) cb(!ec, ec ? ec.message() : std::string());
+                  done();
+                });
+            return;
+          }
 
-  SubmitWrite(
-      index, subindex, value,
-      [cb](uint8_t, uint16_t, uint8_t, std::error_code ec) {
-        if (cb) cb(!ec, ec ? ec.message() : std::string());
+          SubmitWrite(
+              index, subindex, value,
+              [cb, done](
+                  uint8_t, uint16_t, uint8_t, std::error_code ec) mutable {
+                if (cb) cb(!ec, ec ? ec.message() : std::string());
+                done();
+              });
+        } catch (const std::exception& e) {
+          if (cb) {
+            cb(false, e.what());
+          }
+          done();
+        } catch (...) {
+          if (cb) {
+            cb(false, "unknown exception during SubmitWrite");
+          }
+          done();
+        }
       });
+}
+
+bool AxisDriver::WaitForSdoIdle(std::chrono::milliseconds timeout) const {
+  return sdo_queue_.WaitForIdle(timeout);
 }
 
 // --- Lely callbacks ---
@@ -592,43 +645,69 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
   }
 
   pdo_reader_ = std::make_shared<PdoMappingReader>();
-  pdo_reader_->Start(*this, [this](bool ok, const std::string& error,
-                                   const PdoMapping& actual) {
-    if (!ok) {
-      CANOPEN_LOG_ERROR("axis={} node={}: PDO read failed: {}",
-                        axis_index_, static_cast<int>(id()), error);
-      pdo_verified_.store(false);
-      pdo_verification_done_.store(true);
-      if (error.find("timeout") != std::string::npos) {
-        logic_.mutable_health().pdo_verify_timeout.fetch_add(1,
-                                                             std::memory_order_relaxed);
-      } else {
-        logic_.mutable_health().pdo_verify_fail.fetch_add(1,
-                                                          std::memory_order_relaxed);
-      }
-      return;
-    }
+  pdo_reader_->Start(
+      [this](uint16_t index, uint8_t subindex, bool is_u8,
+             PdoMappingReader::ReadValueCallback cb) {
+        const std::size_t expected_size = is_u8 ? 1u : 4u;
+        AsyncSdoRead(
+            index, subindex,
+            [cb = std::move(cb)](bool ok, const std::vector<uint8_t>& data,
+                                 const std::string& error) mutable {
+              if (!ok) {
+                if (cb) {
+                  cb(false, 0, error);
+                }
+                return;
+              }
+              if (data.empty() || data.size() > 4) {
+                if (cb) {
+                  cb(false, 0, "unexpected SDO read size");
+                }
+                return;
+              }
+              if (cb) {
+                cb(true, DecodeLeU32(data), std::string());
+              }
+            },
+            expected_size);
+      },
+      [this](bool ok, const std::string& error, const PdoMapping& actual) {
+        if (!ok) {
+          CANOPEN_LOG_ERROR("axis={} node={}: PDO read failed: {}",
+                            axis_index_, static_cast<int>(id()), error);
+          pdo_verified_.store(false);
+          pdo_verification_done_.store(true);
+          if (error.find("timeout") != std::string::npos) {
+            logic_.mutable_health().pdo_verify_timeout.fetch_add(
+                1, std::memory_order_relaxed);
+          } else {
+            logic_.mutable_health().pdo_verify_fail.fetch_add(
+                1, std::memory_order_relaxed);
+          }
+          return;
+        }
 
-    std::vector<std::string> diffs;
-    if (!DiffPdoMapping(*expected_pdo_, actual, &diffs)) {
-      CANOPEN_LOG_WARN("axis={} node={}: PDO mapping mismatch",
-                       axis_index_, static_cast<int>(id()));
-      for (const auto& diff : diffs) {
-        CANOPEN_LOG_WARN("  {}", diff);
-      }
-      pdo_verified_.store(false);
-      logic_.mutable_health().pdo_verify_fail.fetch_add(1,
-                                                        std::memory_order_relaxed);
-    } else {
-      CANOPEN_LOG_INFO("axis={} node={}: PDO mapping verified",
-                       axis_index_, static_cast<int>(id()));
-      pdo_verified_.store(true);
-      logic_.mutable_health().pdo_verify_ok.fetch_add(1,
-                                                      std::memory_order_relaxed);
-    }
+        std::vector<std::string> diffs;
+        if (!DiffPdoMapping(*expected_pdo_, actual, &diffs)) {
+          CANOPEN_LOG_WARN("axis={} node={}: PDO mapping mismatch",
+                           axis_index_, static_cast<int>(id()));
+          for (const auto& diff : diffs) {
+            CANOPEN_LOG_WARN("  {}", diff);
+          }
+          pdo_verified_.store(false);
+          logic_.mutable_health().pdo_verify_fail.fetch_add(
+              1, std::memory_order_relaxed);
+        } else {
+          CANOPEN_LOG_INFO("axis={} node={}: PDO mapping verified",
+                           axis_index_, static_cast<int>(id()));
+          pdo_verified_.store(true);
+          logic_.mutable_health().pdo_verify_ok.fetch_add(
+              1, std::memory_order_relaxed);
+        }
 
-    pdo_verification_done_.store(true);
-  }, std::chrono::milliseconds(2000));
+        pdo_verification_done_.store(true);
+      },
+      std::chrono::milliseconds(2000));
 }
 
 }  // namespace canopen_hw

@@ -278,6 +278,18 @@ add_executable(test_sdo_accessor
 target_link_libraries(test_sdo_accessor PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_sdo_accessor)
 
+add_executable(test_sdo_single_flight
+  test/test_sdo_single_flight.cpp
+)
+target_link_libraries(test_sdo_single_flight PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_sdo_single_flight)
+
+add_executable(test_pdo_mapping
+  test/test_pdo_mapping.cpp
+)
+target_link_libraries(test_pdo_mapping PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_pdo_mapping)
+
 add_executable(test_diagnostics_collector
   test/test_diagnostics_collector.cpp
 )
