@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -30,6 +31,8 @@ class CanopenAuxServices {
                      CanopenMaster* master,
                      std::mutex* loop_mtx);
 
+  bool SetModeAxis(std::size_t axis_index, int8_t mode, std::string* detail);
+
   // 供 ServiceGateway::SetPostInitHook 或外部调用。
   // 当 auto_write_soft_limits_from_urdf 为 false 时直接返回 true。
   bool ApplySoftLimitAll(std::string* detail);
@@ -44,11 +47,15 @@ class CanopenAuxServices {
   bool ApplySoftLimitAxis(std::size_t axis_index, std::string* detail);
   bool PrepareSoftLimitAxis(std::size_t axis_index, PreparedSoftLimit* out,
                             std::string* detail);
+  bool WaitForAllSdoIdle(std::chrono::milliseconds timeout, std::string* detail) const;
+  bool WaitForAxisSdoIdle(std::size_t axis_index, std::chrono::milliseconds timeout,
+                          std::string* detail) const;
 
   // 非拥有指针。
   CanopenRobotHwRos* robot_hw_ros_;
   OperationalCoordinator* coordinator_;
   const CanopenMasterConfig* master_cfg_;
+  CanopenMaster* master_;
   std::mutex* loop_mtx_;
 
   ZeroSoftLimitExecutor zero_executor_;

@@ -10,12 +10,52 @@ namespace canopen_hw {
 
 namespace {
 
+constexpr auto kSoftLimitSdoIdleTimeout = std::chrono::milliseconds(2500);
+constexpr auto kSetZeroSdoIdleTimeout = std::chrono::milliseconds(2500);
+
 bool IsAllowedMode(int8_t mode) {
   return mode == kMode_IP || mode == kMode_CSP ||
          mode == kMode_CSV || mode == kMode_CST;
 }
 
 }  // namespace
+
+bool CanopenAuxServices::SetModeAxis(std::size_t axis_index,
+                                     int8_t mode,
+                                     std::string* detail) {
+  if (detail != nullptr) {
+    detail->clear();
+  }
+
+  std::lock_guard<std::mutex> lk(*loop_mtx_);
+  const auto system_mode = coordinator_->mode();
+  if (system_mode != SystemOpMode::Standby) {
+    if (detail != nullptr) {
+      *detail = "set_mode only allowed in Standby; call ~/disable first";
+    }
+    return false;
+  }
+  if (axis_index >= robot_hw_ros_->axis_count()) {
+    if (detail != nullptr) {
+      *detail = "axis_index out of range";
+    }
+    return false;
+  }
+  if (!IsAllowedMode(mode)) {
+    if (detail != nullptr) {
+      *detail =
+          "unsupported mode: " + std::to_string(mode) +
+          ", allowed: 7(IP),8(CSP),9(CSV),10(CST)";
+    }
+    return false;
+  }
+
+  robot_hw_ros_->SetMode(axis_index, mode);
+  if (detail != nullptr) {
+    *detail = "mode set";
+  }
+  return true;
+}
 
 CanopenAuxServices::CanopenAuxServices(
     ros::NodeHandle* pnh,
@@ -27,6 +67,7 @@ CanopenAuxServices::CanopenAuxServices(
     : robot_hw_ros_(robot_hw_ros),
       coordinator_(coordinator),
       master_cfg_(master_cfg),
+      master_(master),
       loop_mtx_(loop_mtx),
       zero_executor_(master, master_cfg) {
   // ── ~/set_mode ──
@@ -34,29 +75,9 @@ CanopenAuxServices::CanopenAuxServices(
                                         Eyou_Canopen_Master::SetMode::Response>(
       "set_mode", [this](Eyou_Canopen_Master::SetMode::Request& req,
                          Eyou_Canopen_Master::SetMode::Response& res) {
-        std::lock_guard<std::mutex> lk(*loop_mtx_);
-        const auto mode = coordinator_->mode();
-        if (mode != SystemOpMode::Standby) {
-          res.success = false;
-          res.message = "set_mode only allowed in Standby; call ~/disable first";
-          return true;
-        }
-        if (req.axis_index >= robot_hw_ros_->axis_count()) {
-          res.success = false;
-          res.message = "axis_index out of range";
-          return true;
-        }
-        if (!IsAllowedMode(req.mode)) {
-          res.success = false;
-          res.message =
-              "unsupported mode: " + std::to_string(req.mode) +
-              ", allowed: 7(IP),8(CSP),9(CSV),10(CST)";
-          return true;
-        }
-
-        robot_hw_ros_->SetMode(req.axis_index, req.mode);
-        res.success = true;
-        res.message = "mode set";
+        std::string detail;
+        res.success = SetModeAxis(req.axis_index, req.mode, &detail);
+        res.message = detail;
         return true;
       });
 
@@ -85,6 +106,11 @@ CanopenAuxServices::CanopenAuxServices(
           if (!PrepareSoftLimitAxis(req.axis_index, &prepared, &detail)) {
             res.success = false;
             res.message = detail.empty() ? "soft limit precheck failed" : detail;
+            return true;
+          }
+          if (!WaitForAxisSdoIdle(req.axis_index, kSetZeroSdoIdleTimeout, &detail)) {
+            res.success = false;
+            res.message = detail.empty() ? "axis SDO idle wait failed" : detail;
             return true;
           }
           if (!zero_executor_.ReadHomeOffset(req.axis_index,
@@ -227,11 +253,79 @@ bool CanopenAuxServices::PrepareSoftLimitAxis(std::size_t axis_index,
   return false;
 }
 
+bool CanopenAuxServices::WaitForAllSdoIdle(std::chrono::milliseconds timeout,
+                                           std::string* detail) const {
+  if (!master_) {
+    if (detail) {
+      *detail = "master is null; cannot wait for SDO idle";
+    }
+    return false;
+  }
+
+  std::vector<std::size_t> pending_axes;
+  if (master_->WaitForAllSdoIdle(timeout, &pending_axes)) {
+    return true;
+  }
+
+  if (detail) {
+    std::ostringstream oss;
+    oss << "timed out waiting for all-axis SDO idle";
+    if (!pending_axes.empty()) {
+      oss << "; pending axes: ";
+      for (std::size_t i = 0; i < pending_axes.size(); ++i) {
+        if (i > 0) {
+          oss << ", ";
+        }
+        oss << pending_axes[i];
+        if (master_cfg_ && pending_axes[i] < master_cfg_->joints.size()) {
+          oss << "(node="
+              << static_cast<int>(master_cfg_->joints[pending_axes[i]].node_id)
+              << ")";
+        }
+      }
+    }
+    *detail = oss.str();
+  }
+  return false;
+}
+
+bool CanopenAuxServices::WaitForAxisSdoIdle(std::size_t axis_index,
+                                            std::chrono::milliseconds timeout,
+                                            std::string* detail) const {
+  if (!master_) {
+    if (detail) {
+      *detail = "master is null; cannot wait for SDO idle";
+    }
+    return false;
+  }
+  if (axis_index >= master_cfg_->joints.size()) {
+    if (detail) {
+      *detail = "axis_index out of range for SDO idle wait";
+    }
+    return false;
+  }
+  if (master_->WaitForSdoIdle(axis_index, timeout)) {
+    return true;
+  }
+
+  if (detail) {
+    std::ostringstream oss;
+    oss << "timed out waiting for axis " << axis_index << " SDO idle"
+        << " (node=" << static_cast<int>(master_cfg_->joints[axis_index].node_id)
+        << ")";
+    *detail = oss.str();
+  }
+  return false;
+}
+
 bool CanopenAuxServices::ApplySoftLimitAll(std::string* detail) {
   if (!master_cfg_->auto_write_soft_limits_from_urdf) {
     return true;
   }
   if (!EnsureUrdfLimits(detail)) {
+    return false;
+  }
+  if (!WaitForAllSdoIdle(kSoftLimitSdoIdleTimeout, detail)) {
     return false;
   }
   for (std::size_t i = 0; i < master_cfg_->joints.size(); ++i) {
