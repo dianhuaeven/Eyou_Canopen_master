@@ -102,15 +102,15 @@ CanopenAuxServices::CanopenAuxServices(
         std::string detail;
         PreparedSoftLimit prepared;
         int32_t previous_home_offset = 0;
+        if (!WaitForAxisSdoIdle(req.axis_index, kSetZeroSdoIdleTimeout, &detail)) {
+          res.success = false;
+          res.message = detail.empty() ? "axis SDO idle wait failed" : detail;
+          return true;
+        }
         if (master_cfg_->auto_write_soft_limits_from_urdf) {
           if (!PrepareSoftLimitAxis(req.axis_index, &prepared, &detail)) {
             res.success = false;
             res.message = detail.empty() ? "soft limit precheck failed" : detail;
-            return true;
-          }
-          if (!WaitForAxisSdoIdle(req.axis_index, kSetZeroSdoIdleTimeout, &detail)) {
-            res.success = false;
-            res.message = detail.empty() ? "axis SDO idle wait failed" : detail;
             return true;
           }
           if (!zero_executor_.ReadHomeOffset(req.axis_index,
