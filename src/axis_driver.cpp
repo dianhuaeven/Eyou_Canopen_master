@@ -357,6 +357,24 @@ bool AxisDriver::WaitForSdoIdle(std::chrono::milliseconds timeout) const {
   return sdo_queue_.WaitForIdle(timeout);
 }
 
+bool AxisDriver::WaitForStartupComplete(std::chrono::milliseconds timeout) const {
+  if (startup_complete_.load(std::memory_order_acquire)) {
+    return true;
+  }
+  std::unique_lock<std::mutex> lk(startup_mtx_);
+  return startup_cv_.wait_for(lk, timeout, [this]() {
+    return startup_complete_.load(std::memory_order_acquire);
+  });
+}
+
+void AxisDriver::SetStartupComplete(bool complete) {
+  startup_complete_.store(complete, std::memory_order_release);
+  if (complete) {
+    std::lock_guard<std::mutex> lk(startup_mtx_);
+    startup_cv_.notify_all();
+  }
+}
+
 // --- Lely callbacks ---
 
 void AxisDriver::OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept {
@@ -401,6 +419,7 @@ void AxisDriver::OnHeartbeat(bool occurred) noexcept {
 void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                         const std::string& what) noexcept {
   (void)st;
+  SetStartupComplete(false);
 
   if (es != 0) {
     CANOPEN_LOG_ERROR(
@@ -618,12 +637,18 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                     CANOPEN_LOG_WARN(
                         "axis={} node={}: write 0x60C2:01 failed: {}",
                         axis_index_, static_cast<int>(id()), error);
+                    if (!verify_pdo_mapping_) {
+                      SetStartupComplete(true);
+                    }
                     return;
                   }
                   CANOPEN_LOG_INFO(
                       "axis={} node={}: 0x60C2:01 set to {} ms",
                       axis_index_, static_cast<int>(id()),
                       static_cast<int>(ip_interpolation_period_ms_));
+                  if (!verify_pdo_mapping_) {
+                    SetStartupComplete(true);
+                  }
                 });
 
   if (!verify_pdo_mapping_) {
@@ -641,6 +666,7 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
                      axis_index_, static_cast<int>(id()));
     pdo_verified_.store(false);
     pdo_verification_done_.store(true);
+    SetStartupComplete(true);
     return;
   }
 
@@ -684,6 +710,7 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
             logic_.mutable_health().pdo_verify_fail.fetch_add(
                 1, std::memory_order_relaxed);
           }
+          SetStartupComplete(true);
           return;
         }
 
@@ -706,6 +733,7 @@ void AxisDriver::OnBoot(lely::canopen::NmtState st, char es,
         }
 
         pdo_verification_done_.store(true);
+        SetStartupComplete(true);
       },
       std::chrono::milliseconds(2000));
 }

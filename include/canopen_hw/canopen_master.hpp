@@ -117,6 +117,12 @@ class CanopenMaster {
   bool WaitForAllSdoIdle(
       std::chrono::milliseconds timeout = std::chrono::milliseconds(1000),
       std::vector<std::size_t>* pending_axes = nullptr) const;
+  bool WaitForStartupComplete(
+      std::size_t axis_index,
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000)) const;
+  bool WaitForAllStartupComplete(
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000),
+      std::vector<std::size_t>* pending_axes = nullptr) const;
 
  private:
   // 供后续真实 master 初始化后调用:

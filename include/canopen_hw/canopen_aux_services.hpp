@@ -47,6 +47,8 @@ class CanopenAuxServices {
   bool ApplySoftLimitAxis(std::size_t axis_index, std::string* detail);
   bool PrepareSoftLimitAxis(std::size_t axis_index, PreparedSoftLimit* out,
                             std::string* detail);
+  bool WaitForAllStartupComplete(std::chrono::milliseconds timeout,
+                                 std::string* detail) const;
   bool WaitForAllSdoIdle(std::chrono::milliseconds timeout, std::string* detail) const;
   bool WaitForAxisSdoIdle(std::size_t axis_index, std::chrono::milliseconds timeout,
                           std::string* detail) const;

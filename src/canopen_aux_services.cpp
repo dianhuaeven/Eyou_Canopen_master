@@ -12,6 +12,7 @@ namespace {
 
 constexpr auto kSoftLimitSdoIdleTimeout = std::chrono::milliseconds(2500);
 constexpr auto kSetZeroSdoIdleTimeout = std::chrono::milliseconds(2500);
+constexpr auto kStartupCompleteTimeout = std::chrono::milliseconds(4000);
 
 bool IsAllowedMode(int8_t mode) {
   return mode == kMode_IP || mode == kMode_CSP ||
@@ -289,6 +290,42 @@ bool CanopenAuxServices::WaitForAllSdoIdle(std::chrono::milliseconds timeout,
   return false;
 }
 
+bool CanopenAuxServices::WaitForAllStartupComplete(
+    std::chrono::milliseconds timeout, std::string* detail) const {
+  if (!master_) {
+    if (detail) {
+      *detail = "master is null; cannot wait for startup complete";
+    }
+    return false;
+  }
+
+  std::vector<std::size_t> pending_axes;
+  if (master_->WaitForAllStartupComplete(timeout, &pending_axes)) {
+    return true;
+  }
+
+  if (detail) {
+    std::ostringstream oss;
+    oss << "timed out waiting for all-axis startup completion";
+    if (!pending_axes.empty()) {
+      oss << "; pending axes: ";
+      for (std::size_t i = 0; i < pending_axes.size(); ++i) {
+        if (i > 0) {
+          oss << ", ";
+        }
+        oss << pending_axes[i];
+        if (master_cfg_ && pending_axes[i] < master_cfg_->joints.size()) {
+          oss << "(node="
+              << static_cast<int>(master_cfg_->joints[pending_axes[i]].node_id)
+              << ")";
+        }
+      }
+    }
+    *detail = oss.str();
+  }
+  return false;
+}
+
 bool CanopenAuxServices::WaitForAxisSdoIdle(std::size_t axis_index,
                                             std::chrono::milliseconds timeout,
                                             std::string* detail) const {
@@ -323,6 +360,9 @@ bool CanopenAuxServices::ApplySoftLimitAll(std::string* detail) {
     return true;
   }
   if (!EnsureUrdfLimits(detail)) {
+    return false;
+  }
+  if (!WaitForAllStartupComplete(kStartupCompleteTimeout, detail)) {
     return false;
   }
   if (!WaitForAllSdoIdle(kSoftLimitSdoIdleTimeout, detail)) {

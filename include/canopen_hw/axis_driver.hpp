@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -81,8 +82,14 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   bool WaitForSdoIdle(
       std::chrono::milliseconds timeout = std::chrono::milliseconds(1000)) const;
   bool sdo_idle() const { return sdo_queue_.IsIdle(); }
+  bool WaitForStartupComplete(
+      std::chrono::milliseconds timeout = std::chrono::milliseconds(1000)) const;
+  bool startup_complete() const {
+    return startup_complete_.load(std::memory_order_acquire);
+  }
 
  private:
+  void SetStartupComplete(bool complete);
   void OnRpdoWrite(uint16_t idx, uint8_t subidx) noexcept override;
   void OnEmcy(uint16_t eec, uint8_t er, uint8_t msef[5]) noexcept override;
   void OnHeartbeat(bool occurred) noexcept override;
@@ -103,6 +110,9 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   bool expected_pdo_loaded_ = false;
   std::shared_ptr<PdoMappingReader> pdo_reader_;
   SdoSingleFlightQueue sdo_queue_;
+  mutable std::mutex startup_mtx_;
+  mutable std::condition_variable startup_cv_;
+  std::atomic<bool> startup_complete_{false};
   std::atomic<int> boot_retry_count_{0};
   std::atomic<bool> ip_target_fallback_warned_{false};
   int max_boot_retries_ = 3;

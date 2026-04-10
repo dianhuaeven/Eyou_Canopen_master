@@ -80,3 +80,30 @@ TEST(MasterConfig, WaitForSdoIdleRejectsMissingAxisDriver) {
 
   EXPECT_FALSE(master.WaitForSdoIdle(0, std::chrono::milliseconds(10)));
 }
+
+TEST(MasterConfig, WaitForAllStartupCompleteSucceedsWithoutDrivers) {
+  canopen_hw::SharedState shared(1);
+  canopen_hw::CanopenMasterConfig cfg;
+  cfg.axis_count = 1;
+  cfg.master_node_id = 127;
+  cfg.can_interface = "can0";
+
+  canopen_hw::CanopenMaster master(cfg, &shared);
+
+  std::vector<std::size_t> pending;
+  EXPECT_TRUE(
+      master.WaitForAllStartupComplete(std::chrono::milliseconds(10), &pending));
+  EXPECT_TRUE(pending.empty());
+}
+
+TEST(MasterConfig, WaitForStartupCompleteRejectsMissingAxisDriver) {
+  canopen_hw::SharedState shared(1);
+  canopen_hw::CanopenMasterConfig cfg;
+  cfg.axis_count = 1;
+  cfg.master_node_id = 127;
+  cfg.can_interface = "can0";
+
+  canopen_hw::CanopenMaster master(cfg, &shared);
+
+  EXPECT_FALSE(master.WaitForStartupComplete(0, std::chrono::milliseconds(10)));
+}
