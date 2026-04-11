@@ -170,7 +170,8 @@ rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 | `~recover` | `std_srvs/Trigger` | `Faulted -> Standby`（等待 fault 与 heartbeat 全清后才成功，不自动上电） |
 | `~shutdown` | `std_srvs/Trigger` | 停通信并回 `Configured`，节点不退出（随后需 `~init`；成功后触发一次命令重同步） |
 | `~set_mode` | `Eyou_Canopen_Master/SetMode` | 仅在 `Standby` 允许（典型：`~disable` 后） |
-| `~set_zero` | `Eyou_Canopen_Master/SetZero` | 仅在 `Standby` 允许；将当前轴位置设为零点（`0x607C`），并持久化到设备（`0x1010:01='save'`） |
+| `~set_zero` | `Eyou_Canopen_Master/SetZero` | 仅在 `Standby` 允许；zero-only，支持“按当前点归零”或“显式写入零偏” |
+| `~apply_limits` | `Eyou_Canopen_Master/ApplyLimits` | 仅在 `Standby` 允许；单独应用 URDF 或手工限位到 `0x2003/0x607D` |
 
 ### 6.1.2 命令协议（epoch-ready + command_sync_sequence）
 
@@ -198,8 +199,26 @@ rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 - `~disable`：将 `Running/Armed` 回到 `Standby`，但保持通信在线。
 - `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。
 - `~resume`：仅在健康快照下允许进入 `Running`；若存在 fault、heartbeat 丢失或 `global_fault` 闩锁，则会被拒绝。
-- `~set_zero`：仅允许 `Standby`；执行序列为 `0x607C=0 -> 读0x6064 -> 0x607C=-actual_position -> 0x1010:01='save'`。若启用自动软限位，会在成功后立即重写该轴 `0x2003/0x607D`。
+- `~set_zero`：仅允许 `Standby`；当前统一为 zero-only 语义。`use_current_position_as_zero=true` 时执行 `0x607C=0 -> 读0x6064 -> 0x607C=-actual_position -> 0x1010:01='save'`；否则按请求值直接写 `0x607C` 并保存。
+- `~apply_limits`：仅允许 `Standby`；负责单独写该轴 `0x2003/0x607D`。`use_urdf_limits=true` 时采用 URDF 限位，`require_current_inside_limits=true` 时才会在当前点超限时拒绝。
 - 故障恢复标准顺序为：`~recover -> ~enable -> ~resume`。
+
+### 6.1.4 调零与限位推荐顺序
+
+```bash
+# 1) 进入 Standby
+rosservice call /canopen_hw_node/disable "{}"
+
+# 2) 当前点设零（zero-only）
+rosservice call /canopen_hw_node/set_zero "{axis_index: 0, zero_offset_rad: 0.0, use_current_position_as_zero: true}"
+
+# 3) 单独应用 URDF 限位
+rosservice call /canopen_hw_node/apply_limits "{axis_index: 0, min_position: 0.0, max_position: 0.0, use_urdf_limits: true, require_current_inside_limits: false}"
+
+# 4) 重新进入运行态
+rosservice call /canopen_hw_node/enable "{}"
+rosservice call /canopen_hw_node/resume "{}"
+```
 
 ### 6.2 模式切换流程
 
