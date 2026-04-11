@@ -11,6 +11,7 @@ from typing import Dict, List
 import actionlib
 import rospy
 import yaml
+from Eyou_Canopen_Master.srv import ApplyLimits
 from Eyou_Canopen_Master.srv import SetMode
 from Eyou_Canopen_Master.srv import SetZero
 from control_msgs.msg import (
@@ -136,6 +137,10 @@ class JointActionUi:
         self.mode_joint_var = tk.StringVar(value=self.joint_names[0])
         self.mode_value_var = tk.StringVar(value="7")
         self.zero_joint_var = tk.StringVar(value=self.joint_names[0])
+        self.limit_min_var = tk.StringVar(value="0.0")
+        self.limit_max_var = tk.StringVar(value="0.0")
+        self.use_urdf_limits_var = tk.BooleanVar(value=True)
+        self.require_current_inside_limits_var = tk.BooleanVar(value=False)
         self.action_candidates: List[str] = []
 
         self.client = None
@@ -217,7 +222,7 @@ class JointActionUi:
 
         zero = ttk.Frame(self.root, padding=8)
         zero.grid(row=3, column=0, sticky="ew")
-        zero.columnconfigure(4, weight=1)
+        zero.columnconfigure(8, weight=1)
         ttk.Label(zero, text="zero joint").grid(row=0, column=0, sticky="w")
         ttk.Combobox(
             zero,
@@ -228,13 +233,42 @@ class JointActionUi:
         ).grid(row=0, column=1, padx=2, sticky="w")
         ttk.Button(
             zero,
-            text="当前点设零+限位",
+            text="当前点设零",
             command=self.call_set_zero_service,
         ).grid(row=0, column=2, padx=(6, 2), sticky="w")
+        ttk.Button(
+            zero,
+            text="应用限位",
+            command=self.call_apply_limits_service,
+        ).grid(row=0, column=3, padx=(2, 2), sticky="w")
         ttk.Label(
             zero,
-            text="调用 canopen set_zero；要求当前系统处于 Standby。",
-        ).grid(row=0, column=3, padx=(8, 0), sticky="w")
+            text="min",
+        ).grid(row=0, column=4, padx=(8, 2), sticky="w")
+        ttk.Entry(zero, width=8, textvariable=self.limit_min_var).grid(
+            row=0, column=5, padx=2, sticky="w"
+        )
+        ttk.Label(
+            zero,
+            text="max",
+        ).grid(row=0, column=6, padx=(8, 2), sticky="w")
+        ttk.Entry(zero, width=8, textvariable=self.limit_max_var).grid(
+            row=0, column=7, padx=2, sticky="w"
+        )
+        ttk.Checkbutton(
+            zero,
+            text="使用URDF限位",
+            variable=self.use_urdf_limits_var,
+        ).grid(row=1, column=1, padx=(0, 6), sticky="w")
+        ttk.Checkbutton(
+            zero,
+            text="要求当前点在限位内",
+            variable=self.require_current_inside_limits_var,
+        ).grid(row=1, column=2, columnspan=2, padx=(0, 6), sticky="w")
+        ttk.Label(
+            zero,
+            text="调试建议：先“当前点设零”，再“应用限位”；两者都要求当前系统处于 Standby。",
+        ).grid(row=1, column=4, columnspan=5, padx=(8, 0), sticky="w")
 
         table = ttk.Frame(self.root, padding=8)
         table.grid(row=4, column=0, sticky="nsew")
@@ -569,6 +603,47 @@ class JointActionUi:
         axis_index = self.joint_names.index(joint)
         threading.Thread(
             target=self._call_set_zero_service_worker,
+            args=(axis_index, joint),
+            daemon=True,
+        ).start()
+
+    def _call_apply_limits_service_worker(self, axis_index: int, joint_name: str) -> None:
+        full_name = f"{self.service_ns}/apply_limits"
+        try:
+            min_position = float(self.limit_min_var.get().strip())
+            max_position = float(self.limit_max_var.get().strip())
+        except ValueError:
+            self.set_service_status("apply_limits: ERROR min/max must be numeric")
+            return
+
+        try:
+            rospy.wait_for_service(full_name, timeout=2.0)
+            proxy = rospy.ServiceProxy(full_name, ApplyLimits)
+            res = proxy(
+                axis_index=axis_index,
+                min_position=min_position,
+                max_position=max_position,
+                use_urdf_limits=bool(self.use_urdf_limits_var.get()),
+                require_current_inside_limits=bool(
+                    self.require_current_inside_limits_var.get()
+                ),
+            )
+            prefix = "OK" if res.success else "FAIL"
+            self.set_service_status(
+                f"apply_limits[{joint_name}/axis={axis_index}]: {prefix} {res.message} "
+                f"(current={res.current_position:.4f}, limits=[{res.applied_min_position:.4f}, {res.applied_max_position:.4f}])"
+            )
+        except Exception as e:
+            self.set_service_status(f"apply_limits[{joint_name}]: ERROR {e}")
+
+    def call_apply_limits_service(self) -> None:
+        joint = self.zero_joint_var.get().strip()
+        if joint not in self.joint_set:
+            messagebox.showerror("apply_limits", f"invalid joint: {joint}")
+            return
+        axis_index = self.joint_names.index(joint)
+        threading.Thread(
+            target=self._call_apply_limits_service_worker,
             args=(axis_index, joint),
             daemon=True,
         ).start()
