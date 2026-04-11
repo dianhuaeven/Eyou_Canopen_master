@@ -2,6 +2,7 @@
 
 #include <sstream>
 
+#include "Eyou_Canopen_Master/ApplyLimits.h"
 #include "Eyou_Canopen_Master/SetMode.h"
 #include "Eyou_Canopen_Master/SetZero.h"
 #include "canopen_hw/cia402_defs.hpp"
@@ -17,6 +18,12 @@ constexpr auto kStartupCompleteTimeout = std::chrono::milliseconds(4000);
 bool IsAllowedMode(int8_t mode) {
   return mode == kMode_IP || mode == kMode_CSP ||
          mode == kMode_CSV || mode == kMode_CST;
+}
+
+void SetDetail(std::string* detail, const std::string& message) {
+  if (detail != nullptr) {
+    *detail = message;
+  }
 }
 
 }  // namespace
@@ -58,6 +65,170 @@ bool CanopenAuxServices::SetModeAxis(std::size_t axis_index,
   return true;
 }
 
+bool CanopenAuxServices::SetZeroAxis(std::size_t axis_index,
+                                     double zero_offset,
+                                     bool use_current_position_as_zero,
+                                     double* current_position,
+                                     double* applied_zero_offset,
+                                     std::string* detail) {
+  if (detail != nullptr) {
+    detail->clear();
+  }
+  if (current_position != nullptr) {
+    *current_position = 0.0;
+  }
+  if (applied_zero_offset != nullptr) {
+    *applied_zero_offset = 0.0;
+  }
+
+  std::lock_guard<std::mutex> lk(*loop_mtx_);
+  const auto mode = coordinator_->mode();
+  if (mode != SystemOpMode::Standby) {
+    SetDetail(detail, "set_zero only allowed in Standby; call ~/disable first");
+    return false;
+  }
+  if (axis_index >= master_cfg_->joints.size()) {
+    SetDetail(detail, "axis_index out of range");
+    return false;
+  }
+
+  const double current = robot_hw_ros_->joint_position(axis_index);
+  if (current_position != nullptr) {
+    *current_position = current;
+  }
+
+  std::string local_detail;
+  if (!WaitForAxisSdoIdle(axis_index, kSetZeroSdoIdleTimeout, &local_detail)) {
+    SetDetail(detail,
+              local_detail.empty() ? "axis SDO idle wait failed" : local_detail);
+    return false;
+  }
+
+  if (use_current_position_as_zero) {
+    if (!zero_executor_.SetCurrentPositionAsZero(axis_index, &local_detail)) {
+      SetDetail(detail, local_detail.empty() ? "set_zero failed" : local_detail);
+      return false;
+    }
+    if (applied_zero_offset != nullptr) {
+      *applied_zero_offset = -current;
+    }
+  } else {
+    if (!EnsureUrdfLimits(&local_detail)) {
+      SetDetail(detail, local_detail);
+      return false;
+    }
+    if (axis_index >= urdf_limits_.size()) {
+      SetDetail(detail, "axis_index out of URDF limit range");
+      return false;
+    }
+
+    const auto& limit = urdf_limits_[axis_index];
+    bool ok = false;
+    if (limit.unit == UrdfJointLimitUnit::kRadians) {
+      ok = zero_executor_.SetHomeOffsetRadians(axis_index, zero_offset, &local_detail);
+    } else if (limit.unit == UrdfJointLimitUnit::kMeters) {
+      ok = zero_executor_.SetHomeOffsetMeters(axis_index, zero_offset, &local_detail);
+    } else {
+      local_detail = "unsupported URDF limit unit";
+    }
+    if (!ok) {
+      SetDetail(detail, local_detail.empty() ? "set_zero failed" : local_detail);
+      return false;
+    }
+    if (applied_zero_offset != nullptr) {
+      *applied_zero_offset = zero_offset;
+    }
+  }
+
+  SetDetail(detail, local_detail.empty() ? "zero set" : local_detail);
+  return true;
+}
+
+bool CanopenAuxServices::ApplyLimitsAxis(std::size_t axis_index,
+                                         bool use_urdf_limits,
+                                         double min_position,
+                                         double max_position,
+                                         bool require_current_inside_limits,
+                                         double* current_position,
+                                         double* applied_min_position,
+                                         double* applied_max_position,
+                                         std::string* detail) {
+  if (detail != nullptr) {
+    detail->clear();
+  }
+  if (current_position != nullptr) {
+    *current_position = 0.0;
+  }
+  if (applied_min_position != nullptr) {
+    *applied_min_position = 0.0;
+  }
+  if (applied_max_position != nullptr) {
+    *applied_max_position = 0.0;
+  }
+
+  std::lock_guard<std::mutex> lk(*loop_mtx_);
+  const auto mode = coordinator_->mode();
+  if (mode != SystemOpMode::Standby) {
+    SetDetail(detail, "apply_limits only allowed in Standby; call ~/disable first");
+    return false;
+  }
+  if (axis_index >= master_cfg_->joints.size()) {
+    SetDetail(detail, "axis_index out of range");
+    return false;
+  }
+  if (!EnsureUrdfLimits(detail)) {
+    return false;
+  }
+  if (!WaitForAxisSdoIdle(axis_index, kSoftLimitSdoIdleTimeout, detail)) {
+    return false;
+  }
+
+  PreparedSoftLimit prepared;
+  double resolved_min = min_position;
+  double resolved_max = max_position;
+  if (use_urdf_limits) {
+    if (!PrepareSoftLimitAxis(axis_index, &prepared, detail)) {
+      return false;
+    }
+    const auto& limit = urdf_limits_[axis_index];
+    resolved_min = limit.lower;
+    resolved_max = limit.upper;
+  } else {
+    if (!ApplySoftLimitAxisManual(axis_index, min_position, max_position,
+                                  &prepared, detail)) {
+      return false;
+    }
+  }
+
+  const double current = robot_hw_ros_->joint_position(axis_index);
+  if (current_position != nullptr) {
+    *current_position = current;
+  }
+  if (applied_min_position != nullptr) {
+    *applied_min_position = resolved_min;
+  }
+  if (applied_max_position != nullptr) {
+    *applied_max_position = resolved_max;
+  }
+  if (require_current_inside_limits &&
+      (current < resolved_min || current > resolved_max)) {
+    SetDetail(detail, "current position is outside requested limit range");
+    return false;
+  }
+
+  if (!zero_executor_.ApplySoftLimitCounts(axis_index,
+                                           prepared.min_counts,
+                                           prepared.max_counts,
+                                           detail)) {
+    return false;
+  }
+
+  if (detail != nullptr && detail->empty()) {
+    *detail = "soft limits applied";
+  }
+  return true;
+}
+
 CanopenAuxServices::CanopenAuxServices(
     ros::NodeHandle* pnh,
     CanopenRobotHwRos* robot_hw_ros,
@@ -87,77 +258,37 @@ CanopenAuxServices::CanopenAuxServices(
                                         Eyou_Canopen_Master::SetZero::Response>(
       "set_zero", [this](Eyou_Canopen_Master::SetZero::Request& req,
                          Eyou_Canopen_Master::SetZero::Response& res) {
-        std::lock_guard<std::mutex> lk(*loop_mtx_);
-        const auto mode = coordinator_->mode();
-        if (mode != SystemOpMode::Standby) {
-          res.success = false;
-          res.message = "set_zero only allowed in Standby; call ~/disable first";
-          return true;
-        }
-        if (req.axis_index >= master_cfg_->joints.size()) {
-          res.success = false;
-          res.message = "axis_index out of range";
-          return true;
-        }
-
         std::string detail;
-        PreparedSoftLimit prepared;
-        int32_t previous_home_offset = 0;
-        if (!WaitForAxisSdoIdle(req.axis_index, kSetZeroSdoIdleTimeout, &detail)) {
-          res.success = false;
-          res.message = detail.empty() ? "axis SDO idle wait failed" : detail;
-          return true;
-        }
-        if (master_cfg_->auto_write_soft_limits_from_urdf) {
-          if (!PrepareSoftLimitAxis(req.axis_index, &prepared, &detail)) {
-            res.success = false;
-            res.message = detail.empty() ? "soft limit precheck failed" : detail;
-            return true;
-          }
-          if (!zero_executor_.ReadHomeOffset(req.axis_index,
-                                             &previous_home_offset, &detail)) {
-            res.success = false;
-            res.message = detail.empty() ? "read home offset failed" : detail;
-            return true;
-          }
-        }
-
-        if (!zero_executor_.SetCurrentPositionAsZero(req.axis_index, &detail)) {
-          res.success = false;
-          res.message = detail.empty() ? "set_zero failed" : detail;
-          return true;
-        }
-
-        if (master_cfg_->auto_write_soft_limits_from_urdf) {
-          if (!zero_executor_.ApplySoftLimitCounts(
-                  req.axis_index, prepared.min_counts,
-                  prepared.max_counts, &detail)) {
-            const std::string soft_limit_error =
-                detail.empty() ? "soft limit rewrite failed" : detail;
-            std::string rollback_detail;
-            if (!zero_executor_.RestoreHomeOffset(
-                    req.axis_index, previous_home_offset, &rollback_detail)) {
-              res.success = false;
-              res.message =
-                  "zero set and soft limit rewrite failed; rollback failed: " +
-                  soft_limit_error;
-              if (!rollback_detail.empty()) {
-                res.message += "; " + rollback_detail;
-              }
-              return true;
-            }
-            res.success = false;
-            res.message =
-                "soft limit rewrite failed after zeroing; restored previous home offset: " +
-                soft_limit_error;
-            return true;
-          }
-        }
-
-        res.success = true;
-        res.message = detail.empty() ? "zero set" : detail;
+        res.success = SetZeroAxis(req.axis_index,
+                                  req.zero_offset_rad,
+                                  req.use_current_position_as_zero,
+                                  &res.current_position,
+                                  &res.applied_zero_offset,
+                                  &detail);
+        res.message = detail;
         return true;
       });
+
+  // ── ~/apply_limits ──
+  apply_limits_srv_ =
+      pnh->advertiseService<Eyou_Canopen_Master::ApplyLimits::Request,
+                            Eyou_Canopen_Master::ApplyLimits::Response>(
+          "apply_limits",
+          [this](Eyou_Canopen_Master::ApplyLimits::Request& req,
+                 Eyou_Canopen_Master::ApplyLimits::Response& res) {
+            std::string detail;
+            res.success = ApplyLimitsAxis(req.axis_index,
+                                          req.use_urdf_limits,
+                                          req.min_position,
+                                          req.max_position,
+                                          req.require_current_inside_limits,
+                                          &res.current_position,
+                                          &res.applied_min_position,
+                                          &res.applied_max_position,
+                                          &detail);
+            res.message = detail;
+            return true;
+          });
 }
 
 // ── URDF 软限位 ──────────────────────────────────────
@@ -208,6 +339,47 @@ bool CanopenAuxServices::ApplySoftLimitAxis(std::size_t axis_index,
   if (limit.unit == UrdfJointLimitUnit::kMeters) {
     return zero_executor_.ApplySoftLimitMeters(
         axis_index, limit.lower, limit.upper, detail);
+  }
+  if (detail) {
+    *detail = "unsupported URDF limit unit";
+  }
+  return false;
+}
+
+bool CanopenAuxServices::ApplySoftLimitAxisManual(std::size_t axis_index,
+                                                  double min_position,
+                                                  double max_position,
+                                                  PreparedSoftLimit* out,
+                                                  std::string* detail) {
+  if (!out) {
+    if (detail) {
+      *detail = "prepared soft limit output is null";
+    }
+    return false;
+  }
+  if (!EnsureUrdfLimits(detail)) {
+    return false;
+  }
+  if (axis_index >= urdf_limits_.size() ||
+      axis_index >= master_cfg_->joints.size()) {
+    if (detail) {
+      std::ostringstream oss;
+      oss << "axis " << axis_index << " out of URDF limit range";
+      *detail = oss.str();
+    }
+    return false;
+  }
+
+  const auto& limit = urdf_limits_[axis_index];
+  if (limit.unit == UrdfJointLimitUnit::kRadians) {
+    return zero_executor_.PrepareSoftLimitRadians(
+        axis_index, min_position, max_position,
+        &out->min_counts, &out->max_counts, detail);
+  }
+  if (limit.unit == UrdfJointLimitUnit::kMeters) {
+    return zero_executor_.PrepareSoftLimitMeters(
+        axis_index, min_position, max_position,
+        &out->min_counts, &out->max_counts, detail);
   }
   if (detail) {
     *detail = "unsupported URDF limit unit";

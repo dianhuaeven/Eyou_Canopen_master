@@ -68,6 +68,60 @@ bool ZeroSoftLimitExecutor::SetCurrentPositionAsZero(std::size_t axis_index,
   return true;
 }
 
+bool ZeroSoftLimitExecutor::SetHomeOffsetRadians(std::size_t axis_index,
+                                                 double offset_rad,
+                                                 std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+
+  int32_t home_offset = 0;
+  if (!RadToCounts(offset_rad, config_->joints[axis_index].counts_per_rev,
+                   &home_offset, detail)) {
+    return false;
+  }
+  if (!WriteHomeOffset(axis_index, home_offset, "write 0x607C:00=offset_rad",
+                       detail)) {
+    return false;
+  }
+  if (!StoreParameters(axis_index, "write 0x1010:01='save'", detail)) {
+    return false;
+  }
+  if (detail) {
+    std::ostringstream oss;
+    oss << "axis " << axis_index << " home_offset set to " << home_offset;
+    *detail = oss.str();
+  }
+  return true;
+}
+
+bool ZeroSoftLimitExecutor::SetHomeOffsetMeters(std::size_t axis_index,
+                                                double offset_meters,
+                                                std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+
+  int32_t home_offset = 0;
+  if (!MetersToCounts(offset_meters, config_->joints[axis_index].counts_per_meter,
+                      &home_offset, detail)) {
+    return false;
+  }
+  if (!WriteHomeOffset(axis_index, home_offset, "write 0x607C:00=offset_meters",
+                       detail)) {
+    return false;
+  }
+  if (!StoreParameters(axis_index, "write 0x1010:01='save'", detail)) {
+    return false;
+  }
+  if (detail) {
+    std::ostringstream oss;
+    oss << "axis " << axis_index << " home_offset set to " << home_offset;
+    *detail = oss.str();
+  }
+  return true;
+}
+
 bool ZeroSoftLimitExecutor::ReadHomeOffset(std::size_t axis_index, int32_t* out,
                                            std::string* detail) {
   if (!ValidateAxis(axis_index, detail)) {

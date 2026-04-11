@@ -35,6 +35,10 @@ class ZeroSoftLimitExecutor {
   ZeroSoftLimitExecutor(const CanopenMasterConfig* config, Ops ops);
 
   bool SetCurrentPositionAsZero(std::size_t axis_index, std::string* detail = nullptr);
+  bool SetHomeOffsetRadians(std::size_t axis_index, double offset_rad,
+                            std::string* detail = nullptr);
+  bool SetHomeOffsetMeters(std::size_t axis_index, double offset_meters,
+                           std::string* detail = nullptr);
   bool ReadHomeOffset(std::size_t axis_index, int32_t* out,
                       std::string* detail = nullptr);
   bool RestoreHomeOffset(std::size_t axis_index, int32_t home_offset,

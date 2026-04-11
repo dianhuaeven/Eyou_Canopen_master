@@ -548,10 +548,15 @@ class JointActionUi:
         try:
             rospy.wait_for_service(full_name, timeout=2.0)
             proxy = rospy.ServiceProxy(full_name, SetZero)
-            res = proxy(axis_index=axis_index)
+            res = proxy(
+                axis_index=axis_index,
+                zero_offset_rad=0.0,
+                use_current_position_as_zero=True,
+            )
             prefix = "OK" if res.success else "FAIL"
             self.set_service_status(
-                f"set_zero[{joint_name}/axis={axis_index}]: {prefix} {res.message}"
+                f"set_zero[{joint_name}/axis={axis_index}]: {prefix} {res.message} "
+                f"(current={res.current_position:.4f}, zero={res.applied_zero_offset:.4f})"
             )
         except Exception as e:
             self.set_service_status(f"set_zero[{joint_name}]: ERROR {e}")

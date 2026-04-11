@@ -32,6 +32,21 @@ class CanopenAuxServices {
                      std::mutex* loop_mtx);
 
   bool SetModeAxis(std::size_t axis_index, int8_t mode, std::string* detail);
+  bool SetZeroAxis(std::size_t axis_index,
+                   double zero_offset,
+                   bool use_current_position_as_zero,
+                   double* current_position,
+                   double* applied_zero_offset,
+                   std::string* detail);
+  bool ApplyLimitsAxis(std::size_t axis_index,
+                       bool use_urdf_limits,
+                       double min_position,
+                       double max_position,
+                       bool require_current_inside_limits,
+                       double* current_position,
+                       double* applied_min_position,
+                       double* applied_max_position,
+                       std::string* detail);
 
   // 供 ServiceGateway::SetPostInitHook 或外部调用。
   // 当 auto_write_soft_limits_from_urdf 为 false 时直接返回 true。
@@ -45,6 +60,11 @@ class CanopenAuxServices {
 
   bool EnsureUrdfLimits(std::string* detail);
   bool ApplySoftLimitAxis(std::size_t axis_index, std::string* detail);
+  bool ApplySoftLimitAxisManual(std::size_t axis_index,
+                                double min_position,
+                                double max_position,
+                                PreparedSoftLimit* prepared,
+                                std::string* detail);
   bool PrepareSoftLimitAxis(std::size_t axis_index, PreparedSoftLimit* out,
                             std::string* detail);
   bool WaitForAllStartupComplete(std::chrono::milliseconds timeout,
@@ -66,6 +86,7 @@ class CanopenAuxServices {
 
   ros::ServiceServer set_mode_srv_;
   ros::ServiceServer set_zero_srv_;
+  ros::ServiceServer apply_limits_srv_;
 };
 
 }  // namespace canopen_hw

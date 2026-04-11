@@ -23,6 +23,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 add_service_files(FILES
+  ApplyLimits.srv
   SetMode.srv
   SetZero.srv
 )
