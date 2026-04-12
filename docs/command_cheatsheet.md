@@ -119,6 +119,7 @@ rosservice call /canopen_hw_node/disable "{}"
 rosservice call /canopen_hw_node/halt "{}"
 rosservice call /canopen_hw_node/resume "{}"
 rosservice call /canopen_hw_node/recover "{}"
+rosservice call /canopen_hw_node/set_zero "{axis_index: 0}"
 rosservice call /canopen_hw_node/shutdown "{}"
 ```
 
@@ -129,7 +130,17 @@ rosservice call /canopen_hw_node/shutdown "{}"
 - `halt`: `Running -> Armed`
 - `resume`: `Armed -> Running`
 - `recover`: `Faulted -> Standby`（不自动上电）
+- `set_zero`: 仅 `Standby` 允许；`0x607C=0 -> 读0x6064 -> 0x607C=-actual -> 0x1010:01='save'`
 - `shutdown`: `* -> Configured`
+
+设置零点（推荐顺序）：
+
+```bash
+rosservice call /canopen_hw_node/disable "{}"
+rosservice call /canopen_hw_node/set_zero "{axis_index: 0}"
+rosservice call /canopen_hw_node/enable "{}"
+rosservice call /canopen_hw_node/resume "{}"
+```
 
 模式切换（白名单：`7/8/9/10`）：
 
@@ -219,17 +230,37 @@ control_msgs/FollowJointTrajectoryActionGoal \
 
 ```bash
 # 1) 拉起 CAN
-sudo ip link set can0 down 2>/dev/null || true
-sudo ip link set can0 type can bitrate 1000000 restart-ms 100
+# 1. 先关闭接口
+sudo ip link set can0 down
+
+# 2. 设置波特率（示例 1000Kbps）
+sudo ip link set can0 type can bitrate 1000000
+
+# 3. 设置缓冲区大小（推荐值）
+sudo ip link set can0 txqueuelen 10000     # 或 20000 / 5000，根据需求
+
+# 4. 重新启动
 sudo ip link set can0 up
+```bash
+# 1) 拉起 CAN
+# 1. 先关闭接口
+sudo ip link set can1 down
+
+# 2. 设置波特率（示例 1000Kbps）
+sudo ip link set can1 type can bitrate 1000000
+
+# 3. 设置缓冲区大小（推荐值）
+sudo ip link set can1 txqueuelen 10000     # 或 20000 / 5000，根据需求
+
+# 4. 重新启动
+sudo ip link set can1 up
 
 # 2) 生成 DCF
 cd ~/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
 dcfgen -S -r -d . master.yaml
 
 # 3) 启动 ROS 节点
-cd ~/Robot24_catkin_ws
-source devel/setup.bash
+
 roslaunch Eyou_Canopen_Master bringup.launch auto_init:=false
 
 # 4) 初始化
