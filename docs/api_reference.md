@@ -1,7 +1,7 @@
 # API Quick Reference
 
 当前 API 的安全行为基线见：`docs/2026-03-25_现行安全行为规范.md`。
-若与 `docs/0324import.md` 存在状态语义差异，以现行安全行为规范为准。
+若与 `docs/archive/2026-04-19_deprecated/0324import.md` 存在状态语义差异，以现行安全行为规范为准。
 
 ## OperationalCoordinator
 
