@@ -1200,25 +1200,25 @@ DefaultValue=127
 ParameterName=Node-ID 1
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/left_front_arm_joint.bin
+UploadFile=/home/rera/robot24_ws/src/Eyou_Canopen_master/config/left_front_arm_joint.bin
 
 [1F22sub2]
 ParameterName=Node-ID 2
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/right_front_arm_joint.bin
+UploadFile=/home/rera/robot24_ws/src/Eyou_Canopen_master/config/right_front_arm_joint.bin
 
 [1F22sub3]
 ParameterName=Node-ID 3
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/left_rear_arm_joint.bin
+UploadFile=/home/rera/robot24_ws/src/Eyou_Canopen_master/config/left_rear_arm_joint.bin
 
 [1F22sub4]
 ParameterName=Node-ID 4
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/right_rear_arm_joint.bin
+UploadFile=/home/rera/robot24_ws/src/Eyou_Canopen_master/config/right_rear_arm_joint.bin
 
 [1F22sub5]
 ParameterName=Node-ID 5

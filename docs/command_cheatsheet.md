@@ -102,6 +102,129 @@ roslaunch Eyou_Canopen_Master bringup.launch \
 rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 ```
 
+4 轴摆臂如果只是验证 `flipper_csp_controller` 的 action/轨迹接口，可以走 IP executor：
+
+```bash
+cd ~/robot24_ws
+source devel/setup.bash
+
+roslaunch Eyou_Canopen_Master bringup_flipper_4axis.launch \
+  use_ip_executor:=true \
+  ip_executor_action_ns:=flipper_csp_controller/follow_joint_trajectory
+```
+
+如果要联调 `flipper_control`：
+
+- `csv_velocity` 独立摆臂测试，推荐直接走 `canopen_hw_node`
+- 全车 `CSP` 混合后端联调，再走 `hybrid_motor_hw_node`
+
+`flipper_control` 的三个 profile 与底层模式对应关系：
+
+- `csp_position` -> `CSP`
+- `csp_jog` -> `CSP`
+- `csv_velocity` -> `CSV`
+
+若 4 轴启动时报下面这类错误：
+
+```text
+error: .../left_front_arm_joint.bin: No such file or directory
+error: SDO abort code 08000020 on upload request of object 1F22:01 (Concise DCF)
+```
+
+说明当前 `master_flipper_4axis.dcf` 是在别的机器上生成的旧产物，里面的 `UploadFile=` 仍指向旧绝对路径。需要在本机重新生成 4 轴 DCF 与 4 个从站 `.bin`：
+
+```bash
+source /opt/ros/noetic/setup.bash
+CFG_DIR=$(rospack find Eyou_Canopen_Master)/config
+cd "$CFG_DIR"
+
+dcfgen -S -r -d . master_flipper_4axis.yaml
+cp master.dcf master_flipper_4axis.dcf
+```
+
+生成后可检查：
+
+```bash
+ls "$CFG_DIR"/left_front_arm_joint.bin \
+   "$CFG_DIR"/right_front_arm_joint.bin \
+   "$CFG_DIR"/left_rear_arm_joint.bin \
+   "$CFG_DIR"/right_rear_arm_joint.bin
+
+grep -n "UploadFile=" "$CFG_DIR/master_flipper_4axis.dcf" | head
+```
+
+若启动时报：
+
+```text
+Could not load controller 'flipper_csp_controller' because controller type
+'position_controllers/JointTrajectoryController' does not exist.
+```
+
+先检查当前环境是否缺少 JTC 插件：
+
+```bash
+rosrun controller_manager controller_manager list-types | grep JointTrajectoryController
+dpkg -l | grep ros-noetic-joint-trajectory-controller
+```
+
+为空则安装：
+
+```bash
+sudo apt update
+sudo apt install ros-noetic-joint-trajectory-controller
+```
+
+4 轴 UI 调试：
+
+```bash
+cd ~/robot24_ws
+source devel/setup.bash
+
+rosrun Eyou_Canopen_Master joint_action_ui.py \
+  --joints-yaml ~/robot24_ws/src/Eyou_Canopen_Master/config/joints_flipper_4axis.yaml \
+  --action-ns /flipper_csp_controller/follow_joint_trajectory \
+  --service-ns /canopen_hw_node
+```
+
+注意：
+
+- `joint_action_ui.py` 适合 `FollowJointTrajectory` / action 调试
+- 它不覆盖 `flipper_control` 的 `csv_velocity` 测试链路
+- `csv_velocity` 更适合通过 `flipper_control/set_control_profile`、`/flipper_control/jog_cmd`、`/flipper_control/state`、`/diagnostics` 联调
+
+独立摆臂 `CSV` 联调示例：
+
+```bash
+cd ~/robot24_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+
+roslaunch Eyou_Canopen_Master bringup_flipper_4axis.launch \
+  start_csp_controller:=true \
+  start_csv_controller:=false
+```
+
+```bash
+cd ~/robot24_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+
+roslaunch flipper_control flipper_control.launch \
+  backend_type:=canopen \
+  canopen_ns:=/canopen_hw_node
+```
+
+```bash
+rosservice call /flipper_control/set_control_profile "{profile: 'csv_velocity'}"
+
+rostopic pub -1 /flipper_control/jog_cmd control_msgs/JointJog \
+"{
+  joint_names: ['left_front_arm_joint','right_front_arm_joint'],
+  velocities: [0.2, 0.2],
+  duration: 0.2
+}"
+```
+
 ## 6. Service 调用
 
 列出服务：
