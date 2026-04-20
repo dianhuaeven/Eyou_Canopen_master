@@ -12,6 +12,8 @@
   - 当前架构、线程模型、控制链路
 - [`yaml_config_guide.md`](yaml_config_guide.md)
   - `master.yaml/master.dcf/joints.yaml` 说明
+- [`电机配置变更指南.md`](电机配置变更指南.md)
+  - 电机配置变更时 `joints.yaml`、`master.yaml`、`master.dcf` 与控制器文件的同步规则
 - [`api_reference.md`](api_reference.md)
   - 核心模块与 ROS 接口摘要
 - [`command_cheatsheet.md`](command_cheatsheet.md)
