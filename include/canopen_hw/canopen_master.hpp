@@ -146,6 +146,7 @@ class CanopenMaster {
   std::unique_ptr<lely::io::CanChannel> can_chan_;
   std::unique_ptr<lely::canopen::AsyncMaster> master_;
   std::thread ev_thread_;
+  std::string runtime_master_dcf_path_;
 
   // 每轴一个 driver，索引与轴号一一对应(0 -> node_id 1)。
   // 约束: 容量在初始化阶段 reserve，运行阶段只读/不扩容。

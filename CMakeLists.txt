@@ -72,6 +72,7 @@ add_library(canopen_core
   src/shared_state.cpp
   src/axis_driver.cpp
   src/canopen_master.cpp
+  src/dcf_path_utils.cpp
   src/canopen_robot_hw.cpp
   src/joints_config.cpp
   src/pdo_mapping.cpp
@@ -240,6 +241,12 @@ add_executable(test_zero_soft_limit_executor
 )
 target_link_libraries(test_zero_soft_limit_executor PRIVATE canopen_core GTest::gtest_main)
 gtest_discover_tests(test_zero_soft_limit_executor)
+
+add_executable(test_dcf_path_utils
+  test/test_dcf_path_utils.cpp
+)
+target_link_libraries(test_dcf_path_utils PRIVATE canopen_core GTest::gtest_main)
+gtest_discover_tests(test_dcf_path_utils)
 
 add_executable(test_urdf_joint_limits
   test/test_urdf_joint_limits.cpp

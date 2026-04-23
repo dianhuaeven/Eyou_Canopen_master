@@ -4,13 +4,57 @@
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <thread>
 
 #include "canopen_hw/cia402_defs.hpp"
+#include "canopen_hw/dcf_path_utils.hpp"
 #include "canopen_hw/logging.hpp"
 
 namespace canopen_hw {
+namespace {
+
+std::string MakeRuntimeMasterDcfPath(const std::string& source_dcf_path) {
+  const auto source = std::filesystem::path(source_dcf_path);
+  const auto stamp =
+      std::chrono::steady_clock::now().time_since_epoch().count();
+  return (std::filesystem::temp_directory_path() /
+          (source.stem().string() + ".runtime." + std::to_string(stamp) +
+           source.extension().string()))
+      .string();
+}
+
+bool WriteTextFile(const std::string& path, const std::string& text,
+                   std::string* error) {
+  std::ofstream ofs(path, std::ios::trunc);
+  if (!ofs.is_open()) {
+    if (error) {
+      *error = "open temp dcf failed: " + path;
+    }
+    return false;
+  }
+
+  ofs << text;
+  if (!ofs.good()) {
+    if (error) {
+      *error = "write temp dcf failed: " + path;
+    }
+    return false;
+  }
+  return true;
+}
+
+void CleanupRuntimeMasterDcf(std::string* path) {
+  if (!path || path->empty()) {
+    return;
+  }
+  std::error_code ec;
+  std::filesystem::remove(*path, ec);
+  path->clear();
+}
+
+}  // namespace
 
 CanopenMaster::CanopenMaster(const CanopenMasterConfig& config,
                              SharedState* shared_state)
@@ -56,6 +100,57 @@ bool CanopenMaster::Start() {
     return false;
   }
 
+  CleanupRuntimeMasterDcf(&runtime_master_dcf_path_);
+  runtime_master_dcf_path_ = config_.master_dcf_path;
+
+  std::string rewritten_dcf;
+  std::vector<DcfUploadFileResolution> upload_files;
+  std::string rewrite_error;
+  if (!RewriteMasterDcfUploadPaths(config_.master_dcf_path, &rewritten_dcf,
+                                   &upload_files, &rewrite_error)) {
+    CANOPEN_LOG_ERROR("CanopenMaster start failed: {}", rewrite_error);
+    return false;
+  }
+
+  std::vector<std::string> missing_upload_files;
+  bool needs_runtime_copy = false;
+  for (const auto& upload_file : upload_files) {
+    if (upload_file.original_path != upload_file.resolved_path) {
+      needs_runtime_copy = true;
+    }
+    if (!upload_file.exists) {
+      missing_upload_files.push_back(upload_file.resolved_path);
+    }
+  }
+
+  if (!missing_upload_files.empty()) {
+    std::ostringstream oss;
+    for (std::size_t i = 0; i < missing_upload_files.size(); ++i) {
+      if (i > 0) {
+        oss << ", ";
+      }
+      oss << missing_upload_files[i];
+    }
+    CANOPEN_LOG_ERROR(
+        "CanopenMaster start failed: UploadFile target(s) missing for {}: {}",
+        config_.master_dcf_path, oss.str());
+    return false;
+  }
+
+  if (needs_runtime_copy) {
+    runtime_master_dcf_path_ = MakeRuntimeMasterDcfPath(config_.master_dcf_path);
+    if (!WriteTextFile(runtime_master_dcf_path_, rewritten_dcf,
+                       &rewrite_error)) {
+      CANOPEN_LOG_ERROR("CanopenMaster start failed: {}", rewrite_error);
+      CleanupRuntimeMasterDcf(&runtime_master_dcf_path_);
+      return false;
+    }
+    // TODO(rera): move UploadFile path normalization fully into dcf generation,
+    // then this runtime temp DCF can be removed.
+    CANOPEN_LOG_INFO("Prepared runtime master DCF with resolved UploadFile paths: {}",
+                     runtime_master_dcf_path_);
+  }
+
   try {
     io_guard_ = std::make_unique<lely::io::IoGuard>();
     io_ctx_ = std::make_unique<lely::io::Context>();
@@ -72,7 +167,7 @@ bool CanopenMaster::Start() {
 
     master_ = std::make_unique<lely::canopen::AsyncMaster>(
         ev_loop_->get_executor(), *io_timer_, *can_chan_,
-        config_.master_dcf_path, std::string(), config_.master_node_id);
+        runtime_master_dcf_path_, std::string(), config_.master_node_id);
     CreateAxisDrivers(*master_);
 
     ev_loop_->restart();
@@ -98,6 +193,7 @@ bool CanopenMaster::Start() {
     io_poll_.reset();
     io_ctx_.reset();
     io_guard_.reset();
+    CleanupRuntimeMasterDcf(&runtime_master_dcf_path_);
     running_.store(false);
     return false;
   }
@@ -126,6 +222,7 @@ void CanopenMaster::Stop() {
   io_poll_.reset();
   io_ctx_.reset();
   io_guard_.reset();
+  CleanupRuntimeMasterDcf(&runtime_master_dcf_path_);
 
   running_.store(false);
 }
