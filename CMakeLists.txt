@@ -148,6 +148,15 @@ target_link_libraries(canopen_hw_ros_node
   PRIVATE
     canopen_ros_adapter
 )
+# This node is sometimes granted file capabilities (NET_RAW / NET_ADMIN) for SocketCAN.
+# In that secure-exec mode the dynamic loader ignores LD_LIBRARY_PATH, so we need a
+# transitive embedded search path for indirect ROS dependencies such as
+# libcontroller_manager.so -> libclass_loader.so. Emitting legacy RPATH instead of
+# RUNPATH keeps the ROS library directories visible to those indirect dependencies.
+target_link_options(canopen_hw_ros_node
+  PRIVATE
+    -Wl,--disable-new-dtags
+)
 add_dependencies(canopen_hw_ros_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # ── Install ───────────────────────────────────────────
@@ -167,6 +176,11 @@ install(DIRECTORY launch config
 
 catkin_install_python(PROGRAMS
   scripts/joint_action_ui.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(PROGRAMS
+  scripts/generate_dcf.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
