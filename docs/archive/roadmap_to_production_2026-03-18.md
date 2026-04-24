@@ -85,7 +85,7 @@
 ### commit 9：接通 joints.yaml 顶层 canopen
 改动：
 - 解析并接通 `interface/master_node_id`
-- `main.cpp` 不再硬编码 `can0/127`  
+- `main.cpp` 不再硬编码 `canable0/127`  
 验证：修改配置可切换接口与主站 ID。
 
 ---

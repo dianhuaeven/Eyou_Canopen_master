@@ -18,18 +18,18 @@ sudo apt install can-utils
 ### 1.2 启动 CAN 接口
 
 ```bash
-sudo ip link set can0 up type can bitrate 1000000
-ip -details -statistics link show can0
+sudo ip link set canable0 up type can bitrate 1000000
+ip -details -statistics link show canable0
 ```
 
 ### 1.3 抓包检查（建议常开）
 
 ```bash
 # 实时抓包
-candump can0
+candump canable0
 
 # 仅看关键帧（SYNC + PDO + Heartbeat + EMCY）
-candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
+candump canable0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 ```
 
 预期：
@@ -67,12 +67,25 @@ candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 ## 3. 生成 DCF
 
 ```bash
-cd ~/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
-dcfgen -S -r -d . master.yaml
+rosrun Eyou_Canopen_Master generate_dcf.sh full
+rosrun Eyou_Canopen_Master generate_dcf.sh arm_only
 ```
 
 说明：
 - 若 `dcfgen` 报 EDS 格式错误，请改用 `YiyouServo_V1.4.dcfgen.eds`。
+- `full` 会刷新默认全量 `config/master.dcf`。
+- `arm_only` 会刷新机械臂肩部专用 `config/master_arm_only.dcf`。
+- 4 轴摆臂配置可用：
+
+```bash
+rosrun Eyou_Canopen_Master generate_dcf.sh flipper_only
+```
+
+- 一次刷新全部三套 CANopen 配置：
+
+```bash
+rosrun Eyou_Canopen_Master generate_dcf.sh all
+```
 
 ---
 
@@ -342,13 +355,13 @@ Ctrl+C 才会触发进程级退出，释放 ROS 节点与内部对象。
 
 ### 10.1 前置准备
 
-1. CAN 链路已连通，`can0` 已 up，波特率与驱动器一致。
+1. CAN 链路已连通，`canable0` 已 up，波特率与驱动器一致。
 2. `master.dcf` 与现场固件版本匹配（更新固件后必须重生成 DCF）。
 3. 启动抓包：
 
 ```bash
 # Node=5 示例：SYNC + TPDO/RPDO + Heartbeat + NMT
-candump -L can0,080:7FF,185:7FF,205:7FF,285:7FF,705:7FF,000:7FF
+candump -L canable0,080:7FF,185:7FF,205:7FF,285:7FF,705:7FF,000:7FF
 ```
 
 ### 10.2 启动与 Boot 身份判据

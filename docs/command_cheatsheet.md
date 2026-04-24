@@ -11,23 +11,23 @@ sudo modprobe can
 sudo modprobe can_raw
 sudo modprobe can_dev
 
-# 2) 配置并拉起 can0（1Mbps）
-sudo ip link set can0 down 2>/dev/null || true
-sudo ip link set can0 type can bitrate 1000000
-sudo ip link set can0 up
+# 2) 配置并拉起 canable0（1Mbps）
+sudo ip link set canable0 down 2>/dev/null || true
+sudo ip link set canable0 type can bitrate 1000000
+sudo ip link set canable0 up
 
 # 3) 查看状态
-ip -details -statistics link show can0
+ip -details -statistics link show canable0
 ```
 
 抓包：
 
 ```bash
 # 全量抓包
-candump can0
+candump canable0
 
 # 关键帧抓包（SYNC + PDO + Heartbeat + EMCY）
-candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
+candump canable0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 ```
 
 ## 2. 赋权命令（可选）
@@ -55,8 +55,8 @@ newgrp dialout
 ## 3. 生成 DCF
 
 ```bash
-cd ~/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
-dcfgen -S -r -d . master.yaml
+rosrun Eyou_Canopen_Master generate_dcf.sh full
+rosrun Eyou_Canopen_Master generate_dcf.sh arm_only
 ```
 
 ## 4. 编译
@@ -134,12 +134,7 @@ error: SDO abort code 08000020 on upload request of object 1F22:01 (Concise DCF)
 说明当前 `master_flipper_4axis.dcf` 是在别的机器上生成的旧产物，里面的 `UploadFile=` 仍指向旧绝对路径。需要在本机重新生成 4 轴 DCF 与 4 个从站 `.bin`：
 
 ```bash
-source /opt/ros/noetic/setup.bash
-CFG_DIR=$(rospack find Eyou_Canopen_Master)/config
-cd "$CFG_DIR"
-
-dcfgen -S -r -d . master_flipper_4axis.yaml
-cp master.dcf master_flipper_4axis.dcf
+rosrun Eyou_Canopen_Master generate_dcf.sh flipper_only
 ```
 
 生成后可检查：
@@ -354,29 +349,29 @@ control_msgs/FollowJointTrajectoryActionGoal \
 ```bash
 # 1) 拉起 CAN
 # 1. 先关闭接口
-sudo ip link set can0 down
+sudo ip link set canable0 down
 
 # 2. 设置波特率（示例 1000Kbps）
-sudo ip link set can0 type can bitrate 1000000
+sudo ip link set canable0 type can bitrate 1000000
 
 # 3. 设置缓冲区大小（推荐值）
-sudo ip link set can0 txqueuelen 10000     # 或 20000 / 5000，根据需求
+sudo ip link set canable0 txqueuelen 10000     # 或 20000 / 5000，根据需求
 
 # 4. 重新启动
-sudo ip link set can0 up
+sudo ip link set canable0 up
 ```bash
 # 1) 拉起 CAN
 # 1. 先关闭接口
-sudo ip link set can1 down
+sudo ip link set canable1 down
 
 # 2. 设置波特率（示例 1000Kbps）
-sudo ip link set can1 type can bitrate 1000000
+sudo ip link set canable1 type can bitrate 1000000
 
 # 3. 设置缓冲区大小（推荐值）
-sudo ip link set can1 txqueuelen 10000     # 或 20000 / 5000，根据需求
+sudo ip link set canable1 txqueuelen 10000     # 或 20000 / 5000，根据需求
 
 # 4. 重新启动
-sudo ip link set can1 up
+sudo ip link set canable1 up
 
 # 2) 生成 DCF
 cd ~/Robot24_catkin_ws/src/Eyou_Canopen_Master/config

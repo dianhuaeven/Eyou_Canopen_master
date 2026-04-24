@@ -586,7 +586,7 @@ EMCY 仅做**日志记录**，不做额外动作。状态机的故障处理由 s
 
 ```
 1. 初始化 SocketCAN 接口
-   $ sudo ip link set can0 up type can bitrate 1000000
+   $ sudo ip link set canable0 up type can bitrate 1000000
 
 2. 创建 Lely AsyncMaster
    - 加载由 dcfgen 生成的 master DCF
@@ -598,7 +598,7 @@ EMCY 仅做**日志记录**，不做额外动作。状态机的故障处理由 s
 
 ```
 1. 初始化 SocketCAN 接口
-   $ sudo ip link set can0 up type can bitrate 1000000
+   $ sudo ip link set canable0 up type can bitrate 1000000
 
 2. 创建 Lely AsyncMaster
    - 加载由 dcfgen 生成的 master DCF
@@ -974,8 +974,8 @@ CANable 2.0 (gs_usb) 的 SYNC 发送受 USB 帧调度影响：
 
 | 手段 | 用途 |
 |---|---|
-| `candump can0` | 原始 CAN 帧观测，确认 SYNC/PDO/EMCY 时序 |
-| `cansend can0` | 手动发送单帧，验证驱动器响应 |
+| `candump canable0` | 原始 CAN 帧观测，确认 SYNC/PDO/EMCY 时序 |
+| `cansend canable0` | 手动发送单帧，验证驱动器响应 |
 | 自定义日志 | 每个 SYNC 周期记录 statusword、controlword、actual_pos、target_pos |
 | `rqt_plot` | ROS 侧观测关节位置曲线 |
 | 示波器/逻辑分析仪 | （可选）测量 SYNC 实际间隔，验证 USB-CAN 抖动 |
@@ -984,11 +984,11 @@ CANable 2.0 (gs_usb) 的 SYNC 发送受 USB 帧调度影响：
 
 ```bash
 # 设置 CAN 接口
-sudo ip link set can0 up type can bitrate 1000000
+sudo ip link set canable0 up type can bitrate 1000000
 
 # 检查驱动器心跳（如果 0x1017 出厂默认为 0 则看不到，
 # 但应该能看到 Bootup 帧）
-candump can0
+candump canable0
 
 # 如果看不到任何帧，检查：
 # 1. 终端电阻是否正确（总线两端各120Ω）
@@ -996,12 +996,12 @@ candump can0
 # 3. CAN_H / CAN_L 是否接反
 
 # 手动读取 statusword（SDO read，假设 NodeID=1）
-cansend can0 601#40.41.60.00.00.00.00.00
+cansend canable0 601#40.41.60.00.00.00.00.00
 # 期望收到 581#4B.41.60.00.XX.XX.00.00
 # XX.XX 应为 0x0240 或 0x0640 (SWITCH_ON_DISABLED，bit6=1, bit9=1)
 
 # 手动读取固件版本
-cansend can0 601#40.0A.10.00.00.00.00.00
+cansend canable0 601#40.0A.10.00.00.00.00.00
 ```
 
 ### 12.4 D3 阶段手动使能验证
@@ -1010,31 +1010,31 @@ cansend can0 601#40.0A.10.00.00.00.00.00
 
 ```bash
 # 1. 设置模式为 CSP (0x6060 = 8)
-cansend can0 601#2F.60.60.00.08.00.00.00
+cansend canable0 601#2F.60.60.00.08.00.00.00
 # 期望返回 581#60.60.60.00.00.00.00.00
 
 # 2. 读取当前位置 (0x6064)
-cansend can0 601#40.64.60.00.00.00.00.00
+cansend canable0 601#40.64.60.00.00.00.00.00
 # 记下返回的位置值 actual_pos
 
 # 3. 将 target_position 设为 actual_pos (0x607A)
-cansend can0 601#23.7A.60.00.<actual_pos 4字节小端>
+cansend canable0 601#23.7A.60.00.<actual_pos 4字节小端>
 
 # 4. Shutdown (0x6040 = 0x0006)
-cansend can0 601#2B.40.60.00.06.00.00.00
+cansend canable0 601#2B.40.60.00.06.00.00.00
 
 # 5. 读 statusword 确认 READY_TO_SWITCH_ON
-cansend can0 601#40.41.60.00.00.00.00.00
+cansend canable0 601#40.41.60.00.00.00.00.00
 
 # 6. Enable Operation (0x6040 = 0x000F)
-cansend can0 601#2B.40.60.00.0F.00.00.00
+cansend canable0 601#2B.40.60.00.0F.00.00.00
 
 # 7. 读 statusword 确认 OPERATION_ENABLED
-cansend can0 601#40.41.60.00.00.00.00.00
+cansend canable0 601#40.41.60.00.00.00.00.00
 # 期望: (statusword & 0x006F) == 0x0027
 
 # 8. 下使能 (0x6040 = 0x0006)
-cansend can0 601#2B.40.60.00.06.00.00.00
+cansend canable0 601#2B.40.60.00.06.00.00.00
 ```
 
 **此步骤是在写代码前确认驱动器行为与文档一致的关键验证。如果手动使能都不成功，代码写得再好也没用。**
@@ -1048,7 +1048,7 @@ cansend can0 601#2B.40.60.00.06.00.00.00
 ```yaml
 # joints.yaml
 canopen:
-  interface: "can0"
+  interface: "canable0"
   bitrate: 1000000
   sync_period_us: 10000
   master_node_id: 127

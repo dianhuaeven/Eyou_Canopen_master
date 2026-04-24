@@ -24,7 +24,7 @@
 
 ```yaml
 options:
-  dcf_path: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
+  dcf_path: .
   heartbeat_multiplier: 3.0
 
 master:
@@ -35,7 +35,7 @@ master:
 
 joint_1:
   node_id: 1
-  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
@@ -127,7 +127,7 @@ joints:
 ### 3.2 字段说明
 
 `joints.yaml` 顶层 `canopen`（运行时生效）：
-- `interface`：CAN 接口名（例如 `can0`）。
+- `interface`：CAN 接口名（例如 `canable0`）。
 - `master_node_id`：主站节点号。
 - `loop_hz`：ROS 控制循环频率（Hz）。
 - `auto_write_soft_limits_from_urdf`：是否在每次 `init` 成功后自动按 URDF 限位写入 `0x2003/0x607D`（默认 `false`）。

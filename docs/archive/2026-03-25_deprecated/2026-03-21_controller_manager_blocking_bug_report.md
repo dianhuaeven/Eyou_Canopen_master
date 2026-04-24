@@ -2,14 +2,14 @@
 
 - 日期: 2026-03-21
 - 项目: Eyou_Canopen_Master
-- 环境: ROS Noetic (`rosversion: 1.17.2`), Ubuntu (x86_64), SocketCAN `can0`, 从站 NodeID=5
+- 环境: ROS Noetic (`rosversion: 1.17.2`), Ubuntu (x86_64), SocketCAN `canable0`, 从站 NodeID=5
 - 目标现象: CSP 位置命令已发布，但电机无动作
 
 ## 1. 问题摘要
 
 当前问题不是单一故障，而是多阶段叠加：
 
-1. 启动早期存在 CAN 权限问题，节点无法打开 `can0`。
+1. 启动早期存在 CAN 权限问题，节点无法打开 `canable0`。
 2. `set_mode` service 类型命名错误（代码缺陷）导致服务调用失败。
 3. 修复 service 类型后，`controller_manager` 相关调用出现阻塞或控制器未加载，导致 `/arm_position_controller/command` 话题不存在，位置命令无法被消费。
 

@@ -4,20 +4,20 @@
 
 ```bash
 # 1) 启动 CAN 口
-sudo ip link set can0 up type can bitrate 1000000
+sudo ip link set canable0 up type can bitrate 1000000
 
 # 2) 查看接口状态
-ip -details -statistics link show can0
+ip -details -statistics link show canable0
 ```
 
 ## 2. 总线观测
 
 ```bash
 # 实时抓包
-candump can0
+candump canable0
 
 # 仅看关键帧（SYNC + PDO + Heartbeat + EMCY）
-candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
+candump canable0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 ```
 
 预期：
@@ -29,16 +29,16 @@ candump can0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 
 ```bash
 # 读 statusword 0x6041
-cansend can0 601#40.41.60.00.00.00.00.00
+cansend canable0 601#40.41.60.00.00.00.00.00
 
 # 设 mode_of_operation=8 (CSP)
-cansend can0 601#2F.60.60.00.08.00.00.00
+cansend canable0 601#2F.60.60.00.08.00.00.00
 
 # 发 shutdown (0x6040=0x0006)
-cansend can0 601#2B.40.60.00.06.00.00.00
+cansend canable0 601#2B.40.60.00.06.00.00.00
 
 # 发 enable operation (0x6040=0x000F)
-cansend can0 601#2B.40.60.00.0F.00.00.00
+cansend canable0 601#2B.40.60.00.0F.00.00.00
 ```
 
 ## 4. dcfgen 生成流程
@@ -120,7 +120,7 @@ D1 SocketCAN 通讯验证
 - 日期/负责人：
 - 设备/环境：
 - 步骤：
-  1) candump can0 观察心跳帧 0x701~0x706
+  1) candump canable0 观察心跳帧 0x701~0x706
 - 结果：
 - 结论/下一步：
 

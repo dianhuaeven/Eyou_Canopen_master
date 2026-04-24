@@ -9,6 +9,7 @@ Eyou_Canopen_master/
 |-- config/
 |   |-- master.yaml / master.dcf
 |   |-- joints.yaml
+|   |-- master_arm_only.* / joints_arm_only.yaml
 |   `-- master_flipper_4axis.* / joints_flipper_4axis.yaml
 |-- docs/
 |   |-- README.md
@@ -16,6 +17,7 @@ Eyou_Canopen_master/
 |-- launch/
 |   |-- canopen_hw.launch
 |   |-- bringup.launch
+|   |-- flipper_only.launch
 |   |-- canopen_hw_flipper_4axis.launch
 |   `-- bringup_flipper_4axis.launch
 |-- scripts/
@@ -54,7 +56,15 @@ roslaunch Eyou_Canopen_Master bringup.launch
 四摆臂 4 轴 bringup：
 
 ```bash
-roslaunch Eyou_Canopen_Master bringup_flipper_4axis.launch
+roslaunch Eyou_Canopen_Master flipper_only.launch
+```
+
+重新生成 DCF：
+
+```bash
+rosrun Eyou_Canopen_Master generate_dcf.sh full
+rosrun Eyou_Canopen_Master generate_dcf.sh arm_only
+rosrun Eyou_Canopen_Master generate_dcf.sh flipper_only
 ```
 
 启用 IP executor：
@@ -117,12 +127,16 @@ rosrun Eyou_Canopen_Master joint_action_ui.py
 关键配置：
 
 - `config/master.yaml` / `config/master.dcf`
-  - 主站 DCF 与总线配置
+  - 默认全量 CANopen 电机配置
 - `config/joints.yaml`
-  - 关节与限位配置
+  - 默认全量 CANopen 关节与限位配置
+- `config/master_arm_only.yaml` / `config/master_arm_only.dcf`
+  - 机械臂肩部 2 轴专用配置
+- `config/joints_arm_only.yaml`
+  - 机械臂肩部 2 轴运行时配置
 - `launch/bringup.launch`
-  - 正式单后端 bringup
-- `launch/bringup_flipper_4axis.launch`
+  - 默认全量 CANopen bringup
+- `launch/flipper_only.launch`
   - 四摆臂专用 bringup
 
 关键能力：

@@ -2,7 +2,7 @@
 
 **项目：** Eyou_Canopen_Master（Lely Core + ROS）
 **日期：** 2026-03-22
-**总线：** `can0`
+**总线：** `canable0`
 **从站：** Node ID = 5
 **模式：** CSP（Cyclic Synchronous Position，mode=8）
 **严重程度：** 高（Recover 后驱动器永久无法使能）
@@ -25,10 +25,10 @@ CAN 总线抓包（`candump` 节选）：
 
 ```
 # Recover 调用后，主站开始发送：
-(1774110525.332335) can0 185#5002E902000008   ← 节点第一帧 TPDO，mode_display=8 ✓
-(1774110525.332560) can0 285#00000000F9FF
-(1774110525.342328) can0 205#00000000000000   ← 主站 RPDO：controlword=0, mode=0 ✗
-(1774110525.342412) can0 185#5002E902000000   ← 节点 mode_display 变 0，被损坏
+(1774110525.332335) canable0 185#5002E902000008   ← 节点第一帧 TPDO，mode_display=8 ✓
+(1774110525.332560) canable0 285#00000000F9FF
+(1774110525.342328) canable0 205#00000000000000   ← 主站 RPDO：controlword=0, mode=0 ✗
+(1774110525.342412) canable0 185#5002E902000000   ← 节点 mode_display 变 0，被损坏
 ```
 
 ---
