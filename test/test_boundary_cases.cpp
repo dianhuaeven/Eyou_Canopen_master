@@ -22,7 +22,7 @@ TEST(Boundary, AxisCountZeroNormalizesToOne) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 0;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
 
   canopen_hw::CanopenMaster master(cfg, &shared);
   EXPECT_EQ(master.config().axis_count, 1u);
@@ -52,7 +52,7 @@ TEST(Boundary, NodeIdZeroDefaultFill) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 3;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
   cfg.joints.assign(3, canopen_hw::CanopenMasterConfig::JointConfig{});
 
   canopen_hw::CanopenMaster master(cfg, &shared);

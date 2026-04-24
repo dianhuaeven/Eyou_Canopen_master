@@ -13,7 +13,7 @@ namespace {
 CanopenMasterConfig MakeMinimalConfig() {
   CanopenMasterConfig config;
   config.axis_count = 1;
-  config.can_interface = "can0";
+  config.can_interface = "canable0";
   config.master_dcf_path = "/tmp/definitely_missing_master_for_lifecycle_test.dcf";
   config.joints.resize(1);
   config.joints[0].name = "joint_1";

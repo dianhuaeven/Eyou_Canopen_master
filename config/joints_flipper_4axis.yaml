@@ -4,7 +4,7 @@
 # - 机械臂 2 轴保留为注释参考，不参与本次启动。
 
 canopen:
-  interface: "can0"      # CAN 总线接口名
+  interface: "canable0"      # CAN 总线接口名
   master_node_id: 127     # 主站 CANopen 节点 ID
   loop_hz: 200.0          # 控制循环频率（Hz）
   auto_write_soft_limits_from_urdf: true  # 每次 init 后按 URDF 自动写 0x2003/0x607D
@@ -89,7 +89,7 @@ joints:
   # 恢复时请取消注释，并同步恢复 master_flipper_4axis.yaml 中对应从站段后重新生成 DCF。
   # - name: shoulder_yaw_joint
   #   canopen:
-  #     node_id: 6              # 原 joints.yaml 运行时配置
+  #     node_id: 5              # 原 joints.yaml 运行时配置
   #     verify_pdo_mapping: false
   #     default_mode: 7
   #   counts_per_rev: 6619136
@@ -108,7 +108,7 @@ joints:
   #   ip_goal_tolerance: 0.001
   # - name: shoulder_pitch_joint
   #   canopen:
-  #     node_id: 5              # 原 joints.yaml 运行时配置
+  #     node_id: 6              # 原 joints.yaml 运行时配置
   #     verify_pdo_mapping: false
   #     default_mode: 7
   #   counts_per_rev: 6619136

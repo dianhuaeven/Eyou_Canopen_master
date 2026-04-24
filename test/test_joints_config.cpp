@@ -192,7 +192,7 @@ TEST(JointsConfig, AutoWriteSoftLimitsFromUrdfDefaultsFalse) {
   {
     std::ofstream ofs(path);
     ofs << "canopen:\n"
-           "  interface: can0\n"
+           "  interface: canable0\n"
            "joints:\n"
            "  - name: joint_1\n"
            "    canopen:\n"

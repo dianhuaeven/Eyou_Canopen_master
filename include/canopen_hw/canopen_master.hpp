@@ -26,7 +26,7 @@ namespace canopen_hw {
 // 主站基础配置，包含总线参数和每轴参数。
 // 由 LoadJointsYaml() 一次性填充，运行期只读。
 struct CanopenMasterConfig {
-  std::string can_interface = "can0";
+  std::string can_interface = "canable0";
   std::string master_dcf_path;
   uint8_t master_node_id = 127;
   std::size_t axis_count = 6;  // 由 joints.yaml 覆盖，上限 SharedState::kMaxAxisCount。

@@ -1,5 +1,5 @@
 options:
-  dcf_path: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config
+  dcf_path: .
   heartbeat_multiplier: 3.0
 
 master:
@@ -10,7 +10,7 @@ master:
 
 left_front_arm_joint:
   node_id: 1
-  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
@@ -60,7 +60,7 @@ left_front_arm_joint:
 
 right_front_arm_joint:
   node_id: 2
-  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
@@ -110,7 +110,7 @@ right_front_arm_joint:
 
 left_rear_arm_joint:
   node_id: 3
-  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
@@ -160,7 +160,7 @@ left_rear_arm_joint:
 
 right_rear_arm_joint:
   node_id: 4
-  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
@@ -210,7 +210,7 @@ right_rear_arm_joint:
 
 shoulder_yaw_joint:
   node_id: 5
-  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:
@@ -260,7 +260,7 @@ shoulder_yaw_joint:
 
 shoulder_pitch_joint:
   node_id: 6
-  dcf: /home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/YiyouServo_V1.4.dcfgen.eds
+  dcf: YiyouServo_V1.4.dcfgen.eds
   heartbeat_producer: 500
   rpdo:
     1:

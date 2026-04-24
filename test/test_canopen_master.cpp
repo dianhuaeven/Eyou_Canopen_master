@@ -11,7 +11,7 @@ TEST(MasterConfig, ZeroAxisNormalized) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 0;  // 构造时会被归一化为至少 1 轴。
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
   cfg.joints.clear();
 
   canopen_hw::CanopenMaster master(cfg, &shared);
@@ -31,7 +31,7 @@ TEST(MasterConfig, NotRunningAfterConstruction) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 0;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
   cfg.joints.clear();
 
   canopen_hw::CanopenMaster master(cfg, &shared);
@@ -45,7 +45,7 @@ TEST(MasterConfig, ResetAllFaultsRejectsWhenNotRunning) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 2;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
   cfg.joints.clear();
 
   canopen_hw::CanopenMaster master(cfg, &shared);
@@ -60,7 +60,7 @@ TEST(MasterConfig, WaitForAllSdoIdleSucceedsWithoutDrivers) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 1;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
 
   canopen_hw::CanopenMaster master(cfg, &shared);
 
@@ -74,7 +74,7 @@ TEST(MasterConfig, WaitForSdoIdleRejectsMissingAxisDriver) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 1;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
 
   canopen_hw::CanopenMaster master(cfg, &shared);
 
@@ -86,7 +86,7 @@ TEST(MasterConfig, WaitForAllStartupCompleteSucceedsWithoutDrivers) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 1;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
 
   canopen_hw::CanopenMaster master(cfg, &shared);
 
@@ -101,7 +101,7 @@ TEST(MasterConfig, WaitForStartupCompleteRejectsMissingAxisDriver) {
   canopen_hw::CanopenMasterConfig cfg;
   cfg.axis_count = 1;
   cfg.master_node_id = 127;
-  cfg.can_interface = "can0";
+  cfg.can_interface = "canable0";
 
   canopen_hw::CanopenMaster master(cfg, &shared);
 
