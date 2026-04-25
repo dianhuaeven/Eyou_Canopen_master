@@ -247,6 +247,23 @@ bool ZeroSoftLimitExecutor::ApplySoftLimitCounts(std::size_t axis_index, int32_t
   return true;
 }
 
+bool ZeroSoftLimitExecutor::DisableSoftLimit(std::size_t axis_index,
+                                             std::string* detail) {
+  if (!ValidateAxis(axis_index, detail)) {
+    return false;
+  }
+  if (!WriteU32(axis_index, kObj_SoftLimitState, 0, 0u,
+                "write 0x2003:00 disable soft limit", detail)) {
+    return false;
+  }
+  if (detail) {
+    std::ostringstream oss;
+    oss << "axis " << axis_index << " soft limits disabled";
+    *detail = oss.str();
+  }
+  return true;
+}
+
 bool ZeroSoftLimitExecutor::ApplySoftLimitRadians(std::size_t axis_index, double min_rad,
                                                   double max_rad, std::string* detail) {
   int32_t min_counts = 0;

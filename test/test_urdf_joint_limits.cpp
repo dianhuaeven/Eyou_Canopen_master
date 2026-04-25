@@ -45,9 +45,11 @@ TEST(UrdfJointLimits, ParseSuccessForRevoluteAndPrismatic) {
 
   ASSERT_TRUE(ParseUrdfJointLimits(urdf, joints, &limits, &error)) << error;
   ASSERT_EQ(limits.size(), 2u);
+  EXPECT_TRUE(limits[0].has_position_limits);
   EXPECT_DOUBLE_EQ(limits[0].lower, -1.0);
   EXPECT_DOUBLE_EQ(limits[0].upper, 1.5);
   EXPECT_EQ(limits[0].unit, UrdfJointLimitUnit::kRadians);
+  EXPECT_TRUE(limits[1].has_position_limits);
   EXPECT_DOUBLE_EQ(limits[1].lower, -0.2);
   EXPECT_DOUBLE_EQ(limits[1].upper, 0.3);
   EXPECT_EQ(limits[1].unit, UrdfJointLimitUnit::kMeters);
@@ -77,7 +79,7 @@ TEST(UrdfJointLimits, MissingJointReturnsError) {
   EXPECT_NE(error.find("not found"), std::string::npos);
 }
 
-TEST(UrdfJointLimits, ContinuousJointRejected) {
+TEST(UrdfJointLimits, ContinuousJointDisablesPositionLimits) {
   const std::string urdf = R"(
 <robot name="r">
   <link name="l0"/>
@@ -97,21 +99,17 @@ TEST(UrdfJointLimits, ContinuousJointRejected) {
   std::vector<JointLimitSpec> limits;
   std::string error;
 
-  EXPECT_FALSE(ParseUrdfJointLimits(urdf, joints, &limits, &error));
-  EXPECT_NE(error.find("not limited revolute/prismatic"), std::string::npos);
+  ASSERT_TRUE(ParseUrdfJointLimits(urdf, joints, &limits, &error)) << error;
+  ASSERT_EQ(limits.size(), 1u);
+  EXPECT_FALSE(limits[0].has_position_limits);
+  EXPECT_EQ(limits[0].unit, UrdfJointLimitUnit::kRadians);
 }
 
 TEST(UrdfJointLimits, InvalidUrdfRejected) {
   const std::string urdf = R"(
 <robot name="r">
   <link name="l0"/>
-  <link name="l1"/>
-  <joint name="joint_1" type="revolute">
-    <parent link="l0"/>
-    <child link="l1"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
-    <axis xyz="0 0 1"/>
-  </joint>
+  <link name="l1">
 </robot>
 )";
 

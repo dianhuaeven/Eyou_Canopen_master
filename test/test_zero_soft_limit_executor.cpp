@@ -221,6 +221,34 @@ TEST(ZeroSoftLimitExecutor, ApplySoftLimitCountsWritesExpectedSequence) {
   EXPECT_EQ(writes[2], expected2);
 }
 
+TEST(ZeroSoftLimitExecutor, DisableSoftLimitWritesOnlySoftLimitState) {
+  CanopenMasterConfig cfg;
+  CanopenMasterConfig::JointConfig joint;
+  joint.node_id = 6;
+  cfg.joints = {joint};
+  cfg.axis_count = 1;
+
+  std::vector<std::tuple<uint8_t, uint16_t, uint8_t, uint32_t>> writes;
+  ZeroSoftLimitExecutor::Ops ops;
+  ops.read = [](uint8_t, uint16_t, uint8_t, std::chrono::milliseconds,
+                std::size_t) -> SdoResult { return SdoResult{false, {}, "unused"}; };
+  ops.write_u32 = [&](uint8_t node_id, uint16_t index, uint8_t subindex, uint32_t value,
+                      std::chrono::milliseconds) -> SdoResult {
+    writes.emplace_back(node_id, index, subindex, value);
+    return SdoResult{true, {}, {}};
+  };
+
+  ZeroSoftLimitExecutor executor(&cfg, ops);
+  std::string detail;
+  ASSERT_TRUE(executor.DisableSoftLimit(0, &detail)) << detail;
+
+  ASSERT_EQ(writes.size(), 1u);
+  const auto expected = std::make_tuple(
+      static_cast<uint8_t>(6), ZeroSoftLimitExecutor::kObj_SoftLimitState,
+      static_cast<uint8_t>(0), 0u);
+  EXPECT_EQ(writes[0], expected);
+}
+
 TEST(ZeroSoftLimitExecutor, ApplySoftLimitRadiansUsesCountsPerRev) {
   CanopenMasterConfig cfg;
   CanopenMasterConfig::JointConfig joint;

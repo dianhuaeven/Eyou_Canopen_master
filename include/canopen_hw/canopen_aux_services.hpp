@@ -54,6 +54,7 @@ class CanopenAuxServices {
 
  private:
   struct PreparedSoftLimit {
+    bool disable = false;
     int32_t min_counts = 0;
     int32_t max_counts = 0;
   };

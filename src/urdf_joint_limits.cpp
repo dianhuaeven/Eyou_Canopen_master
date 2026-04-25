@@ -16,7 +16,9 @@ void SetError(std::string* error, const std::string& message) {
 }
 
 bool IsSupportedLimitedType(int joint_type) {
-  return joint_type == urdf::Joint::REVOLUTE || joint_type == urdf::Joint::PRISMATIC;
+  return joint_type == urdf::Joint::REVOLUTE ||
+         joint_type == urdf::Joint::PRISMATIC ||
+         joint_type == urdf::Joint::CONTINUOUS;
 }
 
 }  // namespace
@@ -51,16 +53,21 @@ bool ParseUrdfJointLimits(
     if (!IsSupportedLimitedType(joint->type)) {
       std::ostringstream oss;
       oss << "axis " << axis_index << " joint '" << cfg.name
-          << "' type is not limited revolute/prismatic";
+          << "' type is not supported (expected revolute/prismatic/continuous)";
       SetError(error, oss.str());
       return false;
     }
-    if (!joint->limits) {
-      std::ostringstream oss;
-      oss << "axis " << axis_index << " joint '" << cfg.name
-          << "' has no position limits";
-      SetError(error, oss.str());
-      return false;
+
+    JointLimitSpec spec;
+    if (joint->type == urdf::Joint::PRISMATIC) {
+      spec.unit = UrdfJointLimitUnit::kMeters;
+    } else {
+      spec.unit = UrdfJointLimitUnit::kRadians;
+    }
+
+    if (joint->type == urdf::Joint::CONTINUOUS || !joint->limits) {
+      out_limits->push_back(spec);
+      continue;
     }
 
     const double lower = joint->limits->lower;
@@ -80,12 +87,10 @@ bool ParseUrdfJointLimits(
       return false;
     }
 
-    UrdfJointLimitUnit unit = UrdfJointLimitUnit::kRadians;
-    if (joint->type == urdf::Joint::PRISMATIC) {
-      unit = UrdfJointLimitUnit::kMeters;
-    }
-
-    out_limits->push_back(JointLimitSpec{lower, upper, unit});
+    spec.has_position_limits = true;
+    spec.lower = lower;
+    spec.upper = upper;
+    out_limits->push_back(spec);
   }
 
   return true;

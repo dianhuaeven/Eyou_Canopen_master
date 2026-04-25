@@ -191,8 +191,10 @@ bool CanopenAuxServices::ApplyLimitsAxis(std::size_t axis_index,
       return false;
     }
     const auto& limit = urdf_limits_[axis_index];
-    resolved_min = limit.lower;
-    resolved_max = limit.upper;
+    if (limit.has_position_limits) {
+      resolved_min = limit.lower;
+      resolved_max = limit.upper;
+    }
   } else {
     if (!ApplySoftLimitAxisManual(axis_index, min_position, max_position,
                                   &prepared, detail)) {
@@ -210,21 +212,27 @@ bool CanopenAuxServices::ApplyLimitsAxis(std::size_t axis_index,
   if (applied_max_position != nullptr) {
     *applied_max_position = resolved_max;
   }
-  if (require_current_inside_limits &&
+  if (!prepared.disable && require_current_inside_limits &&
       (current < resolved_min || current > resolved_max)) {
     SetDetail(detail, "current position is outside requested limit range");
     return false;
   }
 
-  if (!zero_executor_.ApplySoftLimitCounts(axis_index,
-                                           prepared.min_counts,
-                                           prepared.max_counts,
-                                           detail)) {
-    return false;
+  if (prepared.disable) {
+    if (!zero_executor_.DisableSoftLimit(axis_index, detail)) {
+      return false;
+    }
+  } else {
+    if (!zero_executor_.ApplySoftLimitCounts(axis_index,
+                                             prepared.min_counts,
+                                             prepared.max_counts,
+                                             detail)) {
+      return false;
+    }
   }
 
   if (detail != nullptr && detail->empty()) {
-    *detail = "soft limits applied";
+    *detail = prepared.disable ? "soft limits disabled" : "soft limits applied";
   }
   return true;
 }
@@ -332,6 +340,9 @@ bool CanopenAuxServices::ApplySoftLimitAxis(std::size_t axis_index,
     return false;
   }
   const auto& limit = urdf_limits_[axis_index];
+  if (!limit.has_position_limits) {
+    return zero_executor_.DisableSoftLimit(axis_index, detail);
+  }
   if (limit.unit == UrdfJointLimitUnit::kRadians) {
     return zero_executor_.ApplySoftLimitRadians(
         axis_index, limit.lower, limit.upper, detail);
@@ -410,6 +421,16 @@ bool CanopenAuxServices::PrepareSoftLimitAxis(std::size_t axis_index,
   }
 
   const auto& limit = urdf_limits_[axis_index];
+  out->disable = false;
+  if (!limit.has_position_limits) {
+    out->disable = true;
+    out->min_counts = 0;
+    out->max_counts = 0;
+    if (detail) {
+      *detail = "URDF has no position limits; soft limits will be disabled";
+    }
+    return true;
+  }
   if (limit.unit == UrdfJointLimitUnit::kRadians) {
     return zero_executor_.PrepareSoftLimitRadians(
         axis_index, limit.lower, limit.upper,
@@ -555,7 +576,7 @@ bool CanopenAuxServices::ApplySoftLimitAll(std::string* detail) {
     }
   }
   if (detail) {
-    *detail = "soft limits applied from URDF";
+    *detail = "soft limits synchronized from URDF";
   }
   return true;
 }

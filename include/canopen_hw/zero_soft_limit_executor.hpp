@@ -52,6 +52,7 @@ class ZeroSoftLimitExecutor {
 
   bool ApplySoftLimitCounts(std::size_t axis_index, int32_t min_counts,
                             int32_t max_counts, std::string* detail = nullptr);
+  bool DisableSoftLimit(std::size_t axis_index, std::string* detail = nullptr);
   bool ApplySoftLimitRadians(std::size_t axis_index, double min_rad, double max_rad,
                              std::string* detail = nullptr);
   bool ApplySoftLimitMeters(std::size_t axis_index, double min_meters,
