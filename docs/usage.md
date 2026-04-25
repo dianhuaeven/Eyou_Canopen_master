@@ -207,7 +207,7 @@ rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 
 - `~shutdown`：停通信并回到 `Configured`，节点进程不退出。
 - `~recover`：仅在全部轴 `fault=false` 且 `heartbeat_lost=false` 后才返回成功；成功后回到 `Standby`，不自动上电。
-- `~init`：`~shutdown` 后重新建立通信并进入 `Armed`；成功后会触发一次命令重同步。若 `canopen.auto_write_soft_limits_from_urdf=true`，会在 `init` 成功后按 URDF 关节限位写入 `0x2003/0x607D`；`revolute` 使用 `counts_per_rev` 换算，`prismatic` 使用 `counts_per_meter` 换算；写入失败则本次 `init` 返回失败并回滚到 `Configured`。
+- `~init`：`~shutdown` 后重新建立通信并进入 `Armed`；成功后会触发一次命令重同步。若 `canopen.auto_write_soft_limits_from_urdf=true`，会在 `init` 成功后按 URDF 关节限位同步 `0x2003/0x607D`；`revolute` 使用 `counts_per_rev` 换算，`prismatic` 使用 `counts_per_meter` 换算；若关节在 URDF 中没有位置上下限，则仅写 `0x2003:00=0x00000000` 关闭该轴软限位，不写 `0x607D`；写入失败则本次 `init` 返回失败并回滚到 `Configured`。
 - `~enable`：将 `Standby` 推到 `Armed`；若快照仍有 fault / heartbeat_lost / global fault，则拒绝。
 - `~disable`：将 `Running/Armed` 回到 `Standby`，但保持通信在线。
 - `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。

@@ -163,7 +163,8 @@ joints:
   - `SoftLimitState(0x2003:00)=0x4C494D54`
   - 若关节类型为 `revolute`：`0x607D:02/01=round(limit_rad/(2π)*counts_per_rev)`
   - 若关节类型为 `prismatic`：`0x607D:02/01=round(limit_meter*counts_per_meter)`
-  若 URDF 缺少对应关节或缺少位置上下限，则本次 `init` 失败。
+  - 若 URDF 中对应关节没有位置上下限（例如 `continuous`，或解析结果无 position limits），则改为写 `0x2003:00=0x00000000` 关闭该轴软限位，不写 `0x607D`。
+  若 URDF 缺少对应关节，则本次 `init` 失败。
   若关节为 `prismatic` 但未配置 `counts_per_meter`，本次 `init` 失败。
 - `ip_interpolation_period_ms` 未配置时，默认由 `loop_hz` 推导：
   `period_ms = round(1000 / loop_hz)`，并限制到 `1..255`。
