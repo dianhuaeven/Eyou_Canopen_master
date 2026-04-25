@@ -13,7 +13,7 @@ joints:
     canopen:
       node_id: 1
       verify_pdo_mapping: false
-      default_mode: 8         # 默认进入 CSP，供 flipper_csp_controller 使用
+      default_mode: 8         # 默认进入 CSP，CSV 仅在显式切换后启用
     counts_per_rev: 19857408  # 6619136 * 3
     rated_torque_nm: 1.0
     position_lock_threshold: 15000
