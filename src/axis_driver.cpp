@@ -165,8 +165,19 @@ bool AxisDriver::WriteTargetPosition(int32_t pos) {
 bool AxisDriver::WriteTargetVelocity(int32_t vel) {
   std::error_code ec;
   tpdo_mapped[0x60FF][0].Write(vel, ec);
-  if (ec) return false;
+  if (ec) {
+    const bool warned = csv_target_unmapped_warned_.exchange(true);
+    if (!warned) {
+      CANOPEN_LOG_WARN(
+          "axis={} node={}: write 0x60FF failed; CSV target velocity is not mapped in current DCF/PDO config",
+          axis_index_, static_cast<int>(id()));
+    }
+    return false;
+  }
   tpdo_mapped[0x60FF][0].WriteEvent(ec);
+  if (!ec) {
+    csv_target_unmapped_warned_.store(false);
+  }
   return !ec;
 }
 

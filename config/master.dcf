@@ -30,7 +30,7 @@ Granularity=1
 DynamicChannelsSupported=0
 GroupMessaging=0
 NrOfRxPDO=12
-NrOfTxPDO=12
+NrOfTxPDO=16
 LSS_Supported=1
 
 [DummyUsage]
@@ -59,7 +59,7 @@ SupportedObjects=3
 3=0x1018
 
 [OptionalObjects]
-SupportedObjects=73
+SupportedObjects=81
 1=0x1003
 2=0x1005
 3=0x1006
@@ -108,34 +108,42 @@ SupportedObjects=73
 46=0x1809
 47=0x180A
 48=0x180B
-49=0x1A00
-50=0x1A01
-51=0x1A02
-52=0x1A03
-53=0x1A04
-54=0x1A05
-55=0x1A06
-56=0x1A07
-57=0x1A08
-58=0x1A09
-59=0x1A0A
-60=0x1A0B
-61=0x1F22
-62=0x1F25
-63=0x1F55
-64=0x1F80
-65=0x1F81
-66=0x1F82
-67=0x1F84
-68=0x1F85
-69=0x1F86
-70=0x1F87
-71=0x1F88
-72=0x1F89
-73=0x1F8A
+49=0x180C
+50=0x180D
+51=0x180E
+52=0x180F
+53=0x1A00
+54=0x1A01
+55=0x1A02
+56=0x1A03
+57=0x1A04
+58=0x1A05
+59=0x1A06
+60=0x1A07
+61=0x1A08
+62=0x1A09
+63=0x1A0A
+64=0x1A0B
+65=0x1A0C
+66=0x1A0D
+67=0x1A0E
+68=0x1A0F
+69=0x1F22
+70=0x1F25
+71=0x1F55
+72=0x1F80
+73=0x1F81
+74=0x1F82
+75=0x1F84
+76=0x1F85
+77=0x1F86
+78=0x1F87
+79=0x1F88
+80=0x1F89
+81=0x1F8A
 
 [ManufacturerObjects]
-SupportedObjects=72
+SupportedObjects=84
 1=0x2000
 2=0x2001
 3=0x2002
@@ -160,54 +168,66 @@ SupportedObjects=72
 22=0x2209
 23=0x220A
 24=0x220B
-25=0x5800
-26=0x5801
-27=0x5802
-28=0x5803
-29=0x5804
-30=0x5805
-31=0x5806
-32=0x5807
-33=0x5808
-34=0x5809
-35=0x580A
-36=0x580B
-37=0x5A00
-38=0x5A01
-39=0x5A02
-40=0x5A03
-41=0x5A04
-42=0x5A05
-43=0x5A06
-44=0x5A07
-45=0x5A08
-46=0x5A09
-47=0x5A0A
-48=0x5A0B
-49=0x5C00
-50=0x5C01
-51=0x5C02
-52=0x5C03
-53=0x5C04
-54=0x5C05
-55=0x5C06
-56=0x5C07
-57=0x5C08
-58=0x5C09
-59=0x5C0A
-60=0x5C0B
-61=0x5E00
-62=0x5E01
-63=0x5E02
-64=0x5E03
-65=0x5E04
-66=0x5E05
-67=0x5E06
-68=0x5E07
-69=0x5E08
-70=0x5E09
-71=0x5E0A
-72=0x5E0B
+25=0x220C
+26=0x220D
+27=0x220E
+28=0x220F
+29=0x5800
+30=0x5801
+31=0x5802
+32=0x5803
+33=0x5804
+34=0x5805
+35=0x5806
+36=0x5807
+37=0x5808
+38=0x5809
+39=0x580A
+40=0x580B
+41=0x5A00
+42=0x5A01
+43=0x5A02
+44=0x5A03
+45=0x5A04
+46=0x5A05
+47=0x5A06
+48=0x5A07
+49=0x5A08
+50=0x5A09
+51=0x5A0A
+52=0x5A0B
+53=0x5C00
+54=0x5C01
+55=0x5C02
+56=0x5C03
+57=0x5C04
+58=0x5C05
+59=0x5C06
+60=0x5C07
+61=0x5C08
+62=0x5C09
+63=0x5C0A
+64=0x5C0B
+65=0x5C0C
+66=0x5C0D
+67=0x5C0E
+68=0x5C0F
+69=0x5E00
+70=0x5E01
+71=0x5E02
+72=0x5E03
+73=0x5E04
+74=0x5E05
+75=0x5E06
+76=0x5E07
+77=0x5E08
+78=0x5E09
+79=0x5E0A
+80=0x5E0B
+81=0x5E0C
+82=0x5E0D
+83=0x5E0E
+84=0x5E0F
 
 [1000]
 ParameterName=Device type
@@ -1078,7 +1098,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000202
+DefaultValue=0x00000401
 
 [1802sub2]
 ParameterName=transmission type
@@ -1124,7 +1144,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000302
+DefaultValue=0x00000202
 
 [1803sub2]
 ParameterName=transmission type
@@ -1170,7 +1190,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000203
+DefaultValue=0x00000302
 
 [1804sub2]
 ParameterName=transmission type
@@ -1216,7 +1236,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000303
+DefaultValue=0x00000402
 
 [1805sub2]
 ParameterName=transmission type
@@ -1262,7 +1282,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000204
+DefaultValue=0x00000203
 
 [1806sub2]
 ParameterName=transmission type
@@ -1308,7 +1328,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000304
+DefaultValue=0x00000303
 
 [1807sub2]
 ParameterName=transmission type
@@ -1354,7 +1374,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000205
+DefaultValue=0x00000403
 
 [1808sub2]
 ParameterName=transmission type
@@ -1400,7 +1420,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000305
+DefaultValue=0x00000204
 
 [1809sub2]
 ParameterName=transmission type
@@ -1446,7 +1466,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000206
+DefaultValue=0x00000304
 
 [180Asub2]
 ParameterName=transmission type
@@ -1492,7 +1512,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000306
+DefaultValue=0x00000404
 
 [180Bsub2]
 ParameterName=transmission type
@@ -1518,6 +1538,190 @@ AccessType=rw
 DefaultValue=0
 
 [180Bsub6]
+ParameterName=SYNC start value
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+
+[180C]
+SubNumber=7
+ParameterName=TPDO communication parameter
+ObjectType=0x09
+
+[180Csub0]
+ParameterName=highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=6
+
+[180Csub1]
+ParameterName=COB-ID used by TPDO
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000205
+
+[180Csub2]
+ParameterName=transmission type
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x01
+
+[180Csub3]
+ParameterName=inhibit time
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Csub4]
+ParameterName=reserved
+DataType=0x0005
+AccessType=rw
+
+[180Csub5]
+ParameterName=event timer
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Csub6]
+ParameterName=SYNC start value
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+
+[180D]
+SubNumber=7
+ParameterName=TPDO communication parameter
+ObjectType=0x09
+
+[180Dsub0]
+ParameterName=highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=6
+
+[180Dsub1]
+ParameterName=COB-ID used by TPDO
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000305
+
+[180Dsub2]
+ParameterName=transmission type
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x01
+
+[180Dsub3]
+ParameterName=inhibit time
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Dsub4]
+ParameterName=reserved
+DataType=0x0005
+AccessType=rw
+
+[180Dsub5]
+ParameterName=event timer
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Dsub6]
+ParameterName=SYNC start value
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+
+[180E]
+SubNumber=7
+ParameterName=TPDO communication parameter
+ObjectType=0x09
+
+[180Esub0]
+ParameterName=highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=6
+
+[180Esub1]
+ParameterName=COB-ID used by TPDO
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000206
+
+[180Esub2]
+ParameterName=transmission type
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x01
+
+[180Esub3]
+ParameterName=inhibit time
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Esub4]
+ParameterName=reserved
+DataType=0x0005
+AccessType=rw
+
+[180Esub5]
+ParameterName=event timer
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Esub6]
+ParameterName=SYNC start value
+DataType=0x0005
+AccessType=rw
+DefaultValue=0
+
+[180F]
+SubNumber=7
+ParameterName=TPDO communication parameter
+ObjectType=0x09
+
+[180Fsub0]
+ParameterName=highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=6
+
+[180Fsub1]
+ParameterName=COB-ID used by TPDO
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000306
+
+[180Fsub2]
+ParameterName=transmission type
+DataType=0x0005
+AccessType=rw
+DefaultValue=0x01
+
+[180Fsub3]
+ParameterName=inhibit time
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Fsub4]
+ParameterName=reserved
+DataType=0x0005
+AccessType=rw
+
+[180Fsub5]
+ParameterName=event timer
+DataType=0x0006
+AccessType=rw
+DefaultValue=0
+
+[180Fsub6]
 ParameterName=SYNC start value
 DataType=0x0005
 AccessType=rw
@@ -1552,37 +1756,35 @@ ParameterName=TPDO mapping parameter
 ObjectType=0x09
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [1A02Value]
-NrOfEntries=3
-1=0x22020110
-2=0x22020220
-3=0x22020308
+NrOfEntries=1
+1=0x22020120
 
 [1A03]
 ParameterName=TPDO mapping parameter
 ObjectType=0x09
 DataType=0x0007
 AccessType=rw
-CompactSubObj=1
+CompactSubObj=3
 
 [1A03Value]
-NrOfEntries=1
-1=0x22030120
+NrOfEntries=3
+1=0x22030110
+2=0x22030220
+3=0x22030308
 
 [1A04]
 ParameterName=TPDO mapping parameter
 ObjectType=0x09
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [1A04Value]
-NrOfEntries=3
-1=0x22040110
-2=0x22040220
-3=0x22040308
+NrOfEntries=1
+1=0x22040120
 
 [1A05]
 ParameterName=TPDO mapping parameter
@@ -1624,37 +1826,35 @@ ParameterName=TPDO mapping parameter
 ObjectType=0x09
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [1A08Value]
-NrOfEntries=3
-1=0x22080110
-2=0x22080220
-3=0x22080308
+NrOfEntries=1
+1=0x22080120
 
 [1A09]
 ParameterName=TPDO mapping parameter
 ObjectType=0x09
 DataType=0x0007
 AccessType=rw
-CompactSubObj=1
+CompactSubObj=3
 
 [1A09Value]
-NrOfEntries=1
-1=0x22090120
+NrOfEntries=3
+1=0x22090110
+2=0x22090220
+3=0x22090308
 
 [1A0A]
 ParameterName=TPDO mapping parameter
 ObjectType=0x09
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [1A0AValue]
-NrOfEntries=3
-1=0x220A0110
-2=0x220A0220
-3=0x220A0308
+NrOfEntries=1
+1=0x220A0120
 
 [1A0B]
 ParameterName=TPDO mapping parameter
@@ -1666,6 +1866,54 @@ CompactSubObj=1
 [1A0BValue]
 NrOfEntries=1
 1=0x220B0120
+
+[1A0C]
+ParameterName=TPDO mapping parameter
+ObjectType=0x09
+DataType=0x0007
+AccessType=rw
+CompactSubObj=3
+
+[1A0CValue]
+NrOfEntries=3
+1=0x220C0110
+2=0x220C0220
+3=0x220C0308
+
+[1A0D]
+ParameterName=TPDO mapping parameter
+ObjectType=0x09
+DataType=0x0007
+AccessType=rw
+CompactSubObj=1
+
+[1A0DValue]
+NrOfEntries=1
+1=0x220D0120
+
+[1A0E]
+ParameterName=TPDO mapping parameter
+ObjectType=0x09
+DataType=0x0007
+AccessType=rw
+CompactSubObj=3
+
+[1A0EValue]
+NrOfEntries=3
+1=0x220E0110
+2=0x220E0220
+3=0x220E0308
+
+[1A0F]
+ParameterName=TPDO mapping parameter
+ObjectType=0x09
+DataType=0x0007
+AccessType=rw
+CompactSubObj=1
+
+[1A0FValue]
+NrOfEntries=1
+1=0x220F0120
 
 [1F22]
 SubNumber=128
@@ -1682,37 +1930,37 @@ DefaultValue=127
 ParameterName=Node-ID 1
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/left_front_arm_joint.bin
+UploadFile=./left_front_arm_joint.bin
 
 [1F22sub2]
 ParameterName=Node-ID 2
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/right_front_arm_joint.bin
+UploadFile=./right_front_arm_joint.bin
 
 [1F22sub3]
 ParameterName=Node-ID 3
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/left_rear_arm_joint.bin
+UploadFile=./left_rear_arm_joint.bin
 
 [1F22sub4]
 ParameterName=Node-ID 4
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/right_rear_arm_joint.bin
+UploadFile=./right_rear_arm_joint.bin
 
 [1F22sub5]
 ParameterName=Node-ID 5
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/shoulder_yaw_joint.bin
+UploadFile=./shoulder_yaw_joint.bin
 
 [1F22sub6]
 ParameterName=Node-ID 6
 DataType=0x000F
 AccessType=ro
-UploadFile=/home/dianhua/Robot24_catkin_ws/src/Eyou_Canopen_Master/config/shoulder_pitch_joint.bin
+UploadFile=./shoulder_pitch_joint.bin
 
 [1F22sub7]
 ParameterName=Node-ID 7
@@ -2787,7 +3035,7 @@ AccessType=rwr
 PDOMapping=1
 
 [2202]
-SubNumber=4
+SubNumber=2
 ParameterName=Mapped application objects for TPDO 3
 ObjectType=0x09
 
@@ -2795,28 +3043,16 @@ ObjectType=0x09
 ParameterName=Highest sub-index supported
 DataType=0x0005
 AccessType=const
-DefaultValue=3
+DefaultValue=1
 
 [2202sub1]
-ParameterName=right_front_arm_joint: Controlword
-DataType=0x0006
-AccessType=rwr
-PDOMapping=1
-
-[2202sub2]
-ParameterName=right_front_arm_joint: Target position
+ParameterName=left_front_arm_joint: Target velocity
 DataType=0x0004
 AccessType=rwr
 PDOMapping=1
 
-[2202sub3]
-ParameterName=right_front_arm_joint: Modes of operation
-DataType=0x0002
-AccessType=rwr
-PDOMapping=1
-
 [2203]
-SubNumber=2
+SubNumber=4
 ParameterName=Mapped application objects for TPDO 4
 ObjectType=0x09
 
@@ -2824,16 +3060,28 @@ ObjectType=0x09
 ParameterName=Highest sub-index supported
 DataType=0x0005
 AccessType=const
-DefaultValue=1
+DefaultValue=3
 
 [2203sub1]
-ParameterName=right_front_arm_joint: interpolation data record
+ParameterName=right_front_arm_joint: Controlword
+DataType=0x0006
+AccessType=rwr
+PDOMapping=1
+
+[2203sub2]
+ParameterName=right_front_arm_joint: Target position
 DataType=0x0004
 AccessType=rwr
 PDOMapping=1
 
+[2203sub3]
+ParameterName=right_front_arm_joint: Modes of operation
+DataType=0x0002
+AccessType=rwr
+PDOMapping=1
+
 [2204]
-SubNumber=4
+SubNumber=2
 ParameterName=Mapped application objects for TPDO 5
 ObjectType=0x09
 
@@ -2841,23 +3089,11 @@ ObjectType=0x09
 ParameterName=Highest sub-index supported
 DataType=0x0005
 AccessType=const
-DefaultValue=3
+DefaultValue=1
 
 [2204sub1]
-ParameterName=left_rear_arm_joint: Controlword
-DataType=0x0006
-AccessType=rwr
-PDOMapping=1
-
-[2204sub2]
-ParameterName=left_rear_arm_joint: Target position
+ParameterName=right_front_arm_joint: interpolation data record
 DataType=0x0004
-AccessType=rwr
-PDOMapping=1
-
-[2204sub3]
-ParameterName=left_rear_arm_joint: Modes of operation
-DataType=0x0002
 AccessType=rwr
 PDOMapping=1
 
@@ -2873,7 +3109,7 @@ AccessType=const
 DefaultValue=1
 
 [2205sub1]
-ParameterName=left_rear_arm_joint: interpolation data record
+ParameterName=right_front_arm_joint: Target velocity
 DataType=0x0004
 AccessType=rwr
 PDOMapping=1
@@ -2890,19 +3126,19 @@ AccessType=const
 DefaultValue=3
 
 [2206sub1]
-ParameterName=right_rear_arm_joint: Controlword
+ParameterName=left_rear_arm_joint: Controlword
 DataType=0x0006
 AccessType=rwr
 PDOMapping=1
 
 [2206sub2]
-ParameterName=right_rear_arm_joint: Target position
+ParameterName=left_rear_arm_joint: Target position
 DataType=0x0004
 AccessType=rwr
 PDOMapping=1
 
 [2206sub3]
-ParameterName=right_rear_arm_joint: Modes of operation
+ParameterName=left_rear_arm_joint: Modes of operation
 DataType=0x0002
 AccessType=rwr
 PDOMapping=1
@@ -2919,13 +3155,13 @@ AccessType=const
 DefaultValue=1
 
 [2207sub1]
-ParameterName=right_rear_arm_joint: interpolation data record
+ParameterName=left_rear_arm_joint: interpolation data record
 DataType=0x0004
 AccessType=rwr
 PDOMapping=1
 
 [2208]
-SubNumber=4
+SubNumber=2
 ParameterName=Mapped application objects for TPDO 9
 ObjectType=0x09
 
@@ -2933,28 +3169,16 @@ ObjectType=0x09
 ParameterName=Highest sub-index supported
 DataType=0x0005
 AccessType=const
-DefaultValue=3
+DefaultValue=1
 
 [2208sub1]
-ParameterName=shoulder_yaw_joint: Controlword
-DataType=0x0006
-AccessType=rwr
-PDOMapping=1
-
-[2208sub2]
-ParameterName=shoulder_yaw_joint: Target position
+ParameterName=left_rear_arm_joint: Target velocity
 DataType=0x0004
 AccessType=rwr
 PDOMapping=1
 
-[2208sub3]
-ParameterName=shoulder_yaw_joint: Modes of operation
-DataType=0x0002
-AccessType=rwr
-PDOMapping=1
-
 [2209]
-SubNumber=2
+SubNumber=4
 ParameterName=Mapped application objects for TPDO 10
 ObjectType=0x09
 
@@ -2962,16 +3186,28 @@ ObjectType=0x09
 ParameterName=Highest sub-index supported
 DataType=0x0005
 AccessType=const
-DefaultValue=1
+DefaultValue=3
 
 [2209sub1]
-ParameterName=shoulder_yaw_joint: interpolation data record
+ParameterName=right_rear_arm_joint: Controlword
+DataType=0x0006
+AccessType=rwr
+PDOMapping=1
+
+[2209sub2]
+ParameterName=right_rear_arm_joint: Target position
 DataType=0x0004
 AccessType=rwr
 PDOMapping=1
 
+[2209sub3]
+ParameterName=right_rear_arm_joint: Modes of operation
+DataType=0x0002
+AccessType=rwr
+PDOMapping=1
+
 [220A]
-SubNumber=4
+SubNumber=2
 ParameterName=Mapped application objects for TPDO 11
 ObjectType=0x09
 
@@ -2979,23 +3215,11 @@ ObjectType=0x09
 ParameterName=Highest sub-index supported
 DataType=0x0005
 AccessType=const
-DefaultValue=3
+DefaultValue=1
 
 [220Asub1]
-ParameterName=shoulder_pitch_joint: Controlword
-DataType=0x0006
-AccessType=rwr
-PDOMapping=1
-
-[220Asub2]
-ParameterName=shoulder_pitch_joint: Target position
+ParameterName=right_rear_arm_joint: interpolation data record
 DataType=0x0004
-AccessType=rwr
-PDOMapping=1
-
-[220Asub3]
-ParameterName=shoulder_pitch_joint: Modes of operation
-DataType=0x0002
 AccessType=rwr
 PDOMapping=1
 
@@ -3011,6 +3235,98 @@ AccessType=const
 DefaultValue=1
 
 [220Bsub1]
+ParameterName=right_rear_arm_joint: Target velocity
+DataType=0x0004
+AccessType=rwr
+PDOMapping=1
+
+[220C]
+SubNumber=4
+ParameterName=Mapped application objects for TPDO 13
+ObjectType=0x09
+
+[220Csub0]
+ParameterName=Highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=3
+
+[220Csub1]
+ParameterName=shoulder_yaw_joint: Controlword
+DataType=0x0006
+AccessType=rwr
+PDOMapping=1
+
+[220Csub2]
+ParameterName=shoulder_yaw_joint: Target position
+DataType=0x0004
+AccessType=rwr
+PDOMapping=1
+
+[220Csub3]
+ParameterName=shoulder_yaw_joint: Modes of operation
+DataType=0x0002
+AccessType=rwr
+PDOMapping=1
+
+[220D]
+SubNumber=2
+ParameterName=Mapped application objects for TPDO 14
+ObjectType=0x09
+
+[220Dsub0]
+ParameterName=Highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=1
+
+[220Dsub1]
+ParameterName=shoulder_yaw_joint: interpolation data record
+DataType=0x0004
+AccessType=rwr
+PDOMapping=1
+
+[220E]
+SubNumber=4
+ParameterName=Mapped application objects for TPDO 15
+ObjectType=0x09
+
+[220Esub0]
+ParameterName=Highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=3
+
+[220Esub1]
+ParameterName=shoulder_pitch_joint: Controlword
+DataType=0x0006
+AccessType=rwr
+PDOMapping=1
+
+[220Esub2]
+ParameterName=shoulder_pitch_joint: Target position
+DataType=0x0004
+AccessType=rwr
+PDOMapping=1
+
+[220Esub3]
+ParameterName=shoulder_pitch_joint: Modes of operation
+DataType=0x0002
+AccessType=rwr
+PDOMapping=1
+
+[220F]
+SubNumber=2
+ParameterName=Mapped application objects for TPDO 16
+ObjectType=0x09
+
+[220Fsub0]
+ParameterName=Highest sub-index supported
+DataType=0x0005
+AccessType=const
+DefaultValue=1
+
+[220Fsub1]
 ParameterName=shoulder_pitch_joint: interpolation data record
 DataType=0x0004
 AccessType=rwr
@@ -3254,57 +3570,81 @@ DefaultValue=0x00000201
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000102
+DefaultValue=0x00000301
 
 [5C03]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000202
+DefaultValue=0x00000102
 
 [5C04]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000103
+DefaultValue=0x00000202
 
 [5C05]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000203
+DefaultValue=0x00000302
 
 [5C06]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000104
+DefaultValue=0x00000103
 
 [5C07]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000204
+DefaultValue=0x00000203
 
 [5C08]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000105
+DefaultValue=0x00000303
 
 [5C09]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000205
+DefaultValue=0x00000104
 
 [5C0A]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000106
+DefaultValue=0x00000204
 
 [5C0B]
+ParameterName=Remote RPDO number and node-ID
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000304
+
+[5C0C]
+ParameterName=Remote RPDO number and node-ID
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000105
+
+[5C0D]
+ParameterName=Remote RPDO number and node-ID
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000205
+
+[5C0E]
+ParameterName=Remote RPDO number and node-ID
+DataType=0x0007
+AccessType=rw
+DefaultValue=0x00000106
+
+[5C0F]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
@@ -3339,37 +3679,35 @@ ParameterName=Remote RPDO mapping parameter
 ObjectType=0x08
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [5E02Value]
-NrOfEntries=3
-1=0x60400010
-2=0x607A0020
-3=0x60600008
+NrOfEntries=1
+1=0x60FF0020
 
 [5E03]
 ParameterName=Remote RPDO mapping parameter
 ObjectType=0x08
 DataType=0x0007
 AccessType=rw
-CompactSubObj=1
+CompactSubObj=3
 
 [5E03Value]
-NrOfEntries=1
-1=0x60C10120
+NrOfEntries=3
+1=0x60400010
+2=0x607A0020
+3=0x60600008
 
 [5E04]
 ParameterName=Remote RPDO mapping parameter
 ObjectType=0x08
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [5E04Value]
-NrOfEntries=3
-1=0x60400010
-2=0x607A0020
-3=0x60600008
+NrOfEntries=1
+1=0x60C10120
 
 [5E05]
 ParameterName=Remote RPDO mapping parameter
@@ -3380,7 +3718,7 @@ CompactSubObj=1
 
 [5E05Value]
 NrOfEntries=1
-1=0x60C10120
+1=0x60FF0020
 
 [5E06]
 ParameterName=Remote RPDO mapping parameter
@@ -3411,37 +3749,35 @@ ParameterName=Remote RPDO mapping parameter
 ObjectType=0x08
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [5E08Value]
-NrOfEntries=3
-1=0x60400010
-2=0x607A0020
-3=0x60600008
+NrOfEntries=1
+1=0x60FF0020
 
 [5E09]
 ParameterName=Remote RPDO mapping parameter
 ObjectType=0x08
 DataType=0x0007
 AccessType=rw
-CompactSubObj=1
+CompactSubObj=3
 
 [5E09Value]
-NrOfEntries=1
-1=0x60C10120
+NrOfEntries=3
+1=0x60400010
+2=0x607A0020
+3=0x60600008
 
 [5E0A]
 ParameterName=Remote RPDO mapping parameter
 ObjectType=0x08
 DataType=0x0007
 AccessType=rw
-CompactSubObj=3
+CompactSubObj=1
 
 [5E0AValue]
-NrOfEntries=3
-1=0x60400010
-2=0x607A0020
-3=0x60600008
+NrOfEntries=1
+1=0x60C10120
 
 [5E0B]
 ParameterName=Remote RPDO mapping parameter
@@ -3451,5 +3787,53 @@ AccessType=rw
 CompactSubObj=1
 
 [5E0BValue]
+NrOfEntries=1
+1=0x60FF0020
+
+[5E0C]
+ParameterName=Remote RPDO mapping parameter
+ObjectType=0x08
+DataType=0x0007
+AccessType=rw
+CompactSubObj=3
+
+[5E0CValue]
+NrOfEntries=3
+1=0x60400010
+2=0x607A0020
+3=0x60600008
+
+[5E0D]
+ParameterName=Remote RPDO mapping parameter
+ObjectType=0x08
+DataType=0x0007
+AccessType=rw
+CompactSubObj=1
+
+[5E0DValue]
+NrOfEntries=1
+1=0x60C10120
+
+[5E0E]
+ParameterName=Remote RPDO mapping parameter
+ObjectType=0x08
+DataType=0x0007
+AccessType=rw
+CompactSubObj=3
+
+[5E0EValue]
+NrOfEntries=3
+1=0x60400010
+2=0x607A0020
+3=0x60600008
+
+[5E0F]
+ParameterName=Remote RPDO mapping parameter
+ObjectType=0x08
+DataType=0x0007
+AccessType=rw
+CompactSubObj=1
+
+[5E0FValue]
 NrOfEntries=1
 1=0x60C10120

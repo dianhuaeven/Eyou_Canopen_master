@@ -115,6 +115,7 @@ class AxisDriver final : public lely::canopen::BasicDriver, public BusIO {
   std::atomic<bool> startup_complete_{false};
   std::atomic<int> boot_retry_count_{0};
   std::atomic<bool> ip_target_fallback_warned_{false};
+  std::atomic<bool> csv_target_unmapped_warned_{false};
   int max_boot_retries_ = 3;
 };
 

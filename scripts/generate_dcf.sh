@@ -24,9 +24,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pkg_dir="$(cd "${script_dir}/.." && pwd)"
 cfg_dir="${pkg_dir}/config"
 
-rewrite_upload_paths_absolute() {
+normalize_upload_paths_relative() {
   local dcf_path="$1"
   python3 - "$dcf_path" <<'PY'
+import os
 from pathlib import Path
 import sys
 
@@ -40,10 +41,17 @@ for line in lines:
     indent = line[: len(line) - len(stripped)]
     prefix = "UploadFile="
     if stripped.startswith(prefix):
-        value = stripped[len(prefix):]
+        value = stripped[len(prefix):].strip()
         path = Path(value)
-        if not path.is_absolute():
-            line = f"{indent}{prefix}{(base_dir / path).resolve()}"
+        if path.is_absolute():
+            portable = Path(os.path.relpath(path, base_dir))
+        else:
+            portable = path
+
+        portable_str = portable.as_posix()
+        if portable_str and not portable_str.startswith((".", "..")):
+            portable_str = f"./{portable_str}"
+        line = f"{indent}{prefix}{portable_str}"
     rewritten.append(line)
 
 dcf_path.write_text("\n".join(rewritten) + ("\n" if rewritten else ""))
@@ -68,7 +76,7 @@ generate_profile() {
   )
 
   cp "${tmp_dir}/master.dcf" "${cfg_dir}/${dcf_name}"
-  rewrite_upload_paths_absolute "${cfg_dir}/${dcf_name}"
+  normalize_upload_paths_relative "${cfg_dir}/${dcf_name}"
   if [[ -f "${tmp_dir}/master.bin" ]]; then
     cp "${tmp_dir}/master.bin" "${cfg_dir}/master.bin"
   fi
