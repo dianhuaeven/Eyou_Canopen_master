@@ -21,8 +21,8 @@
   <arg name="robot_urdf" default="$(find car_urdf)/urdf/car_urdf.urdf"/>
   <arg name="use_robot_state_publisher" default="true"/>
 
-  <arg name="start_csp_controller" default="true"/>
-  <arg name="start_csv_controller" default="false"/>
+  <arg name="start_csp_controller" default="false"/>
+  <arg name="start_csv_controller" default="true"/>
 
   <rosparam file="$(arg controllers_file)" command="load"/>
 
@@ -47,12 +47,12 @@
         pkg="controller_manager" type="spawner"
         args="--stopped flipper_csp_controller" output="screen"/>
 
-  <node if="$(arg start_csv_controller)" name="spawner_flipper_csv_controller"
+  <node if="$(arg start_csv_controller)" name="spawner_flipper_csv_forward_controller"
         pkg="controller_manager" type="spawner"
-        args="flipper_csv_controller" output="screen"/>
-  <node unless="$(arg start_csv_controller)" name="spawner_flipper_csv_controller_stopped"
+        args="flipper_csv_forward_controller" output="screen"/>
+  <node unless="$(arg start_csv_controller)" name="spawner_flipper_csv_forward_controller_stopped"
         pkg="controller_manager" type="spawner"
-        args="--stopped flipper_csv_controller" output="screen"/>
+        args="--stopped flipper_csv_forward_controller" output="screen"/>
 
   <group if="$(arg use_robot_state_publisher)">
     <param name="robot_description" textfile="$(arg robot_urdf)"/>

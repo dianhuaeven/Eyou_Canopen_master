@@ -195,8 +195,8 @@ source /opt/ros/noetic/setup.bash
 source devel/setup.bash
 
 roslaunch Eyou_Canopen_Master bringup_flipper_4axis.launch \
-  start_csp_controller:=true \
-  start_csv_controller:=false
+  start_csp_controller:=false \
+  start_csv_controller:=true
 ```
 
 ```bash

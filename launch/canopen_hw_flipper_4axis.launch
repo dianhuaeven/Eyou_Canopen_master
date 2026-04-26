@@ -36,14 +36,14 @@
     <param name="ip_executor_action_ns" value="$(arg ip_executor_action_ns)"/>
   </node>
 
-  <!-- 启动 controllers: joint_state 始终启动，flipper_csp 默认启动，flipper_csv 加载但不启动 -->
+  <!-- 启动 controllers: joint_state 始终启动，默认运行 CSV forward controller，CSP 仅保留为 stopped -->
   <node unless="$(arg use_ip_executor)" name="controller_spawner" pkg="controller_manager" type="spawner"
-        args="joint_state_controller flipper_csp_controller" output="screen"/>
+        args="joint_state_controller flipper_csv_forward_controller" output="screen"/>
   <node if="$(arg use_ip_executor)" name="controller_spawner_ip" pkg="controller_manager" type="spawner"
         args="joint_state_controller" output="screen"/>
 
   <node name="controller_spawner_stopped" pkg="controller_manager" type="spawner"
-        args="--stopped flipper_csv_controller" output="screen"/>
+        args="--stopped flipper_csp_controller" output="screen"/>
 
   <!-- 旧 2 轴机械臂 controller 启动方式保留作参考，当前 4 摆臂模式不再使用。 -->
   <!-- 旧配置参考：
