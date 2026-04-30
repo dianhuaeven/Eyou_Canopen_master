@@ -32,7 +32,7 @@ class CanopenRobotHw {
 
   // 对应 RobotHW::write():
   // 始终刷新目标位置/模式到 SharedState；
-  // 当 all_operational=false 时，速度/力矩命令被强制清零。
+  // 未 operational 的轴会逐轴清零速度/力矩命令。
   void WriteToSharedState();
 
   // 测试/上层适配接口: 设置某轴目标位置(单位: rad)。

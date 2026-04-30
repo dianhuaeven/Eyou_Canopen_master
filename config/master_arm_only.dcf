@@ -186,8 +186,8 @@ CompactSubObj=127
 
 [1016Value]
 NrOfEntries=2
-1=0x000505DC
-2=0x000605DC
+1=0x000605DC
+2=0x000505DC
 
 [1017]
 ParameterName=Producer heartbeat time
@@ -245,8 +245,8 @@ CompactSubObj=127
 
 [1028Value]
 NrOfEntries=2
-5=0x00000085
 6=0x00000086
+5=0x00000085
 
 [1029]
 ParameterName=Error behavior object
@@ -280,7 +280,7 @@ DefaultValue=5
 ParameterName=COB-ID used by RPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000185
+DefaultValue=0x00000186
 
 [1400sub2]
 ParameterName=transmission type
@@ -319,7 +319,7 @@ DefaultValue=5
 ParameterName=COB-ID used by RPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000285
+DefaultValue=0x00000286
 
 [1401sub2]
 ParameterName=transmission type
@@ -358,7 +358,7 @@ DefaultValue=5
 ParameterName=COB-ID used by RPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000186
+DefaultValue=0x00000185
 
 [1402sub2]
 ParameterName=transmission type
@@ -397,7 +397,7 @@ DefaultValue=5
 ParameterName=COB-ID used by RPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000286
+DefaultValue=0x00000285
 
 [1403sub2]
 ParameterName=transmission type
@@ -486,7 +486,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000205
+DefaultValue=0x00000206
 
 [1800sub2]
 ParameterName=transmission type
@@ -532,7 +532,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000305
+DefaultValue=0x00000306
 
 [1801sub2]
 ParameterName=transmission type
@@ -578,7 +578,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000206
+DefaultValue=0x00000205
 
 [1802sub2]
 ParameterName=transmission type
@@ -624,7 +624,7 @@ DefaultValue=6
 ParameterName=COB-ID used by TPDO
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000306
+DefaultValue=0x00000305
 
 [1803sub2]
 ParameterName=transmission type
@@ -738,13 +738,13 @@ AccessType=ro
 ParameterName=Node-ID 5
 DataType=0x000F
 AccessType=ro
-UploadFile=./shoulder_yaw_joint.bin
+UploadFile=./shoulder_pitch_joint.bin
 
 [1F22sub6]
 ParameterName=Node-ID 6
 DataType=0x000F
 AccessType=ro
-UploadFile=./shoulder_pitch_joint.bin
+UploadFile=./shoulder_yaw_joint.bin
 
 [1F22sub7]
 ParameterName=Node-ID 7
@@ -1380,8 +1380,8 @@ CompactSubObj=127
 
 [1F81Value]
 NrOfEntries=2
-5=0x00000005
 6=0x00000005
+5=0x00000005
 
 [1F82]
 ParameterName=Request NMT
@@ -1399,8 +1399,8 @@ CompactSubObj=127
 
 [1F84Value]
 NrOfEntries=2
-5=0x00220811
 6=0x00220811
+5=0x00220811
 
 [1F85]
 ParameterName=Vendor identification
@@ -1652,25 +1652,25 @@ PDOMapping=1
 ParameterName=Remote TPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000105
+DefaultValue=0x00000106
 
 [5801]
 ParameterName=Remote TPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000205
+DefaultValue=0x00000206
 
 [5802]
 ParameterName=Remote TPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000106
+DefaultValue=0x00000105
 
 [5803]
 ParameterName=Remote TPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000206
+DefaultValue=0x00000205
 
 [5A00]
 ParameterName=Remote TPDO mapping parameter
@@ -1726,25 +1726,25 @@ NrOfEntries=2
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000105
+DefaultValue=0x00000106
 
 [5C01]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000205
+DefaultValue=0x00000206
 
 [5C02]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000106
+DefaultValue=0x00000105
 
 [5C03]
 ParameterName=Remote RPDO number and node-ID
 DataType=0x0007
 AccessType=rw
-DefaultValue=0x00000206
+DefaultValue=0x00000205
 
 [5E00]
 ParameterName=Remote RPDO mapping parameter

@@ -78,14 +78,12 @@ class AxisLogicTest : public ::testing::Test {
 TEST_F(AxisLogicTest, ProcessRpdoWritesBusIO) {
   logic_->ProcessRpdo(kSW_SwitchOnDisabled, 100, 50, 10, kMode_CSP);
 
-  // 应该写了 controlword + mode + position + velocity + torque
-  ASSERT_GE(bus_.calls.size(), 5u);
+  // CSP/IP 位置模式只写 controlword + mode + position。
+  ASSERT_GE(bus_.calls.size(), 3u);
   EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
   EXPECT_EQ(bus_.calls[0].value, kCtrl_DisableVoltage);
   EXPECT_EQ(bus_.calls[1].type, BusCall::kMode);
   EXPECT_EQ(bus_.calls[2].type, BusCall::kPosition);
-  EXPECT_EQ(bus_.calls[3].type, BusCall::kVelocity);
-  EXPECT_EQ(bus_.calls[4].type, BusCall::kTorque);
 }
 
 TEST_F(AxisLogicTest, ProcessRpdoWritesEnableOperationControlwordInReadyToSwitchOn) {
@@ -140,6 +138,21 @@ TEST_F(AxisLogicTest, CSTModeWritesTorque) {
     }
   }
   EXPECT_TRUE(found_torque);
+}
+
+TEST_F(AxisLogicTest, PositionModeSkipsVelocityAndTorqueWrites) {
+  logic_->SetTargetMode(kMode_IP);
+  logic_->SetRosTargetVelocity(500);
+  logic_->SetRosTargetTorque(200);
+  DriveToOperational();
+  bus_.calls.clear();
+
+  logic_->ProcessRpdo(kSW_OperationEnabled, 0, 0, 0, kMode_IP);
+
+  for (const auto& c : bus_.calls) {
+    EXPECT_NE(c.type, BusCall::kVelocity);
+    EXPECT_NE(c.type, BusCall::kTorque);
+  }
 }
 
 // --- EMCY 处理 ---
@@ -254,8 +267,8 @@ TEST_F(AxisLogicTest, StaleIntentSequenceFallsBackToDisable) {
 
   ASSERT_FALSE(bus_.calls.empty());
   EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
-  EXPECT_EQ(bus_.calls.back().type, BusCall::kTorque);
-  const auto controlword_index = bus_.calls.size() - 5;
+  EXPECT_EQ(bus_.calls.back().type, BusCall::kPosition);
+  const auto controlword_index = bus_.calls.size() - 3;
   EXPECT_EQ(bus_.calls[controlword_index].type, BusCall::kControlword);
   EXPECT_EQ(bus_.calls[controlword_index].value, kCtrl_DisableVoltage);
 }
@@ -332,7 +345,7 @@ TEST_F(AxisLogicTest, HaltRequestSetsHaltBitAndFreezesVelocityCommand) {
   logic_->RequestHalt();
   logic_->ProcessRpdo(kSW_OperationEnabled, 1010, 0, 0, kMode_CSV);
 
-  ASSERT_GE(bus_.calls.size(), 5u);
+  ASSERT_GE(bus_.calls.size(), 4u);
   EXPECT_EQ(bus_.calls[0].type, BusCall::kControlword);
   EXPECT_EQ(bus_.calls[0].value,
             static_cast<int64_t>(kCtrl_EnableOperation | kCtrl_Bit_Halt));
@@ -344,14 +357,14 @@ TEST_F(AxisLogicTest, HaltRequestSetsHaltBitAndFreezesVelocityCommand) {
   logic_->SetRosTargetVelocity(900);
   bus_.calls.clear();
   logic_->ProcessRpdo(kSW_OperationEnabled, 1020, 0, 0, kMode_CSV);
-  ASSERT_GE(bus_.calls.size(), 5u);
+  ASSERT_GE(bus_.calls.size(), 4u);
   EXPECT_EQ(bus_.calls[2].value, 1020);
   EXPECT_EQ(bus_.calls[3].value, 0);
 
   logic_->RequestResume();
   bus_.calls.clear();
   logic_->ProcessRpdo(kSW_OperationEnabled, 1020, 0, 0, kMode_CSV);
-  ASSERT_GE(bus_.calls.size(), 5u);
+  ASSERT_GE(bus_.calls.size(), 4u);
   EXPECT_EQ(bus_.calls[0].value, kCtrl_EnableOperation);
   EXPECT_EQ(bus_.calls[3].value, 0);
 
@@ -364,7 +377,7 @@ TEST_F(AxisLogicTest, HaltRequestSetsHaltBitAndFreezesVelocityCommand) {
 
   bus_.calls.clear();
   logic_->ProcessRpdo(kSW_OperationEnabled, 1020, 0, 0, kMode_CSV);
-  ASSERT_GE(bus_.calls.size(), 5u);
+  ASSERT_GE(bus_.calls.size(), 4u);
   EXPECT_EQ(bus_.calls[0].value, kCtrl_EnableOperation);
   EXPECT_EQ(bus_.calls[3].value, 900);
 }

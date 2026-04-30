@@ -82,7 +82,7 @@ void CanopenRobotHw::WriteToSharedState() {
       // 避免单轴未就绪时影响其他已就绪轴的目标位置。
       cmd.target_position = RadToTicks(i, joint_pos_[i]);
     }
-    if (all_operational_) {
+    if (axis_operational_[i]) {
       cmd.target_velocity = RadPerSecToTicksPerSec(i, joint_vel_cmd_[i]);
       cmd.target_torque = NmToTorquePermille(i, joint_torque_cmd_[i]);
     } else {

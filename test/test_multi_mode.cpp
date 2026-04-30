@@ -200,6 +200,40 @@ TEST_F(RobotHwMultiMode, VelocityCommandWrittenToSharedState) {
   EXPECT_EQ(cmd.arm_epoch, 3u);
 }
 
+TEST_F(RobotHwMultiMode, VelocityCommandUsesPerAxisOperationalGate) {
+  AxisFeedback fb0;
+  fb0.is_operational = true;
+  fb0.state = CiA402State::OperationEnabled;
+  fb0.arm_epoch = 3;
+  state.UpdateFeedback(0, fb0);
+
+  AxisFeedback fb1;
+  fb1.is_operational = false;
+  fb1.state = CiA402State::OperationEnabled;
+  fb1.arm_epoch = 3;
+  state.UpdateFeedback(1, fb1);
+  state.RecomputeAllOperational();
+  hw.ReadFromSharedState();
+  ASSERT_FALSE(hw.all_operational());
+
+  hw.SetJointMode(0, kMode_CSV);
+  hw.SetJointMode(1, kMode_CSV);
+  hw.SetJointVelocityCommand(0, 1.0);
+  hw.SetJointVelocityCommand(1, 1.0);
+  hw.SetCommandReady(0, true);
+  hw.SetCommandReady(1, true);
+  hw.SetCommandEpoch(0, 3);
+  hw.SetCommandEpoch(1, 3);
+  hw.WriteToSharedState();
+
+  AxisCommand cmd0;
+  AxisCommand cmd1;
+  ASSERT_TRUE(state.GetCommand(0, &cmd0));
+  ASSERT_TRUE(state.GetCommand(1, &cmd1));
+  EXPECT_NE(cmd0.target_velocity, 0);
+  EXPECT_EQ(cmd1.target_velocity, 0);
+}
+
 TEST_F(RobotHwMultiMode, TorqueCommandWrittenToSharedState) {
   MakeAllOperational();
   hw.SetJointMode(1, kMode_CST);

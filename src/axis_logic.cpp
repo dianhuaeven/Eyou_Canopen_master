@@ -106,8 +106,12 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
     bus_io_->WriteControlword(controlword);
     bus_io_->WriteModeOfOperation(safe_mode);
     bus_io_->WriteTargetPosition(safe_target_ticks);
-    bus_io_->WriteTargetVelocity(safe_target_velocity);
-    bus_io_->WriteTargetTorque(safe_target_torque);
+    if (safe_mode == kMode_CSV) {
+      bus_io_->WriteTargetVelocity(safe_target_velocity);
+    }
+    if (safe_mode == kMode_CST) {
+      bus_io_->WriteTargetTorque(safe_target_torque);
+    }
   }
 }
 

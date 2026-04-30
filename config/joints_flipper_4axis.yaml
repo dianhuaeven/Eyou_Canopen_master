@@ -89,7 +89,7 @@ joints:
   # 恢复时请取消注释，并同步恢复 master_flipper_4axis.yaml 中对应从站段后重新生成 DCF。
   # - name: shoulder_yaw_joint
   #   canopen:
-  #     node_id: 5              # 原 joints.yaml 运行时配置
+  #     node_id: 6              # 原 joints.yaml 运行时配置
   #     verify_pdo_mapping: false
   #     default_mode: 7
   #   counts_per_rev: 6619136
@@ -108,7 +108,7 @@ joints:
   #   ip_goal_tolerance: 0.001
   # - name: shoulder_pitch_joint
   #   canopen:
-  #     node_id: 6              # 原 joints.yaml 运行时配置
+  #     node_id: 5              # 原 joints.yaml 运行时配置
   #     verify_pdo_mapping: false
   #     default_mode: 7
   #   counts_per_rev: 6619136

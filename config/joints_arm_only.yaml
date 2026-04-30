@@ -9,7 +9,7 @@ canopen:
 joints:
   - name: shoulder_yaw_joint
     canopen:
-      node_id: 5              # 从站 CANopen 节点 ID
+      node_id: 6              # 从站 CANopen 节点 ID
       verify_pdo_mapping: false  # 启动时是否校验 PDO 映射
       default_mode: 7         # 默认控制模式（7=IP 插补位置模式）
     counts_per_rev: 6619136   # 编码器每圈计数值
@@ -27,7 +27,7 @@ joints:
     ip_goal_tolerance: 0.001  # 终点到位判定误差（rad）
   - name: shoulder_pitch_joint
     canopen:
-      node_id: 6              # 从站 CANopen 节点 ID
+      node_id: 5              # 从站 CANopen 节点 ID
       verify_pdo_mapping: false  # 启动时是否校验 PDO 映射
       default_mode: 7         # 默认控制模式（7=IP 插补位置模式）
     counts_per_rev: 6619136   # 编码器每圈计数值
