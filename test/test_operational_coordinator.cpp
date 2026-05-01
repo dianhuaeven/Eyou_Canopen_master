@@ -147,10 +147,11 @@ TEST(OperationalCoordinator, DisableFromRunningAndArmedToStandby) {
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
 }
 
-TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToStandby) {
-  SharedState shared(1);
+TEST(OperationalCoordinator, GroupedFaultHaltsOnlyMatchingSafetyGroup) {
+  SharedState shared(3);
   FakeMaster fake;
-  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
+  OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 3);
+  coordinator.SetSafetyGroups({"arm", "arm", "flipper"});
   coordinator.SetConfigured();
   ASSERT_TRUE(coordinator.RequestInit().ok);
   ASSERT_TRUE(coordinator.RequestRelease().ok);
@@ -160,9 +161,17 @@ TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToStandby) {
   fb.is_fault = true;
   shared.UpdateFeedback(0, fb);
   coordinator.UpdateFromFeedback();
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
-  EXPECT_TRUE(shared.GetGlobalFault());
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
+  EXPECT_FALSE(shared.GetGlobalFault());
   EXPECT_TRUE(shared.GetAllAxesHaltedByFault());
+  EXPECT_TRUE(shared.GetAxisHaltedByFault(0));
+  EXPECT_TRUE(shared.GetAxisHaltedByFault(1));
+  EXPECT_FALSE(shared.GetAxisHaltedByFault(2));
+
+  coordinator.ComputeIntents();
+  EXPECT_EQ(shared.GetAxisIntent(0), AxisIntent::Halt);
+  EXPECT_EQ(shared.GetAxisIntent(1), AxisIntent::Halt);
+  EXPECT_EQ(shared.GetAxisIntent(2), AxisIntent::Run);
 
   // 模拟底层 fault 已清除，再发 recover。
   fb.is_fault = false;
@@ -170,13 +179,15 @@ TEST(OperationalCoordinator, AutoFaultDowngradeAndRecoverToStandby) {
 
   auto r = coordinator.RequestRecover();
   EXPECT_TRUE(r.ok);
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Standby);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
   EXPECT_FALSE(shared.GetGlobalFault());
   EXPECT_FALSE(shared.GetAllAxesHaltedByFault());
+  EXPECT_FALSE(shared.GetAxisHaltedByFault(0));
+  EXPECT_FALSE(shared.GetAxisHaltedByFault(1));
   EXPECT_EQ(shared.Snapshot().command_sync_sequence, 2u);
 }
 
-TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
+TEST(OperationalCoordinator, RecoverFailureKeepsCurrentMode) {
   SharedState shared(1);
   FakeMaster fake;
   fake.reset_ok = false;
@@ -189,15 +200,15 @@ TEST(OperationalCoordinator, RecoverFailureKeepsFaulted) {
   fb.heartbeat_lost = true;
   shared.UpdateFeedback(0, fb);
   coordinator.UpdateFromFeedback();
-  ASSERT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Running);
 
   const auto r = coordinator.RequestRecover();
   EXPECT_FALSE(r.ok);
   EXPECT_EQ(r.message, "reset failed");
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
 }
 
-TEST(OperationalCoordinator, RecoverFailsWhenFeedbackStaysFaulted) {
+TEST(OperationalCoordinator, RecoverFailsWhenFeedbackStaysFaultedInCurrentMode) {
   SharedState shared(1);
   FakeMaster fake;
   OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
@@ -209,15 +220,15 @@ TEST(OperationalCoordinator, RecoverFailsWhenFeedbackStaysFaulted) {
   fb.is_fault = true;
   shared.UpdateFeedback(0, fb);
   coordinator.UpdateFromFeedback();
-  ASSERT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Running);
 
   const auto r = coordinator.RequestRecover();
   EXPECT_FALSE(r.ok);
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
   EXPECT_NE(r.message.find("recover timeout"), std::string::npos);
 }
 
-TEST(OperationalCoordinator, ReleaseRejectedWhenAxisUnhealthy) {
+TEST(OperationalCoordinator, ReleaseAllowedWithGroupedAxisFault) {
   SharedState shared(1);
   FakeMaster fake;
   OperationalCoordinator coordinator(MakeMasterOps(&fake), &shared, 1);
@@ -232,9 +243,8 @@ TEST(OperationalCoordinator, ReleaseRejectedWhenAxisUnhealthy) {
   shared.UpdateFeedback(0, fb);
 
   const auto r = coordinator.RequestRelease();
-  EXPECT_FALSE(r.ok);
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
-  EXPECT_NE(r.message.find("fault"), std::string::npos);
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
 }
 
 TEST(OperationalCoordinator, EnableRejectedWhenGlobalFaultLatched) {
@@ -267,7 +277,7 @@ TEST(OperationalCoordinator, RecoverThenEnableReleaseSucceedsAfterFeedbackHealth
   fb.is_fault = true;
   shared.UpdateFeedback(0, fb);
   coordinator.UpdateFromFeedback();
-  ASSERT_EQ(coordinator.mode(), SystemOpMode::Faulted);
+  ASSERT_EQ(coordinator.mode(), SystemOpMode::Running);
 
   std::thread clear_fault([&shared]() {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -280,16 +290,10 @@ TEST(OperationalCoordinator, RecoverThenEnableReleaseSucceedsAfterFeedbackHealth
   const auto recover = coordinator.RequestRecover();
   clear_fault.join();
   ASSERT_TRUE(recover.ok) << recover.message;
-  ASSERT_EQ(coordinator.mode(), SystemOpMode::Standby);
-
-  auto enable = coordinator.RequestEnable();
-  EXPECT_TRUE(enable.ok) << enable.message;
-  auto release = coordinator.RequestRelease();
-  EXPECT_TRUE(release.ok) << release.message;
   EXPECT_EQ(coordinator.mode(), SystemOpMode::Running);
 }
 
-TEST(OperationalCoordinator, InitSafetyCheckFaultFallbackToFaulted) {
+TEST(OperationalCoordinator, InitSafetyCheckFaultStartsArmedWithGroupedHalt) {
   SharedState shared(1);
   AxisFeedback fb;
   fb.is_fault = true;
@@ -300,9 +304,10 @@ TEST(OperationalCoordinator, InitSafetyCheckFaultFallbackToFaulted) {
   coordinator.SetConfigured();
 
   const auto r = coordinator.RequestInit();
-  EXPECT_FALSE(r.ok);
-  EXPECT_EQ(coordinator.mode(), SystemOpMode::Faulted);
-  EXPECT_EQ(r.message, "safety check failed: fault present after init");
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(coordinator.mode(), SystemOpMode::Armed);
+  EXPECT_TRUE(shared.GetAxisHaltedByFault(0));
+  EXPECT_TRUE(shared.GetAllAxesHaltedByFault());
 }
 
 }  // namespace

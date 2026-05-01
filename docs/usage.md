@@ -46,6 +46,7 @@ candump canable0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 路径：`config/joints.yaml`
 
 重点字段（每轴）：
+- `safety_group`（可选，默认 `default`）
 - `counts_per_rev`
 - `rated_torque_nm`
 - `velocity_scale`
@@ -53,6 +54,11 @@ candump canable0,080:7FF,180:7FF,200:7FF,280:7FF,700:7FF
 - `canopen.verify_pdo_mapping`（启动时是否验证 PDO 映射）
 
 建议每轴都填完整参数，避免默认值掩盖问题。
+
+`safety_group` 用于运行期故障隔离：某一轴反馈 `fault` 或 `heartbeat_lost`
+后，该轴所在组的其它轴会进入 halt/命令冻结；其它组不被连带 halt，系统
+生命周期也不会因为这个组内故障直接进入 `Faulted`。当前默认配置使用
+`flipper` 和 `arm` 两组。
 
 ### 2.2 master.yaml / master.dcf
 
@@ -176,11 +182,11 @@ rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 | Service | 类型 | 说明 |
 |---------|------|------|
 | `~init` | `std_srvs/Trigger` | `Configured -> Armed`（启动主站并自动上电到冻结态；成功后触发一次命令重同步） |
-| `~enable` | `std_srvs/Trigger` | `Standby -> Armed`（使能并冻结输出；若存在 fault / heartbeat_lost / global fault 则拒绝） |
+| `~enable` | `std_srvs/Trigger` | `Standby -> Armed`（使能并冻结输出；`global fault` 闩锁会拒绝；单轴 fault 按 `safety_group` 隔离） |
 | `~disable` | `std_srvs/Trigger` | `Running/Armed/Standby -> Standby`（去使能但不断开通信） |
 | `~halt` | `std_srvs/Trigger` | `Running -> Armed`（置 Halt bit，冻结输出） |
-| `~resume` | `std_srvs/Trigger` | `Armed -> Running`；若存在 fault / heartbeat_lost / global fault 则拒绝 |
-| `~recover` | `std_srvs/Trigger` | `Faulted -> Standby`（等待 fault 与 heartbeat 全清后才成功，不自动上电） |
+| `~resume` | `std_srvs/Trigger` | `Armed -> Running`；`global fault` 闩锁会拒绝；单轴 fault 按 `safety_group` 隔离 |
+| `~recover` | `std_srvs/Trigger` | 清除 fault/heartbeat 与组内 halt 闩锁；全局 `Faulted` 时回 `Standby`，普通组内故障时保持当前生命周期 |
 | `~shutdown` | `std_srvs/Trigger` | 停通信并回 `Configured`，节点不退出（随后需 `~init`；成功后触发一次命令重同步） |
 | `~set_mode` | `Eyou_Canopen_Master/SetMode` | 仅在 `Standby` 允许（典型：`~disable` 后） |
 | `~set_zero` | `Eyou_Canopen_Master/SetZero` | 仅在 `Standby` 允许；zero-only，支持“按当前点归零”或“显式写入零偏” |
@@ -206,12 +212,12 @@ rosparam set /canopen_hw_node/ip_executor_rate_hz 100.0
 ### 6.1.3 shutdown/recover/init 关系（Coordinator 语义）
 
 - `~shutdown`：停通信并回到 `Configured`，节点进程不退出。
-- `~recover`：仅在全部轴 `fault=false` 且 `heartbeat_lost=false` 后才返回成功；成功后回到 `Standby`，不自动上电。
+- `~recover`：仅在全部轴 `fault=false` 且 `heartbeat_lost=false` 后才返回成功；若当前处于全局 `Faulted`，成功后回到 `Standby`；若只是 `safety_group` 组内故障，成功后保持当前生命周期。
 - `~init`：`~shutdown` 后重新建立通信并进入 `Armed`；成功后会触发一次命令重同步。若 `canopen.auto_write_soft_limits_from_urdf=true`，会在 `init` 成功后按 URDF 关节限位同步 `0x2003/0x607D`；`revolute` 使用 `counts_per_rev` 换算，`prismatic` 使用 `counts_per_meter` 换算；若关节在 URDF 中没有位置上下限，则仅写 `0x2003:00=0x00000000` 关闭该轴软限位，不写 `0x607D`；写入失败则本次 `init` 返回失败并回滚到 `Configured`。
-- `~enable`：将 `Standby` 推到 `Armed`；若快照仍有 fault / heartbeat_lost / global fault，则拒绝。
+- `~enable`：将 `Standby` 推到 `Armed`；`global fault` 闩锁会拒绝，单轴 fault/heartbeat 由 `safety_group` 隔离为组内 halt。
 - `~disable`：将 `Running/Armed` 回到 `Standby`，但保持通信在线。
 - `~halt` / `~resume`：在 `Running <-> Armed` 之间切换。
-- `~resume`：仅在健康快照下允许进入 `Running`；若存在 fault、heartbeat 丢失或 `global_fault` 闩锁，则会被拒绝。
+- `~resume`：`Armed -> Running`；`global_fault` 闩锁会拒绝，单轴 fault/heartbeat 由 `safety_group` 隔离为组内 halt。
 - `~set_zero`：仅允许 `Standby`；当前统一为 zero-only 语义。`use_current_position_as_zero=true` 时执行 `0x607C=0 -> 读0x6064 -> 0x607C=-actual_position -> 0x1010:01='save'`；否则按请求值直接写 `0x607C` 并保存。
 - `~apply_limits`：仅允许 `Standby`；负责单独写该轴 `0x2003/0x607D`。`use_urdf_limits=true` 时采用 URDF 限位，`require_current_inside_limits=true` 时才会在当前点超限时拒绝。
 - 故障恢复标准顺序为：`~recover -> ~enable -> ~resume`。

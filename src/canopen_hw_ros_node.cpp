@@ -83,6 +83,12 @@ int main(int argc, char** argv) {
   std::mutex loop_mtx;
   canopen_hw::OperationalCoordinator coordinator(
       lifecycle.master(), lifecycle.shared_state(), master_cfg.joints.size());
+  std::vector<std::string> safety_groups;
+  safety_groups.reserve(master_cfg.joints.size());
+  for (const auto& joint : master_cfg.joints) {
+    safety_groups.push_back(joint.safety_group);
+  }
+  coordinator.SetSafetyGroups(safety_groups);
   coordinator.SetConfigured();
   canopen_hw::ServiceGateway service_gateway(&pnh, &coordinator, &loop_mtx);
 

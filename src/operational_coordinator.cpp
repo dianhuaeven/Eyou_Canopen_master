@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <set>
 #include <sstream>
 #include <utility>
 
@@ -84,6 +85,18 @@ void OperationalCoordinator::SetConfigured() {
   mode_.store(SystemOpMode::Configured, std::memory_order_release);
 }
 
+void OperationalCoordinator::SetSafetyGroups(
+    const std::vector<std::string>& safety_groups) {
+  std::lock_guard<std::mutex> lk(transition_mtx_);
+  safety_groups_ = safety_groups;
+  safety_groups_.resize(axis_count_, "default");
+  for (auto& group : safety_groups_) {
+    if (group.empty()) {
+      group = "default";
+    }
+  }
+}
+
 bool OperationalCoordinator::MasterStart(std::string* detail) {
   if (!master_ops_.start || !master_ops_.start()) {
     if (detail && detail->empty()) {
@@ -143,24 +156,99 @@ bool OperationalCoordinator::CheckHealthyForMotion(std::string* detail) const {
     return false;
   }
 
+  return true;
+}
+
+void OperationalCoordinator::ApplyGroupedFaultContainment(
+    const SharedSnapshot& snap) {
+  if (!shared_state_) {
+    return;
+  }
+
+  std::set<std::string> faulted_groups;
   const std::size_t n = std::min(axis_count_, snap.feedback.size());
   for (std::size_t i = 0; i < n; ++i) {
-    if (snap.feedback[i].is_fault) {
-      if (detail) {
-        std::ostringstream oss;
-        oss << "axis " << i << " fault active";
-        *detail = oss.str();
-      }
-      return false;
+    if (snap.feedback[i].is_fault || snap.feedback[i].heartbeat_lost) {
+      const std::string group =
+          (i < safety_groups_.size() && !safety_groups_[i].empty())
+              ? safety_groups_[i]
+              : "default";
+      faulted_groups.insert(group);
     }
-    if (snap.feedback[i].heartbeat_lost) {
-      if (detail) {
-        std::ostringstream oss;
-        oss << "axis " << i << " heartbeat lost";
-        *detail = oss.str();
-      }
-      return false;
+  }
+
+  bool any_halted = false;
+  for (std::size_t i = 0; i < axis_count_; ++i) {
+    const std::string group =
+        (i < safety_groups_.size() && !safety_groups_[i].empty())
+            ? safety_groups_[i]
+            : "default";
+    const bool halted = faulted_groups.find(group) != faulted_groups.end();
+    shared_state_->SetAxisHaltedByFault(i, halted);
+    any_halted = any_halted || halted;
+  }
+  shared_state_->SetAllAxesHaltedByFault(any_halted);
+  shared_state_->SetGlobalFault(false);
+}
+
+bool OperationalCoordinator::RecoverFaults(std::string* detail) {
+  if (!MasterRunning(detail)) {
+    return false;
+  }
+
+  std::string recover_detail;
+  if (!MasterResetAllFaults(&recover_detail)) {
+    if (detail) {
+      *detail = recover_detail.empty() ? "recover failed" : recover_detail;
     }
+    return false;
+  }
+
+  if (shared_state_) {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(2);
+
+    while (true) {
+      const SharedSnapshot snap = shared_state_->Snapshot();
+      const std::size_t n = std::min(axis_count_, snap.feedback.size());
+      bool any_unhealthy = false;
+      std::size_t first_bad_axis = 0;
+      bool first_bad_is_heartbeat = false;
+      for (std::size_t i = 0; i < n; ++i) {
+        if (snap.feedback[i].is_fault || snap.feedback[i].heartbeat_lost) {
+          any_unhealthy = true;
+          first_bad_axis = i;
+          first_bad_is_heartbeat = snap.feedback[i].heartbeat_lost;
+          break;
+        }
+      }
+      if (!any_unhealthy) {
+        break;
+      }
+      if (std::chrono::steady_clock::now() >= deadline) {
+        if (detail) {
+          std::ostringstream oss;
+          oss << "recover timeout: axis " << first_bad_axis << ' '
+              << (first_bad_is_heartbeat ? "heartbeat_lost" : "fault_active");
+          *detail = oss.str();
+        }
+        return false;
+      }
+      shared_state_->WaitForStateChange(std::min(
+          deadline, std::chrono::steady_clock::now() +
+                        std::chrono::milliseconds(20)));
+    }
+
+    shared_state_->SetGlobalFault(false);
+    shared_state_->SetAllAxesHaltedByFault(false);
+    for (std::size_t i = 0; i < axis_count_; ++i) {
+      shared_state_->SetAxisHaltedByFault(i, false);
+    }
+    shared_state_->AdvanceCommandSyncSequence();
+  }
+
+  if (detail && !recover_detail.empty()) {
+    *detail = recover_detail;
   }
   return true;
 }
@@ -234,26 +322,20 @@ OperationalCoordinator::Result OperationalCoordinator::RequestInit() {
             }
           }
           if (any_fault || snap.global_fault) {
-            shared_state_->SetGlobalFault(true);
-            shared_state_->SetAllAxesHaltedByFault(true);
-            mode_.store(SystemOpMode::Faulted, std::memory_order_release);
-            if (detail) {
-              *detail = "safety check failed: fault present after init";
-            }
-            return false;
+            ApplyGroupedFaultContainment(snap);
+            shared_state_->AdvanceCommandSyncSequence();
+            return true;
           }
           if (heartbeat_lost) {
-            // 心跳问题按可恢复启动异常处理，停留 Standby，不自动上电。
-            shared_state_->SetGlobalFault(false);
-            shared_state_->SetAllAxesHaltedByFault(false);
-            mode_.store(SystemOpMode::Standby, std::memory_order_release);
-            if (detail) {
-              *detail = "safety check failed: heartbeat lost";
-            }
-            return false;
+            ApplyGroupedFaultContainment(snap);
+            shared_state_->AdvanceCommandSyncSequence();
+            return true;
           }
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
+          for (std::size_t i = 0; i < axis_count_; ++i) {
+            shared_state_->SetAxisHaltedByFault(i, false);
+          }
           shared_state_->AdvanceCommandSyncSequence();
         }
         return true;
@@ -294,69 +376,28 @@ OperationalCoordinator::Result OperationalCoordinator::RequestHalt() {
 }
 
 OperationalCoordinator::Result OperationalCoordinator::RequestRecover() {
+  const SystemOpMode current = mode_.load(std::memory_order_acquire);
+  if (current == SystemOpMode::Standby || current == SystemOpMode::Armed ||
+      current == SystemOpMode::Running) {
+    std::lock_guard<std::mutex> lk(transition_mtx_);
+    std::string detail;
+    if (!RecoverFaults(&detail)) {
+      return {false, detail.empty() ? "recover failed" : detail};
+    }
+    if (detail.empty()) {
+      detail = "grouped faults recovered";
+    }
+    return {true, detail};
+  }
+
   return DoTransition(
       {SystemOpMode::Faulted}, SystemOpMode::Standby,
       [this](std::string* detail) {
-        if (!MasterRunning(detail)) {
-          return false;
-        }
         mode_.store(SystemOpMode::Recovering, std::memory_order_release);
 
-        std::string recover_detail;
-        if (!MasterResetAllFaults(&recover_detail)) {
+        if (!RecoverFaults(detail)) {
           mode_.store(SystemOpMode::Faulted, std::memory_order_release);
-          if (detail) {
-            *detail = recover_detail.empty() ? "recover failed" : recover_detail;
-          }
           return false;
-        }
-
-        if (shared_state_) {
-          const auto deadline =
-              std::chrono::steady_clock::now() + std::chrono::seconds(2);
-
-          while (true) {
-            const SharedSnapshot snap = shared_state_->Snapshot();
-            const std::size_t n = std::min(axis_count_, snap.feedback.size());
-            bool any_unhealthy = false;
-            std::size_t first_bad_axis = 0;
-            bool first_bad_is_heartbeat = false;
-            for (std::size_t i = 0; i < n; ++i) {
-              if (snap.feedback[i].is_fault || snap.feedback[i].heartbeat_lost) {
-                any_unhealthy = true;
-                first_bad_axis = i;
-                first_bad_is_heartbeat = snap.feedback[i].heartbeat_lost;
-                break;
-              }
-            }
-            if (!any_unhealthy) {
-              break;
-            }
-            if (std::chrono::steady_clock::now() >= deadline) {
-              mode_.store(SystemOpMode::Faulted, std::memory_order_release);
-              if (detail) {
-                std::ostringstream oss;
-                oss << "recover timeout: axis " << first_bad_axis << ' '
-                    << (first_bad_is_heartbeat ? "heartbeat_lost"
-                                               : "fault_active");
-                *detail = oss.str();
-              }
-              return false;
-            }
-            shared_state_->WaitForStateChange(std::min(
-                deadline, std::chrono::steady_clock::now() +
-                              std::chrono::milliseconds(20)));
-          }
-        }
-
-        if (shared_state_) {
-          shared_state_->SetGlobalFault(false);
-          shared_state_->SetAllAxesHaltedByFault(false);
-          shared_state_->AdvanceCommandSyncSequence();
-        }
-
-        if (detail && !recover_detail.empty()) {
-          *detail = recover_detail;
         }
         return true;
       });
@@ -390,6 +431,9 @@ OperationalCoordinator::Result OperationalCoordinator::RequestShutdown() {
         if (shared_state_) {
           shared_state_->SetGlobalFault(false);
           shared_state_->SetAllAxesHaltedByFault(false);
+          for (std::size_t i = 0; i < axis_count_; ++i) {
+            shared_state_->SetAxisHaltedByFault(i, false);
+          }
           shared_state_->AdvanceCommandSyncSequence();
         }
 
@@ -407,6 +451,10 @@ void OperationalCoordinator::ComputeIntents() {
 
   const SystemOpMode current = mode_.load(std::memory_order_acquire);
   AxisIntent intent = AxisIntent::Disable;
+  SharedSnapshot snap;
+  if (shared_state_) {
+    snap = shared_state_->Snapshot();
+  }
 
   switch (current) {
     case SystemOpMode::Running:
@@ -428,7 +476,12 @@ void OperationalCoordinator::ComputeIntents() {
   }
 
   for (std::size_t i = 0; i < axis_count_; ++i) {
-    shared_state_->SetAxisIntent(i, intent);
+    AxisIntent axis_intent = intent;
+    if ((intent == AxisIntent::Run || intent == AxisIntent::Enable) &&
+        i < snap.axes_halted_by_fault.size() && snap.axes_halted_by_fault[i]) {
+      axis_intent = AxisIntent::Halt;
+    }
+    shared_state_->SetAxisIntent(i, axis_intent);
   }
   shared_state_->AdvanceIntentSequence();
 }
@@ -448,7 +501,6 @@ void OperationalCoordinator::UpdateFromFeedback() {
   for (std::size_t i = 0; i < n; ++i) {
     if (snap.feedback[i].is_fault || snap.feedback[i].heartbeat_lost) {
       any_fault = true;
-      break;
     }
   }
 
@@ -456,14 +508,8 @@ void OperationalCoordinator::UpdateFromFeedback() {
     return;
   }
 
-  SystemOpMode expected = current;
-  if (mode_.compare_exchange_strong(expected, SystemOpMode::Faulted,
-                                    std::memory_order_acq_rel)) {
-    shared_state_->SetGlobalFault(true);
-    shared_state_->SetAllAxesHaltedByFault(true);
-    CANOPEN_LOG_WARN("OperationalCoordinator: {} -> Faulted (auto)",
-                     SystemOpModeName(current));
-  }
+  ApplyGroupedFaultContainment(snap);
+  CANOPEN_LOG_WARN("OperationalCoordinator: grouped fault containment active");
 }
 
 }  // namespace canopen_hw

@@ -20,14 +20,14 @@
 |------|------|
 | `SetConfigured()` | Configure 成功后设置起始模式 |
 | `RequestInit()` | `Configured -> Armed`（启动主站并自动上电到冻结态；成功时推进一次 `command_sync_sequence`） |
-| `RequestEnable()` | `Standby -> Armed`（进入使能冻结态；若存在 fault / heartbeat_lost / global fault 则拒绝） |
+| `RequestEnable()` | `Standby -> Armed`（进入使能冻结态；`global fault` 闩锁会拒绝，单轴 fault/heartbeat 按 `safety_group` 隔离） |
 | `RequestDisable()` | `Running/Armed/Standby -> Standby`（去使能但保持通信在线） |
 | `RequestHalt()` | `Running -> Armed` |
 | `RequestRelease()` | `Armed -> Running`（对应 `~/resume`；健康门控同 `RequestEnable()`） |
-| `RequestRecover()` | `Faulted -> Standby`（等待全部轴 `fault`/`heartbeat_lost` 清除后才成功；超时保持 `Faulted`） |
+| `RequestRecover()` | 清除 fault/heartbeat 与组内 halt 闩锁；全局 `Faulted` 时回 `Standby`，普通组内故障时保持当前生命周期 |
 | `RequestShutdown()` | 通信停机并回到 `Configured`（成功时推进一次 `command_sync_sequence`） |
-| `UpdateFromFeedback()` | 在 `Armed/Running` 下自动检测 fault/heartbeat 丢失并降级到 `Faulted` |
-| `ComputeIntents()` | 按模式下发每轴 `AxisIntent`（控制主通道） |
+| `UpdateFromFeedback()` | 在 `Armed/Running` 下自动检测 fault/heartbeat 丢失，并按 `safety_group` 将同组轴置入 fault-halt |
+| `ComputeIntents()` | 按模式下发每轴 `AxisIntent`；fault-halt 轴在 `Running` 下保持 `Halt` |
 
 ## ServiceGateway
 
@@ -86,7 +86,8 @@
 | `SetCommandEpoch(axis, epoch)` | 写入命令会话号（AxisCommand.arm_epoch） |
 | `arm_epoch(axis)` | 读取反馈会话号（AxisFeedback.arm_epoch） |
 | `command_sync_sequence()` | 读取命令重同步序列；用于显式判定“旧命令源必须失效并重对齐” |
-| `all_axes_halted_by_fault()` | 读取全轴故障连带停机标志 |
+| `all_axes_halted_by_fault()` | 读取是否存在 fault-halt 轴的兼容标志 |
+| `axis_halted_by_fault(axis)` | 读取单轴是否因同组故障被 halt |
 
 ## CanopenRobotHwRos
 
@@ -150,8 +151,9 @@
 
 | 字段 | 说明 |
 |------|------|
-| `global_fault` | 任一轴故障后置位的全局闩锁 |
-| `all_axes_halted_by_fault` | 全轴因故障被连带冻结标志 |
+| `global_fault` | 全局故障闩锁；普通单轴 fault 不再置位它 |
+| `all_axes_halted_by_fault` | 是否存在 fault-halt 轴的兼容标志 |
+| `axes_halted_by_fault` | 每轴 fault-halt 标志；由 `safety_group` 故障隔离计算得出 |
 | `intents` | 每轴 `AxisIntent`（当前 shadow 使用） |
 | `intent_sequence` | intent 更新序列号 |
 | `command_sync_sequence` | 命令重同步序列；成功的 `RequestInit()` / `RequestRecover()` / `RequestShutdown()` 会递增 |

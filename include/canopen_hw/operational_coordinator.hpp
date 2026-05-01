@@ -6,6 +6,7 @@
 #include <initializer_list>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "canopen_hw/canopen_master.hpp"
 #include "canopen_hw/shared_state.hpp"
@@ -50,6 +51,7 @@ class OperationalCoordinator {
 
   // Configure 成功后调用，将协同器置为 Configured 起点。
   void SetConfigured();
+  void SetSafetyGroups(const std::vector<std::string>& safety_groups);
 
   // 阶段 1 骨架：内部仍复用现有 CanopenMaster 的高层 API。
   Result RequestInit();
@@ -77,6 +79,8 @@ class OperationalCoordinator {
   bool MasterGracefulShutdown(std::string* detail);
   void MasterStop();
   bool CheckHealthyForMotion(std::string* detail) const;
+  void ApplyGroupedFaultContainment(const SharedSnapshot& snap);
+  bool RecoverFaults(std::string* detail);
 
   std::atomic<SystemOpMode> mode_{SystemOpMode::Inactive};
   mutable std::mutex transition_mtx_;
@@ -85,6 +89,7 @@ class OperationalCoordinator {
   MasterOps master_ops_;
   SharedState* shared_state_ = nullptr;
   std::size_t axis_count_ = 0;
+  std::vector<std::string> safety_groups_;
 };
 
 }  // namespace canopen_hw

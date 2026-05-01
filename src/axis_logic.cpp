@@ -96,7 +96,7 @@ void AxisLogic::ProcessRpdo(uint16_t statusword, int32_t actual_position,
 
   if (shared_state_) {
     if (fault_detected) {
-      shared_state_->SetGlobalFault(true);
+      shared_state_->SetAxisHaltedByFault(axis_index_, true);
       shared_state_->SetAllAxesHaltedByFault(true);
     }
     shared_state_->RecomputeAllOperational();
@@ -151,7 +151,7 @@ void AxisLogic::ProcessHeartbeat(bool lost) {
   PublishSnapshot();
   if (shared_state_) {
     if (lost) {
-      shared_state_->SetGlobalFault(true);
+      shared_state_->SetAxisHaltedByFault(axis_index_, true);
       shared_state_->SetAllAxesHaltedByFault(true);
     }
     shared_state_->RecomputeAllOperational();

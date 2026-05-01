@@ -60,6 +60,7 @@ struct SharedSnapshot {
   std::vector<AxisCommand> commands;
   std::vector<AxisSafeCommand> safe_commands;
   std::vector<AxisIntent> intents;
+  std::vector<bool> axes_halted_by_fault;
   uint64_t intent_sequence = 0;
   uint64_t command_sync_sequence = 0;
   bool all_operational = false;
@@ -111,6 +112,8 @@ class SharedState {
   // 全轴因故障被连带停机标志。
   void SetAllAxesHaltedByFault(bool halted);
   bool GetAllAxesHaltedByFault() const;
+  void SetAxisHaltedByFault(std::size_t axis_index, bool halted);
+  bool GetAxisHaltedByFault(std::size_t axis_index) const;
 
   // 任意线程: 获取完整快照。
   SharedSnapshot Snapshot() const;
@@ -130,6 +133,7 @@ class SharedState {
   std::vector<AxisCommand> commands_;
   std::vector<AxisSafeCommand> safe_commands_;
   std::vector<AxisIntent> intents_;
+  std::vector<bool> axes_halted_by_fault_;
   bool all_operational_ = false;
   bool global_fault_ = false;
   bool all_axes_halted_by_fault_ = false;

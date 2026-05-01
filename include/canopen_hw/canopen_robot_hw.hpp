@@ -57,6 +57,7 @@ class CanopenRobotHw {
 
   // 全轴因故障被连带停机标志(来自 SharedState::all_axes_halted_by_fault)。
   bool all_axes_halted_by_fault() const { return all_axes_halted_by_fault_; }
+  bool axis_halted_by_fault(std::size_t axis_index) const;
 
   // 每轴当前使能会话号（来自反馈侧 arm_epoch）。
   uint32_t arm_epoch(std::size_t axis_index) const;
@@ -105,6 +106,7 @@ class CanopenRobotHw {
 
   bool all_operational_ = false;
   bool all_axes_halted_by_fault_ = false;
+  std::vector<bool> axes_halted_by_fault_;
 
   // 每轴就绪状态缓存（per-axis is_operational），由 ReadFromSharedState 更新。
   // 用于 WriteToSharedState 中的逐轴目标位置保护，避免全局 all_operational_

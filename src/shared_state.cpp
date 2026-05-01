@@ -11,7 +11,8 @@ SharedState::SharedState(std::size_t axis_count)
       feedback_(axis_count_),
       commands_(axis_count_),
       safe_commands_(axis_count_),
-      intents_(axis_count_, AxisIntent::Disable) {}
+      intents_(axis_count_, AxisIntent::Disable),
+      axes_halted_by_fault_(axis_count_, false) {}
 
 void SharedState::UpdateFeedback(std::size_t axis_index,
                                  const AxisFeedback& feedback) {
@@ -123,6 +124,22 @@ bool SharedState::GetAllAxesHaltedByFault() const {
   return all_axes_halted_by_fault_;
 }
 
+void SharedState::SetAxisHaltedByFault(std::size_t axis_index, bool halted) {
+  if (IsValidAxis(axis_index) == false) {
+    return;
+  }
+  std::lock_guard<std::mutex> lk(mtx_);
+  axes_halted_by_fault_[axis_index] = halted;
+}
+
+bool SharedState::GetAxisHaltedByFault(std::size_t axis_index) const {
+  if (IsValidAxis(axis_index) == false) {
+    return false;
+  }
+  std::lock_guard<std::mutex> lk(mtx_);
+  return axes_halted_by_fault_[axis_index];
+}
+
 SharedSnapshot SharedState::Snapshot() const {
   std::lock_guard<std::mutex> lk(mtx_);
   SharedSnapshot s;
@@ -130,6 +147,7 @@ SharedSnapshot SharedState::Snapshot() const {
   s.commands = commands_;
   s.safe_commands = safe_commands_;
   s.intents = intents_;
+  s.axes_halted_by_fault = axes_halted_by_fault_;
   s.intent_sequence = intent_sequence_;
   s.command_sync_sequence = command_sync_sequence_;
   s.all_operational = all_operational_;

@@ -30,6 +30,7 @@ CanopenRobotHw::CanopenRobotHw(SharedState* shared_state)
       axis_arm_epoch_(axis_count_, 0),
       axis_cmd_ready_(axis_count_, false),
       axis_cmd_epoch_(axis_count_, 0),
+      axes_halted_by_fault_(axis_count_, false),
       axis_operational_(axis_count_, false) {}
 
 void CanopenRobotHw::ReadFromSharedState() {
@@ -40,6 +41,8 @@ void CanopenRobotHw::ReadFromSharedState() {
   const SharedSnapshot snap = shared_state_->Snapshot();
   all_operational_ = snap.all_operational;
   all_axes_halted_by_fault_ = snap.all_axes_halted_by_fault;
+  axes_halted_by_fault_ = snap.axes_halted_by_fault;
+  axes_halted_by_fault_.resize(axis_count_, false);
   command_sync_sequence_ = snap.command_sync_sequence;
 
   for (std::size_t i = 0; i < axis_count_; ++i) {
@@ -140,6 +143,10 @@ double CanopenRobotHw::joint_effort(std::size_t axis_index) const {
 
 uint32_t CanopenRobotHw::arm_epoch(std::size_t axis_index) const {
   return IsValidAxis(axis_index) ? axis_arm_epoch_[axis_index] : 0u;
+}
+
+bool CanopenRobotHw::axis_halted_by_fault(std::size_t axis_index) const {
+  return IsValidAxis(axis_index) ? axes_halted_by_fault_[axis_index] : false;
 }
 
 void CanopenRobotHw::SetCommandReady(std::size_t axis_index, bool ready) {

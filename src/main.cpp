@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "canopen_hw/joints_config.hpp"
 #include "canopen_hw/lifecycle_manager.hpp"
@@ -121,6 +122,12 @@ int main(int argc, char** argv) {
 
   canopen_hw::OperationalCoordinator coordinator(
       lifecycle.master(), lifecycle.shared_state(), config.axis_count);
+  std::vector<std::string> safety_groups;
+  safety_groups.reserve(config.joints.size());
+  for (const auto& joint : config.joints) {
+    safety_groups.push_back(joint.safety_group);
+  }
+  coordinator.SetSafetyGroups(safety_groups);
   coordinator.SetConfigured();
 
   if (opts.auto_init) {
