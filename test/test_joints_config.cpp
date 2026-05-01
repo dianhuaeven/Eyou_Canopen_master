@@ -17,6 +17,7 @@ TEST(JointsConfig, LoadValidYaml) {
     std::ofstream ofs(path);
     ofs << "joints:\n"
            "  - name: joint_1\n"
+           "    safety_group: arm\n"
            "    canopen:\n"
            "      node_id: 1\n"
            "      verify_pdo_mapping: true\n"
@@ -45,10 +46,12 @@ TEST(JointsConfig, LoadValidYaml) {
   hw.ApplyConfig(master_cfg);
   EXPECT_EQ(master_cfg.joints.size(), 2u);
   EXPECT_EQ(master_cfg.joints[0].node_id, 1u);
+  EXPECT_EQ(master_cfg.joints[0].safety_group, "arm");
   EXPECT_TRUE(master_cfg.joints[0].verify_pdo_mapping);
   EXPECT_EQ(master_cfg.joints[0].default_mode, canopen_hw::kMode_IP);
   EXPECT_DOUBLE_EQ(master_cfg.joints[0].max_velocity_for_clamp, 1000.0);
   EXPECT_EQ(master_cfg.joints[1].node_id, 2u);
+  EXPECT_EQ(master_cfg.joints[1].safety_group, "default");
   EXPECT_FALSE(master_cfg.joints[1].verify_pdo_mapping);
   EXPECT_EQ(master_cfg.joints[1].default_mode, canopen_hw::kMode_CSV);
   EXPECT_DOUBLE_EQ(master_cfg.joints[1].max_velocity_for_clamp, 2000.0);

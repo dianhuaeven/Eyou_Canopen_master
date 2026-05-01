@@ -10,6 +10,7 @@ joints:
   # 摆臂 4 轴当前按 node_id 1~4 接入。
   # 若现场拨码与此不一致，需同步修改本文件与 master.yaml/master.dcf。
   - name: left_front_arm_joint
+    safety_group: flipper
     canopen:
       node_id: 1
       verify_pdo_mapping: false
@@ -28,6 +29,7 @@ joints:
     ip_max_jerk: 5.0
     ip_goal_tolerance: 0.001
   - name: right_front_arm_joint
+    safety_group: flipper
     canopen:
       node_id: 2
       verify_pdo_mapping: false
@@ -46,6 +48,7 @@ joints:
     ip_max_jerk: 5.0
     ip_goal_tolerance: 0.001
   - name: left_rear_arm_joint
+    safety_group: flipper
     canopen:
       node_id: 3
       verify_pdo_mapping: false
@@ -64,6 +67,7 @@ joints:
     ip_max_jerk: 5.0
     ip_goal_tolerance: 0.001
   - name: right_rear_arm_joint
+    safety_group: flipper
     canopen:
       node_id: 4
       verify_pdo_mapping: false
@@ -82,6 +86,7 @@ joints:
     ip_max_jerk: 5.0
     ip_goal_tolerance: 0.001
   - name: shoulder_yaw_joint
+    safety_group: arm
     canopen:
       node_id: 6              # 从站 CANopen 节点 ID
       verify_pdo_mapping: false  # 启动时是否校验 PDO 映射
@@ -102,6 +107,7 @@ joints:
     ip_max_jerk: 5.0         # 最大加加速度/jerk（rad/s³）
     ip_goal_tolerance: 0.001  # 终点到位判定误差（rad）
   - name: shoulder_pitch_joint
+    safety_group: arm
     canopen:
       node_id: 5              # 从站 CANopen 节点 ID
       verify_pdo_mapping: false  # 启动时是否校验 PDO 映射

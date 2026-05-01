@@ -102,6 +102,16 @@ bool LoadJointsYaml(const std::string& path, std::string* error,
       jcfg.name = "joint_" + std::to_string(axis_index + 1);
     }
     try {
+      if (joint["safety_group"]) {
+        jcfg.safety_group = joint["safety_group"].as<std::string>();
+        if (jcfg.safety_group.empty()) {
+          std::ostringstream oss;
+          oss << "invalid safety_group at joints[" << axis_index
+              << "]: expected non-empty string";
+          SetError(error, oss.str());
+          return false;
+        }
+      }
       const bool has_node_id =
           (canopen && canopen.IsMap() && canopen["node_id"]) || joint["node_id"];
       int node_id = 0;
